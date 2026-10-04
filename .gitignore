@@ -1,0 +1,14 @@
+# Build output
+build/
+dist/
+helper/TWDAccess/bin/
+helper/TWDAccess/obj/
+
+# Local Python environment for tools/build_mod.py
+.venv/
+
+# Downloaded release archive (prism.dll is extracted into tools/prism/)
+tools/prism-windows-x64.zip
+
+# Copies of the test save slot (slot 2) at useful checkpoints, for restoring scenes while testing
+dev_saves/
