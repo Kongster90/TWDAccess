@@ -641,4 +641,12 @@ Gotchas:
   globals a module uses, compile it with lupa (`lupa.lua52.LuaRuntime(encoding=None)`,
   `string.dump`) and run luadis.py on the result, looking for `_ENV[...]` names.
 - PowerShell scripts need `-ExecutionPolicy Bypass` when run from Bash.
-- Git: a repository exists with no commits. Only commit if the user asks.
+- Git: the first commit (ce1fdff) was made on 2026-10-03 at the user's request, as the fixed point
+  for reviews (/mattpocock-skills:code-review). The branch is "main"; the remote "origin" is
+  https://github.com/Kongster90/TWDAccess.git (the user's repository, linked and pushed at their
+  request). No git identity is configured on this machine; commits use
+  `git -c user.name="dengs" -c user.email=<the user's email>` for themselves only. Only commit or
+  push if the user asks.
+- Matt Pocock's engineering skills are set up (CLAUDE.md "Agent skills", docs/agents/): issues in
+  GitHub Issues, default triage labels, single-context domain docs. The `gh` CLI is not installed,
+  so the issue-based skills cannot work until the user installs it and signs in.
