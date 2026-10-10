@@ -3,9 +3,18 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-10-09 (fifth session, about 15:50; see the first items).
+Last updated: 2026-10-10 (sixth session, about 05:25; see the first item).
 
 ## Start here (where the last session stopped)
+
+- Sixth session, 2026-10-09 evening to 2026-10-10 05:25 (user: "keep going on the game"). See
+  "Sixth session: 400 Days", "Season 2's menus" and "400 Days replayed" below. In short: finished
+  testing Episode 4's River Street (two fixes), fixed the countdown time (#19, now also heard in
+  the game: can be closed), played all of 400 Days in slot 2 by ear, made Season 2's menus speak
+  (all but Play, which would start a Season 2 game; ask the user first), then replayed parts of
+  400 Days: the cornfield now names the safe row, works round a game bug that left the panic
+  meter on, and says when to run out; Russell's mouse-only sneak now works with Up arrow (new
+  fastslow.lua). Nothing committed yet this session. dist\TWDAccess matches the source.
 
 - Fifth session, 2026-10-09 early morning (user asleep, "keep working on the mod"; questions saved
   for the end). The fourth session (2026-10-08 evening to 2026-10-09 02:00) finished Episode 2 and
@@ -267,7 +276,10 @@ E. (#14) Long walks are slow and silent (Lee limps: 35 m to Hershel took about 4
    the title screen ("Click to Begin": nothing is said, and whether a key passes it is unknown;
    restart.ps1 clicks).
 5. (#5) Check the menus of Season 2, Michonne, A New Frontier and The Final Season. The later seasons
-   probably use the same widget framework as the hub; Season 2 probably the same panes as Season 1.
+   probably use the same widget framework as the hub. Season 2's menus (their own UIZ framework,
+   not Season 1's panes) were done on 2026-10-10 except Play, which starts a game in a Season 2
+   save file (all three were empty; ask the user before starting one), and My Choices (locked
+   until an episode is played).
 6. (#6) Escape both releases the hotspot the mod is holding and opens the pause menu.
 7. (#7) Done 2026-10-09, not yet run against the real game folder: --uninstall now keeps
    Archives\DebugLoader.lua and TWDAccess\saves.txt when saves may have been made with the mod
@@ -907,6 +919,239 @@ Mod changes in the fifth session (all tested by ear in the station attack unless
   key on "Press W to ..." through the fight (only death or the time limit lets go) and takes
   -Skip "regex" (lines to ignore, to see what the game does without them).
 
+### Sixth session: 400 Days (2026-10-09 evening)
+
+River Street retest (Episode 4, from dev_saves\ep4_riverstreet):
+- Walk danger stop (#17) false alarm: the sound agent "Zombie_wall_vocals_near_water" counted as a
+  walker. Walkers must now have a head bone (AgentHasNode(agent, "head")). Fixed and tested.
+- The telescope: the stranger is only seen when the view is turned fully left
+  (env_savannahRiverStreet.lua: cs_telescopeLooksFarLeft once reticleCamH's "NavCam - Animation
+  Time" is under 0.1; the telescope camera turns with the reticle held at a screen edge). No
+  hotspot marks it, so a player could not know. lookaround.lua SCENE_VIEWS adds a Tab entry "Far
+  left" for camera cam_panningTelescope; choosing it holds the reticle at the left edge until the
+  view stops ("Far left, 22 of 22. Turning."), and actions.lua stays quiet meanwhile
+  (TWDA.turningView). Tested twice.
+- Countdowns (#19): timer_zombieGroupClosesIn reads "Timer Length" 0 yet fills at about 0.0346 a
+  second (about 29 s in all, paused between steps). countdown() now measures the fill rate per
+  run when the length is 0 and waits a moment (under 0.2 s) before announcing so the time comes
+  with it. Checked offline with lupa against the logged numbers ("about 30 seconds", then "about
+  25"); NOT yet heard in the game (the sewers had saved over the alley checkpoint). Heard in the
+  game on 2026-10-10 03:07 (River Street replayed from dev_saves\ep4_riverstreet): "Hurry: about
+  30 seconds. Dumpster: Push. Enter!", the same for Manhole: Open and Climbing Pick, then "about 25
+  seconds" for Manhole: Pry (the timer stands still during the short scenes between steps). #19
+  can be closed. Slot 2 is now at the start of the sewers again.
+- Also seen: "N meters to go." during a walk (#14) works; "The walk to X was cut short ... Enter
+  walks on." works; use.ps1 now presses Enter on that.
+
+400 Days (Season 1's episode screen, "Special Episode: 400 Days"; slot 2; "Generate story
+decisions for skipped episodes?" Yes, then Play again). It starts at ChapterSelection.lua, a
+board with five photos read as "Vince: Choose. Wyatt: Choose. ... Tab to choose, Enter."
+Engine facts found:
+- Game_GetPlayer() is AgentFind("Lee") (wdgame.lua) and returns nothing in 400 Days. New
+  TWDA.player() (core.lua) falls back to navigate.lua's upvalue mPlayer (Russell, Bonnie, Shel);
+  TWDA.playerScene() and TWDA.playerName() too. Every module now uses them (walks, distances,
+  the countdown scan, runto, cover, sniper, turnchoice). Spoken "Lee ..." texts use the name.
+- Speakers' agent names run together are split ("TinyCarlos" -> "Tiny Carlos").
+- People the game labels alike are told apart by their own agent names (lookaround.lua
+  distinctName): Vince's choice on the bus offered "Prisoner" twice (agents Dan and Justin).
+- choices.lua logs "choices: ended"; play_by_ear.ps1 -Answer uses it to find a waiting choice.
+Vince (prison bus): done. Choices, a struggle, "Shotgun: Grab", "Prisoner: Shoot", the window,
+the walkers; the end choice (Danny's foot) worked by ear.
+Wyatt (night drive with Eddie): done. In the car, after the light, "Floorboard" appeared below
+the view and was not announced (gap: new things out of view in look-around scenes are not
+announced until the view turns); Floorboard: Search, Seat Handle: Pull, Keys: Grab, a struggle,
+Door: Close, Car: Start, then "Attacker: Punch" (obj_armNate) must be hit several times: the
+"Again! Enter!" cue now also covers blows and shots at a part of someone (isBlow in
+lookaround.lua), then Gear Shift: Move. Passed by ear.
+Russell (Nate, the truck stop): done. The shootout: "Window: Shoot" must be repeated ("DON'T stop
+shooting!") and the game never refreshes the icons, so a frame check says "Again! Enter!" when
+the same blow or shot target is still in the reticle a second after its use. Passed by ear.
+Then "Check through the window": with subtitles read as names only, nothing said so; actions.lua
+now announces, when walking control comes back, a hotspot a line named in the last 20 s
+("Window: Look Through. Enter to do it."). Then Nate: Talk To. A mouse-only gesture ("Press and
+hold the left mouse button, then push the mouse forward ... sneak up quietly, or quickly to jump
+out") went unanswered and the scene went on after about 18 s; made accessible later (Up arrow,
+fastslow.lua; see "400 Days replayed").
+Bonnie (the woods, the cornfield): done.
+- The run in the woods (Chapter4A_Forest.lua): "Run!" gives about 4 s of free walking. The goal is
+  trigger_dialog_bonnieShot (27 m, toward and past the camera; she is shot at), then, with no
+  hint, trigger_dialog_bonnieFalls (28 m back the other way) before trigger_dialog_bonnieDies,
+  which MOVES with the pursuers at about 2.6 m/s. runto.lua now takes a sequence of spots (the
+  first switched on: "Trigger Enabled"), says "Run!" again when walking comes back after a short
+  scene, works keys out through the scene camera from Lee's position and a point a meter toward
+  the target (projecting a target behind the camera mirrored it), and silences other walking
+  announcements meanwhile (TWDA.runtoActive). Passed by ear (the very first direction was still
+  wrong before the last change; the final version is untested).
+- The cornfield (Chapter4B_Cornfield.lua): Bonnie stays put and the field moves round her.
+  Pursuers come down her row; the game's Cornfield.imap binds A, D, Left, Right (rows) and S,
+  Down (look back). Keys only sometimes reached it. cornfield.lua: hooks
+  Chapter4B_Cornfield_PursuerPanicMeter_Activate/Deactivate: "Someone is coming down this row!
+  Left or Right arrow to change rows." and "Out of the way." (not when caught: the meter goes off
+  then too); forwards the keys to the game's handlers when the game has not reacted (guard: the
+  handlers' upvalue mStealthPositionChangeActive). The scene script's own debug prints can be
+  read: tools\dev\watch_cornfield.lua redirects its local consolePrint into twda.log (CP lines).
+  Passed by ear (three pursuers). Then the rebar: Enter on "Rebar: Pull Out" opens
+  mode_drag_rebarchoice.imap for about 1.7 s (Left/Right: Chapter4B_Cornfield_RebarDragStart_On*);
+  the mod says "Grab it: Left or Right arrow, quickly." and forwards those keys too.
+- Drags (new drag.lua, the game's mode_drag.lua): with the cursor a drag lasts only while the
+  left mouse button is held (OnActivate pops it otherwise). The controller way takes arrows and
+  A/D/W/S while button A is held, and then stays. Just during mode_drag.OnActivate the mod makes
+  Input_UseCursor return false and Input_IsButtonPressed(kEventCodeButtonA) true, then says "Hold
+  Left arrow to pull." from logic_mode_drag's "Drag - Direction" (1 up, 2 down, 3 left, 4 right).
+  The rebar came free by ear ("Hold Left arrow", "Hold Right arrow"), then "Pursuer: Attack.
+  Enter!" (Dee), Bonnie's last choices.
+Shel (Chapter5A_TruckStopInterior.lua, then Chapter5B_TruckStop.lua, Chapter6B_Camp.lua): done.
+- The diner, kitchen and back hall are one scene split by doors that move Shel when used, silently:
+  the Kitchen Doors (diner <-> kitchen) and the Pantry Door (the one with the EXIT sign: kitchen
+  <-> back hall). A logic value (key symbol 13818146074159135818) says which room: 2 diner, 1
+  kitchen, 3 back hall. The Alley Door's use dialog only lets her out when it is 3; from the
+  kitchen an invisible "blocker_alley" covers the door, yet the mod's "out of view from here, but
+  Shel can still use Alley Door" used it anyway and got only "Oh, crap! I told Roman I'd see what
+  she got a hold of!". Now: a target with a blocker_* agent at its marker gets "X can't be used
+  from this side. Close by: <way out>" instead (blockerInFront, nearestWayOut in lookaround.lua;
+  tested: "Alley Door can't be used from this side. Close by: Pantry Door, 2 meters."). And a door
+  used with Main_OnUse that moves the player more than 1.5 m within 6 s (no movement key, no
+  walk) is announced: "Through Kitchen Doors." (tested on both doors). How it was found: tools are the dialog walk (DlgFindNode, DlgNodeGetNextNode,
+  DlgNodeGetChildNodes, DlgGetVisibilityConditions(...).rule, RuleTestCondition) and flipping
+  each logic value briefly to see which one the rule follows (scratch flip.lua; worth a dev tool).
+- Out back: Roman, choices, "Jean: Look At" (the walker eating a puppy), back in, the intruder
+  (kill or let go), the card game ("Seven: Choose"), weeks later Roman ("Just come see me": he
+  is not selectable; walking to the Truck next to him starts it), the RV with Becca: Drawer:
+  Open, then "Keys: Grab" or "Pistol: Grab", then "Drive away" (read as "Away: Drive" before a
+  fix: nouns that are adverbs are now read "verb noun") or "Stephanie: Kill".
+- Tavia (Chapter6B_Camp.lua): choices, then the statistics, then a new screen "who went"
+  (ui_whowent.lua, mouse only): prompts.lua reads "Left with Tavia: Bonnie, Shel, Vince, Wyatt.
+  Stayed at the camp: Russell. Enter to continue." from PlayWhoWentChores' upvalue whosGoing and
+  Enter calls UI_WhoWent_OnLeftClick. Tested. Then the credits and Season 1's menu.
+400 Days done by ear (dev_saves\400done; saves.txt line Chapter6B_Camp.lua).
+
+Dev tools added: watch_timers.lua (TM lines), watch_input.lua (WI), watch_corn.lua (WC2),
+watch_cornfield.lua (CF and CP), watch_maps.lua (WM: input maps and their bindings).
+play_by_ear.ps1 learnt the cornfield, the rebar grab and drags, and holds runto's keys while
+following its corrections; game_input.ps1's KeyState now sets the extended flag for arrows.
+
+### Season 2's menus (sixth session, 2026-10-10 about 01:30 to 03:00)
+
+Reached from the hub with tools\dev\to_season.ps1 -Season 2 (Menu_Seasons, Right, Enter; about 30
+s). Season 2 loads a new Lua state (SubProject_ResetEngine(MenuSeason2)), so changed mod files
+are picked up by going back to the hub and in again: to_season.ps1 -Season 2 -FromSeason2 (from
+Season 2's main menu: Definitive Menu, Accept, wait for the hub). No restart needed for any module.
+Copy the built file from build\mod\TWDAccess to <game>\TWDAccess first (build with the .venv
+python: tools\build_mod.py needs lupa).
+
+How Season 2's menus work (projectseason2's uiz*.lua, button.lua, popup.lua):
+- UIZ_GetActiveMenu() returns the active menu's root agent: ui_menu_main, ui_menu_settings (Help
+  & Options), ui_menu_av, ui_menu_gameplay, ui_menu_graphics, ui_menu_controls, ui_menu_credits,
+  ui_coverflow_saveSlots, ui_popup_reference. Menus left behind stay shown underneath.
+- Rows are children of the root (or one level down) named ui_list_button_reference_N,
+  ui_list_slider_reference_N, ui_list_toggle_reference_N, ui_navHelp_button_reference_N (Apply).
+  The selectable agent has no text; its label is a sibling (ui_list_button_label_N), shown in
+  capitals. A shown ui_list_button_lock_N means locked (My Choices). The title is the root's child
+  ui_header_reference_N's ui_header_N (the reference itself reads hidden). The main menu has none.
+- Nothing is selected when a menu comes up; the first arrow selects. button.imap handles arrows
+  and Enter, backbutton.imap Escape and Backspace (BackButton_OnEscape). Sliders and toggles
+  change with Left/Right (uiz_Setting.imap). A slider's value is in the menu's registeredWidgets
+  entry (isSlider, value, minVal, maxVal; matched by agent name); a toggle's on
+  ui_list_toggle_var_N.
+- Popups (Popup(headerNode, messageNode, ...)) are UIZ menus of their own; their texts are
+  ui_popup_header*, ui_popup_message*, ui_popup_button_label_N.
+- Leaving Audio/Video, Gameplay or Graphics after changing anything asks "Settings Changed ...
+  Save these changes?" with Restore and Apply. The agent changed values only to test and always
+  chose Restore.
+
+What menus.lua does now (all heard in the game):
+- On a new active menu, once its text is the same twice 0.3 s apart (rows are added over several
+  frames): "Help & Options menu, 5 items. Up and down arrows to choose, Enter to select". The save
+  carousel says "Left and right arrows to choose". A screen with no rows (Controls is a picture
+  of the keys) says "Controls. Nothing to choose here, only a picture. Escape goes back" after 2
+  s; a menu gone back to can show no rows for a while, so one read as empty is read again when
+  rows appear (Help & Options after Controls).
+- Rows: "Play", "My Choices, locked", "Display Subtitles, Off", "Music Volume, 60 percent",
+  "Resolution, 1920x1080", "Apply"; a save file reads its label and the texts under it ("Empty" or
+  its date). Value changes are said as they happen ("On", "50 percent").
+- Popups are read whole: header, message, buttons, then "Up and down arrows to choose, Enter to
+  confirm".
+Menus checked: main menu (Play, My Choices, Save Files, Help & Options, Definitive Menu, Exit
+Game), Save Files (three empty), Help & Options (Controls, Audio/Video, Gameplay: Display Style,
+Graphics: Texture Quality, Antialiasing, Full Screen, Resolution; Credits: Episodes 1 to 5), the
+Settings Changed popup. Not checked: Play (it would start a game), the credits themselves.
+Watch out: Season 1's Save Slots look similar; the agent once ended up there with the user's
+"Game 1" highlighted and left with Backspace. Loading Season 2's menu writes
+_wd2_saveSlot1_id.estore (93 bytes) in the save folder: not a save game.
+
+### 400 Days replayed (sixth session, 2026-10-10 about 03:15 to 05:20)
+
+After the River Street retest, 400 Days was replayed in slot 2 to test the open items (from
+slot 2 at Episode 4, then again from dev_saves\ep5done: Season 1's episode screen, Special
+Episode: 400 Days, Play; Bonnie first). Results:
+- Bonnie's run in the woods (runto.lua): passed by ear three times. The first keys still flip
+  within 3 s ("Run! Hold Shift and W", "W and D", "S"), unexplained, but each time she got there.
+  The reticle passing over people ("Dee: Yell To") cut the keys off; lookaround.lua's speakFocus
+  is now silent during a run unless the player Tabbed (TWDA.runtoActive).
+- The cornfield, worked out with tools\dev\watch_pursuers.lua (PU lines: each pursuer as meters
+  ahead and to the left of Bonnie, AgentGetForwardVec): Bonnie stays put and the field slides a
+  row, 2.25 m, per change. Pursuers ("Pursuer1".."6", "CelebrityPursuer1".."6") walk down rows at
+  about 1.7 m/s from 28 m; idle ones are parked 31.5 m behind. Each has a panic box
+  (trigger_PanicMeter_pursuerN: 0.6 m wide, 29 m long; enter dialog trigger_pursuerN_panicOn,
+  exit dialog trigger_pursuer_panicOff) and a kill box (trigger_pursuerN, 5 m, cs_cornfieldDie).
+  The panic meter fills by distance to its pursuer whatever the row, and goes off only through
+  that exit dialog. The spawn table (kPursuerSpawnOffsets) has HeadOn, HeadOnInLeftRow,
+  HeadOnInRightRow, FromLeft(Close), FromRight(Close): a second pursuer can come down the next row.
+  Changes in cornfield.lua:
+  - The warning names the safe side from the pursuers' places: "Someone is coming down this row!
+    Right arrow. Someone is in the row to the left." (also "in both rows; that one is further
+    off"); plain "Left or Right arrow to change rows" when both are clear. The game's arrows on
+    screen always show both, so they say nothing.
+  - The exit dialog was sometimes missed (four times in a row, always the first pursuer after a
+    load): Bonnie a row away, meter still on, dead 20 to 30 s later. 0.6 s after a row change, if
+    the meter is still on and nobody is in her row, the mod calls the game's own
+    Chapter4B_Cornfield_PursuerPanicMeter_Deactivate (logged "meter still on with nobody in
+    Bonnie's row; switching it off"); if someone is, "Still in someone's row! <key>."
+    Tested: fired on the first pursuer, then the whole field passed by ear.
+  - The end: after a set time cornEnd() waits until Bonnie has run far enough along her path
+    (ChoredMovement time target) and nothing says so (a test sat there for minutes). The mod now
+    says "Nobody is coming now. Hold W to run out of the field." when mCornEndFired turns on.
+  - guided.lua stays quiet during the stealth run (TWDA.cornfieldRunning: the scene's
+    mSequenceActive); it had said "Guided path. Hold W or S" over the cornfield's own intro.
+  - Each warning logs every pursuer's place ("cornfield: pursuers Pursuer1 23.9,2.3"), and the
+    Activate hook logs which pursuer, for the user's own logs.
+- Russell's sneak at the farmhouse (Chapter3C_TruckStopInterior.lua, after Window: Look Through
+  and Nate: Talk To): the game's mode_fastSlow, mode_fastSlow.imap with only the mouse button
+  (OnMouseLeft) and the left stick (OnLeftStick); its arrow-key handlers work only on Xfinity.
+  UpdateJoystickDir: a push the mode's way (logic agent property kDirection, Input_GetJoystickDir
+  numbering) with VectorDot(dir, dir) under 0.5 plays the slow dialog and, once that has played
+  with the stick still pushed, pops the mode; 0.5 or more plays the fast dialog and pops at once.
+  The mode lasts about 12 s, then the scene goes on by itself. New fastslow.lua: while the map is
+  active it says "Sneak up quietly: hold Up arrow until it is done. Or Shift and Up arrow to jump
+  out." and, while that key is held, calls mode_fastSlow.OnLeftStick with half (slow) or full
+  (fast, with Shift) tilt; F6 says it too. Tested slow: "fastslow: pushing slow", and the scene
+  went on 11 s after the prompt instead of 18 (Nate: "DON'T FUCKING MOVE!!"). Fast, from
+  dev_saves\auto\Chapter3C_TruckStopInterior: "fastslow: pushing fast", and Jean screamed 4 s
+  later (the jump-out scene). Both ways work.
+- guided.lua: a movement key already held when a path starts moves nothing (the game moves on key
+  presses), and the mod said "W does not move Russell here. Try S" (Russell running to the truck,
+  with W still down from walking; S did nothing either). It now says "Let go of W, then hold it
+  again" in that case. Not yet heard in the game.
+- actions.lua: against the clock, something only to look at is no longer announced as a thing
+  to do ("Hurry ... Chain: Look At. Enter!" after the chain was pulled and shot on Vince's bus).
+  Not yet heard in the game.
+- Number keys pick an action and Enter does it (by design; the agent once pressed only the
+  number and nothing happened).
+- Vince and Russell were replayed by ear without trouble otherwise (Russell's truck stop shootout:
+  "Hurry: about 2 seconds. Window: Shoot. Enter!" and "Again! Enter!" over and over, as designed).
+Slot 2 now: Russell's farmhouse after the sneak (loaded from dev_saves\auto\Chapter3C_TruckStopInterior;
+Bonnie and Vince done; saves.txt: Chapter3C_TruckStopInterior.lua). Dev saves: dev_saves\400_russell (Russell's start,
+Chapter3A_Road.lua, Bonnie and Vince done), and dev_saves\auto\ from the new snapshot script:
+Chapter3B_TruckStop, Chapter3C_TruckStopInterior (Russell's farmhouse, just before the sneak),
+Chapter4A_Forest (Bonnie's start), Chapter4B_Cornfield (the cornfield start); each folder name plus
+".lua" is the saves.txt script.
+Dev tools: watch_pursuers.lua; snapshot_scenes.ps1 (run in the background; copies slot 2 into
+dev_saves\auto\<scene> at each scene-start save; it holds twda.log open, so restart.ps1 cannot
+rename the log to twda.prev.log while it runs); holdkey.ps1 takes Up, Down, Left, Right, Shift;
+play_by_ear.ps1 knows "Still in someone's row!", "Hold W to run out of the field" and "Let go of
+W, then hold it again". The dev console code sent right after a checkpoint load can be lost:
+wait a second after the "bootstrap: running" line.
+
 ### Episode 4 notes (fifth session, 2026-10-09)
 
 Started from dev_saves\ep3done (Season 1 menu, slot 2, Episode 4 "Play"; no missing-decisions
@@ -1302,8 +1547,11 @@ Project root: C:\Users\dengs\Downloads\TWD
 - `mod/lua/`: the mod, plain Lua, installed to <game>\TWDAccess\.
   - main.lua: loads the modules in order: core, settings, text, hooks, carryover, uitext, menus,
     panes, messagebox, prompts, choices, lookaround, actions, aiming, sniper, struggle, turnchoice,
-    inventory, peek, guided, runto, cover, readables, panels, subtitles, hotkeys, then discovery
-    and devconsole if enabled.
+    inventory, peek, guided, runto, cornfield, drag, fastslow, cover, readables, panels, subtitles,
+    hotkeys, then discovery and devconsole if enabled.
+  - cornfield.lua (sixth session): 400 Days' cornfield rows and the rebar grab (see "Sixth
+    session"); drag.lua: the game's drags by keyboard (mode_drag); fastslow.lua: sneak up or
+    jump out by keyboard (mode_fastSlow; see "400 Days replayed").
   - sniper.lua: the rifle scope (mode_sniper; Episode 3's bandit attack): in sight, Enter shoots,
     sides, auto mode; TWDA.describeSniper for F6.
   - panels.lua: controls whose setting matters to a puzzle (the train's cab console), named and
@@ -1324,7 +1572,9 @@ Project root: C:\Users\dengs\Downloads\TWD
   - carryover.lua: the engine-reset redirect described above.
   - uitext.lua: the AgentSetProperty "Text String" dispatcher and spoken hint agents.
   - menus.lua: everything for the widget framework (see above). TWDA.visibleText(agent) joins the
-    visible text of an agent and its children.
+    visible text of an agent and its children. Also Season 2's UIZ menus (see "Season 2's menus"):
+    siblingText, season2TitleOf, season2PopupText, season2RowValue and the frame checks
+    "menus.season2" and "menus.season2value".
   - panes.lua: Season 1's pane menus (see above); TWDA.describePane for F6 and TWDA.paneButton for
     F9, F10, Page Up and Page Down.
   - messagebox.lua: Season 1's Yes/No message box; TWDA.describeMessageBox for F6.
@@ -1405,6 +1655,9 @@ Project root: C:\Users\dengs\Downloads\TWD
   ep4_motorshop\ (env_crawfordAutoShop.lua), ep4_classroom\ (env_crawfordSchoolHallways.lua,
   back in the classroom with the fuel), ep4_meds\ (env_crawfordSchoolNursesOffice.lua, the
   medicine taken), ep4done\ (Episode 4 finished), ep5done\ (Episode 5 finished: Season 1 done).
+  Added in the sixth session: 400_shel\ (400 Days, the start of Shel's story in the truck stop
+  diner; saves.txt line Chapter5A_TruckStopInterior.lua), 400done\ (400 Days finished; saves.txt
+  line Chapter6B_Camp.lua).
 
 In the game folder (G:\Steam\steamapps\common\The Walking Dead The Telltale Definitive Series):
 Archives\DebugLoader.lua, plus the TWDAccess folder (the mod's Lua, settings.txt, twda.log,
@@ -1443,6 +1696,9 @@ with it; `--uninstall --all` removes those too).
   play session).
 - To reach Season 1's menu from the hub: `step.ps1 -Lua 'Menu_Seasons()'`, then
   `step.ps1 -Lua 'Menu_Seasons_Play(1)' -SettleMs 20000`.
+- `tools\dev\to_season.ps1 -Season 2` from the hub's main menu opens that season's menu;
+  `-FromSeason2` first goes from Season 2's main menu back to the hub (a fresh Lua state, so new
+  mod files load). `console.ps1 -File x.lua` runs a Lua file (step.ps1 has no -File).
 - `tools\dev\step.ps1 -Keys Down,Enter` or `step.ps1 -Lua '<code>'`: focuses the game, presses keys
   or runs Lua through the dev console, and prints what the mod said.
 - `tools\dev\goto.ps1 -Target "Settings" -Enter`: presses Down (or -Key Up) until a phrase is
