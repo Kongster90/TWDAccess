@@ -10,11 +10,12 @@ Last updated: 2026-10-10 (sixth session, about 05:25; see the first item).
 - Sixth session, 2026-10-09 evening to 2026-10-10 05:25 (user: "keep going on the game"). See
   "Sixth session: 400 Days", "Season 2's menus" and "400 Days replayed" below. In short: finished
   testing Episode 4's River Street (two fixes), fixed the countdown time (#19, now also heard in
-  the game: can be closed), played all of 400 Days in slot 2 by ear, made Season 2's menus speak
+  the game; closed on GitHub), played all of 400 Days in slot 2 by ear, made Season 2's menus speak
   (all but Play, which would start a Season 2 game; ask the user first), then replayed parts of
   400 Days: the cornfield now names the safe row, works round a game bug that left the panic
   meter on, and says when to run out; Russell's mouse-only sneak now works with Up arrow (new
-  fastslow.lua). Nothing committed yet this session. dist\TWDAccess matches the source.
+  fastslow.lua). All of it is committed (c84fe53, 6bdb6e2, bf710e9 and this handoff update);
+  see the Git note under "Developer tooling" for pushing. dist\TWDAccess matches the source.
 
 - Fifth session, 2026-10-09 early morning (user asleep, "keep working on the mod"; questions saved
   for the end). The fourth session (2026-10-08 evening to 2026-10-09 02:00) finished Episode 2 and
@@ -247,8 +248,8 @@ I. (#18) Probably not a real problem: a slot has two files, and the main wd1_sav
    SaveSlots_Save, which the hooks catch). Do not change saves.txt by hand because of the main
    file's time: doing so loaded hallway data with the nurse's office script (reticle stuck off).
    carryover.lua now also watches the autosave file ("savewatch: ... changed" in twda.log).
-J. (#19) Countdowns said "about 1 second" at each step of the alley chase (Episode 4); the time
-   now accounts for the timer's speed and the scene's time scale, untested.
+J. (#19, closed 2026-10-10) Countdowns said "about 1 second" at each step of the alley chase
+   (Episode 4). Fixed by measuring the fill rate; heard in the game ("about 30 seconds").
 E. (#14) Long walks are slow and silent (Lee limps: 35 m to Hershel took about 40 s after "Walking
    to Hershel"). 2026-10-09: every 10 s of a walk, "N meters to go." while the distance goes down
    (not yet heard in a test: the sewer walks were shorter). When the game takes Lee over during a
@@ -939,7 +940,7 @@ River Street retest (Episode 4, from dev_saves\ep4_riverstreet):
   game on 2026-10-10 03:07 (River Street replayed from dev_saves\ep4_riverstreet): "Hurry: about
   30 seconds. Dumpster: Push. Enter!", the same for Manhole: Open and Climbing Pick, then "about 25
   seconds" for Manhole: Pry (the timer stands still during the short scenes between steps). #19
-  can be closed. Slot 2 is now at the start of the sewers again.
+  is closed. Slot 2 is now at the start of the sewers again.
 - Also seen: "N meters to go." during a walk (#14) works; "The walk to X was cut short ... Enter
   walks on." works; use.ps1 now presses Enter on that.
 
@@ -1823,9 +1824,12 @@ Gotchas:
 - Git: the first commit (ce1fdff) was made on 2026-10-03 at the user's request, as the fixed point
   for reviews (/mattpocock-skills:code-review). The branch is "main"; the remote "origin" is
   https://github.com/Kongster90/TWDAccess.git (the user's repository, linked and pushed at their
-  request). No git identity is configured on this machine; commits use
-  `git -c user.name="dengs" -c user.email=<the user's email>` for themselves only. Only commit or
-  push if the user asks.
+  request). Since 2026-10-10 the repository's own git config has the user's chosen identity,
+  user.name Kongster90 and their GitHub no-reply address as user.email, so a plain `git commit`
+  is right (the two oldest commits, already on GitHub, say "dengs" with their Gmail; the user
+  rewrote the later ones to the new identity themselves). Only commit or push if the user asks.
+  Rewriting history (rebase, amend of pushed commits) and writes to GitHub such as editing issue
+  comments can be blocked by the auto-mode safety check: then tell the user and let them decide.
 - Matt Pocock's engineering skills are set up (CLAUDE.md "Agent skills", docs/agents/): issues in
   GitHub Issues, default triage labels, single-context domain docs. The repository is private.
   The `gh` CLI (2.102.0) is installed at C:\Program Files\GitHub CLI\gh.exe and signed in as
