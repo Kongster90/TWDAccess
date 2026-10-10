@@ -40,8 +40,13 @@ TWDA.hookGlobal("AgentSetProperty", function(original)
         if spokenAgent(name) then
           local text = TWDA.cleanText(value)
           if text ~= "" then
-            TWDA.lastHint = text
-            TWDA.sayOnce(text)
+            TWDA.lastHint, TWDA.lastHintAt = text, TWDA.now()
+            -- In an action scene a hint is what matters now ("Use the S (back) key to get away!").
+            -- While cover.lua says when to walk, "Get to the gate using the tractor as cover!" would
+            -- only cut that off.
+            if not (TWDA.coverWalkActive and TWDA.coverWalkActive()) then
+              TWDA.sayOnce(text, { interrupt = TWDA.inActionScene and TWDA.inActionScene() or nil })
+            end
           end
         end
       end)

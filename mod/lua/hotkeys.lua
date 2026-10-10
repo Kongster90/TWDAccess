@@ -1,6 +1,8 @@
 -- Hotkeys, read straight from the keyboard each frame. The game does not use these keys.
 --   F5  repeat the last thing spoken
---   F6  describe the screen: the current choices, or the menu, selected item, its tooltip and keys
+--   F6  describe the screen: a struggle, aiming or a turn choice; the current choices; or the menu,
+--       selected item, its tooltip and keys; in play, hiding (peek.lua), the time left in a
+--       countdown, the things to interact with and what Lee is carrying
 --   F7  subtitles: off, speaker names only, or full lines
 --   F8  stop speech
 --   F11 action scenes: normal speed, slow motion or automatic
@@ -20,7 +22,12 @@ local function repeatLast()
 end
 
 local function readCurrent()
-  local aiming = TWDA.describeAiming and TWDA.describeAiming()
+  local aiming = (TWDA.describeReadable and TWDA.describeReadable())
+    or (TWDA.describeStruggle and TWDA.describeStruggle()) or (TWDA.describeAiming and TWDA.describeAiming())
+    or (TWDA.describeSniper and TWDA.describeSniper())
+    or (TWDA.describeCover and TWDA.describeCover())
+    or (TWDA.describeTurnChoice and TWDA.describeTurnChoice())
+    or (TWDA.describeStats and TWDA.describeStats())
   if aiming then
     TWDA.say(aiming, { interrupt = true })
     return
@@ -44,8 +51,16 @@ local function readCurrent()
   if okPopup and popupOpen and TWDA.lastPopup then parts[#parts + 1] = TWDA.lastPopup end
   local menu = (TWDA.describePane and TWDA.describePane()) or (TWDA.describeMenu and TWDA.describeMenu())
   if menu then parts[#parts + 1] = menu end
+  local peek = not menu and TWDA.describePeek and TWDA.describePeek()
+  if peek then parts[#parts + 1] = peek end
+  local guided = not menu and TWDA.describeGuided and TWDA.describeGuided()
+  if guided then parts[#parts + 1] = guided end
+  local countdown = not menu and TWDA.describeCountdown and TWDA.describeCountdown()
+  if countdown then parts[#parts + 1] = countdown end
   local hotspots = not menu and TWDA.describeLookaround and TWDA.describeLookaround()
   if hotspots then parts[#parts + 1] = hotspots end
+  local carrying = hotspots and TWDA.describeInventory and TWDA.describeInventory()
+  if carrying then parts[#parts + 1] = carrying end
   if #parts == 0 then parts[1] = TWDA.lastHint or "Nothing on screen to read." end
   TWDA.say(table.concat(parts, ". "), { interrupt = true })
 end

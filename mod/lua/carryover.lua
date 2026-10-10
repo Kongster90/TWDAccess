@@ -99,14 +99,55 @@ end
 
 local function recordSave(via)
   local script = rawget(G, "TWDA_firstScript")
-  if isEpisodeScript(script) then setSlot(currentSlot(), script, via) end
+  local slot = currentSlot()
+  if not isEpisodeScript(script) then return end
+  if slot == nil then
+    TWDA.log(("%s: a save, but no slot known (scene %s)"):format(via, tostring(script)))
+    return
+  end
+  setSlot(slot, script, via)
 end
 
-for _, name in ipairs({ "SaveGame", "SaveGameIncremental", "SaveLoad_AutoSave", "SaveSlots_Save" }) do
+-- (Season 1 saved at the start of env_trainAfterStop.lua, Episode 3, through none of the first four.)
+for _, name in ipairs({ "SaveGame", "SaveGameIncremental", "SaveLoad_AutoSave", "SaveSlots_Save",
+  "SaveLoad_AutoSaveDelayed", "SaveLoad_Checkpoint", "SaveLoad_Save", "SaveGameToBundle", "SaveBundle_Save" }) do
   TWDA.hookBefore(name, function()
     recordSave(name)
   end)
 end
+
+-- The save file itself, as a check on the hooks above: a save they missed still changes the file.
+-- (The house in Savannah, Episode 4: the game wrote the slot two seconds into
+-- env_manorInteriorHouseSearch.lua and no hooked function was seen, so saves.txt kept the yard
+-- outside, and loading the slot would have run the wrong scene.) Compared every few seconds
+-- while an episode scene runs; where the save folder is somewhere else, only the hooks count.
+-- The files are read as this module loads, before the scene's own script runs: the game saves
+-- within a second of a scene starting, often before the mod's first frame.
+local SAVE_DIR = (os.getenv("USERPROFILE") or "") .. "\\Documents\\Telltale Games\\The Walking Dead Definitive\\"
+local function slotContent(slot)
+  local file = io.open(SAVE_DIR .. slot, "rb")
+  if not file then return nil end
+  local data = file:read("*a")
+  file:close()
+  return data
+end
+local baseline = {} -- slot file name -> its contents when this state began (false: no file)
+for i = 1, 12 do
+  local slot = ("wd1_saveslot%d.bundle"):format(i)
+  baseline[slot] = slotContent(slot) or false
+end
+local lastWatch = -10
+TWDA.onFrame("savewatch", function()
+  local now = TWDA.now()
+  if now - lastWatch < 3 then return end
+  lastWatch = now
+  if not isEpisodeScript(rawget(G, "TWDA_firstScript")) then return end
+  local slot = currentSlot()
+  local content = slot and slotContent(slot)
+  if content == nil then return end
+  if baseline[slot] ~= nil and content ~= baseline[slot] then recordSave("slot file changed") end
+  baseline[slot] = content
+end)
 
 -- Copying and deleting slots in Season 1's Save Slots menu.
 TWDA.hookBefore("SaveSlots_DoCopyForReal", function()
@@ -129,7 +170,9 @@ local function leaveNote(script, via)
   if type(script) ~= "string" or script == "" or script:lower() == BOOTSTRAP:lower() then return false end
   local file = io.open(NOTE, "wb")
   if not file then return false end
-  file:write(("%d\t%s\n"):format(os.time(), script))
+  -- (The time of day in seconds: os.time() moves in 128-second steps with this Lua's 4-byte floats.)
+  local h, m, s = os.date("%H:%M:%S"):match("(%d+):(%d+):(%d+)")
+  file:write(("%d\t%s\n"):format(tonumber(h) * 3600 + tonumber(m) * 60 + tonumber(s), script))
   file:close()
   TWDA.log(("%s: next state starts with %s (real first script %s)"):format(via, BOOTSTRAP, script))
   TWDA.flushLog()

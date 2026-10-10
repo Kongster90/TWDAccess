@@ -9,7 +9,6 @@ local G = _G
 
 local choices = {}      -- texts of the choices currently on screen
 local collecting = nil  -- list being filled while the game builds the choice display
-local selected = 0      -- our idea of the highlighted option, for wheel/arrow movement
 
 local function describeChoice(text)
   if text == "..." or text == "" then return "Say nothing" end
@@ -22,6 +21,9 @@ local function announce(interrupt)
     return
   end
   local parts = { "Choices" }
+  -- What a sighted player sees that the choices are about (panels.lua: where Clementine is aiming).
+  local context = TWDA.choiceContext and TWDA.choiceContext(choices)
+  if context then table.insert(parts, 1, context) end
   for i, text in ipairs(choices) do
     parts[#parts + 1] = ("%d: %s"):format(i, describeChoice(text))
   end
@@ -90,26 +92,23 @@ local function afterStart()
   collecting = nil
   if #list == 0 then return end
   choices = list
-  selected = 0
   picked = false
   TWDA.log("choices: " .. table.concat(choices, " | "))
   keepPaused()
   if TWDA.settings.choices ~= false then announce(true) end
 end
 
-local function moveSelection(delta)
+-- After the arrow keys or the mouse wheel: the option the game itself now highlights (its upvalue
+-- mHighlightedIdx; Enter picks that one). Counting key presses ourselves drifted from it.
+local function readHighlight(mode)
   if #choices == 0 then return end
-  if selected == 0 then
-    selected = delta > 0 and 1 or #choices
-  else
-    selected = (selected - 1 + delta) % #choices + 1
-  end
-  TWDA.say(("%d: %s"):format(selected, describeChoice(choices[selected])), { interrupt = true })
+  local index = TWDA.upvalue(rawget(mode, "OnDown"), "mHighlightedIdx")
+  if type(index) ~= "number" or not choices[index] then return end
+  TWDA.say(("%d: %s"):format(index, describeChoice(choices[index])), { interrupt = true })
 end
 
 local function onEnd()
   choices = {}
-  selected = 0
   resumeDialogs()
 end
 
@@ -147,11 +146,8 @@ local function attach()
   if attached[mode] == current then return end
   TWDA.hookMethod(mode, "OnStart", "mode_DialogChoice.OnStart", onStart, afterStart)
   TWDA.hookMethod(mode, "OnEnd", "mode_DialogChoice.OnEnd", onEnd)
-  for _, key in ipairs({ "OnDown", "OnScrollDown" }) do
-    TWDA.hookMethod(mode, key, "mode_DialogChoice." .. key, function() moveSelection(1) end)
-  end
-  for _, key in ipairs({ "OnUp", "OnScrollUp" }) do
-    TWDA.hookMethod(mode, key, "mode_DialogChoice." .. key, function() moveSelection(-1) end)
+  for _, key in ipairs({ "OnDown", "OnScrollDown", "OnUp", "OnScrollUp" }) do
+    TWDA.hookMethod(mode, key, "mode_DialogChoice." .. key, nil, function() readHighlight(mode) end)
   end
   wrapSelectChoice(mode)
   attached[mode] = rawget(mode, "OnStart")

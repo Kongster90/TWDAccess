@@ -47,6 +47,16 @@ function TWDA.flushLog()
   end)
 end
 
+-- Development: with TWDA.tracing on (from the dev console), a line written straight to the log
+-- before a call into the engine, so that the last line before a crash says which call it was.
+-- TWDA.traceFrames = { lookaround = true } also traces those frame callbacks (it floods the log,
+-- which load_slot2.ps1 reads).
+function TWDA.trace(message)
+  if not TWDA.tracing then return end
+  TWDA.log("trace " .. message)
+  TWDA.flushLog()
+end
+
 ---------------------------------------------------------------------------------------------------
 -- Speech. Messages are collected during a frame and sent together at the end of it, each request
 -- numbered so the helper can put them back in order.
@@ -79,7 +89,7 @@ function TWDA.say(text, opts)
     outbox = {}
   end
   outbox[#outbox + 1] = (interrupt and "i" or "q") .. "\t" .. text
-  TWDA.lastSpoken = text
+  TWDA.lastSpoken, TWDA.lastSpokenAt = text, TWDA.now()
   TWDA.log("say" .. (interrupt and "!" or "") .. " " .. text)
   if not TWDA.threadAlive() then TWDA.flushSpeech() end
 end
@@ -127,6 +137,12 @@ function TWDA.onFrame(name, fn)
   frameCallbacks[#frameCallbacks + 1] = { name = name, fn = fn, errors = 0 }
 end
 
+function TWDA.frameNames()
+  local names = {}
+  for _, entry in ipairs(frameCallbacks) do names[#names + 1] = entry.name end
+  return names
+end
+
 function TWDA.threadAlive()
   return lastTick >= 0 and TWDA.now() - lastTick < 1.0
 end
@@ -141,7 +157,9 @@ local function frameLoop()
     end
     lastTick = TWDA.now()
     for _, cb in ipairs(frameCallbacks) do
-      if cb.errors < 5 then
+      -- (TWDA.frameOff[name] = true skips one, for finding which one misbehaves.)
+      if cb.errors < 5 and not (TWDA.frameOff and TWDA.frameOff[cb.name]) then
+        if TWDA.tracing and TWDA.traceFrames and TWDA.traceFrames[cb.name] then TWDA.trace("frame " .. cb.name) end
         local cbOk, err = pcall(cb.fn)
         if not cbOk then
           cb.errors = cb.errors + 1

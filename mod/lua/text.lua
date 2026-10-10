@@ -59,6 +59,8 @@ function TWDA.cleanText(text)
     if inner:find("%.d3dtx") then return " " .. glyph(inner) .. " " end
     return " "
   end)
+  -- "%A9" is the game's escape for the copyright sign (the credits).
+  text = text:gsub("%%A9", "copyright ")
   text = text:gsub("%s+", " ")
   return (text:gsub("^ ", ""):gsub(" $", ""))
 end

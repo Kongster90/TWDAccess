@@ -40,7 +40,14 @@ local viaRequire = loadedByRequire()
 
 -- The real first script of this state, if an engine reset left us a fresh note. The note is always
 -- removed, so a stale one (say, after a crash) can never run somewhere it does not belong.
+-- The note's time is the time of day in seconds: os.time() itself is useless here, as this Lua's
+-- numbers are 4-byte floats and it only changes in steps of 128 seconds.
+local function secondsOfDay()
+  local h, m, s = os.date("%H:%M:%S"):match("(%d+):(%d+):(%d+)")
+  return tonumber(h) * 3600 + tonumber(m) * 60 + tonumber(s)
+end
 local nextScript
+local noteProblem = nil
 pcall(function()
   local path = MOD_DIR .. "next_script.txt"
   local file = io.open(path, "rb")
@@ -49,7 +56,16 @@ pcall(function()
   file:close()
   os.remove(path)
   local stamp, script = content:match("^(%d+)\t([^\r\n]+)")
-  if stamp and os.time() - tonumber(stamp) <= 120 and not viaRequire then nextScript = script end
+  local age = stamp and (secondsOfDay() - tonumber(stamp)) % 86400
+  if not stamp then
+    noteProblem = "unreadable note"
+  elseif age > 120 then
+    noteProblem = "note " .. tostring(age) .. " s old"
+  elseif viaRequire then
+    noteProblem = "note ignored on the require path"
+  else
+    nextScript = script
+  end
 end)
 
 -- No note, yet we are this state's first script: it was started from a save. The engine keeps the
@@ -164,6 +180,7 @@ if nextScript then
   if twda and twda.log then
     twda.log("bootstrap: running the game's first script " .. nextScript
       .. (recovered and (" (loading a save; from " .. recovered .. ")") or "")
+      .. (noteProblem and (" [" .. noteProblem .. "]") or "")
       .. (chunk and "" or " (loadfile failed, using LoadScript)"))
     twda.flushLog()
   end

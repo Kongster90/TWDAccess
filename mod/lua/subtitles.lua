@@ -15,6 +15,11 @@ TWDA.hookBefore("Subtitle_OnCreate", function(subtitle)
   TWDA.log(("subtitle [%s] %s"):format(speaker, text))
   if text == "" then return end
   TWDA.lastSubtitle = speaker ~= "" and (speaker .. ": " .. text) or text
+  -- Other modules can react to what is said (guided.lua: "Stop right there!").
+  for name, handler in pairs(TWDA.onSubtitle or {}) do
+    local ok, err = pcall(handler, speaker, text)
+    if not ok then TWDA.log("subtitle handler " .. tostring(name) .. ": " .. tostring(err)) end
+  end
   local mode = TWDA.settings.subtitles
   if mode == "full" then
     TWDA.say(TWDA.lastSubtitle)

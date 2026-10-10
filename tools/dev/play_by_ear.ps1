@@ -1,0 +1,148 @@
+<#
+  Development helper: plays a fight the way a player listening to the mod would, reacting only to
+  what the mod says (the "say" lines in twda.log), with human-ish timing. Written for the
+  babysitter fight in Clementine's house (2026-10-07) with actionscenes = normal.
+    .\play_by_ear.ps1 -Seconds 90 -MashMs 130 -ReactMs 500
+    .\play_by_ear.ps1 -HoldQ        # hold Q down instead of pressing it (the slow-mode assist)
+  Rules: "Struggle!" starts pressing Q every MashMs; "E now!" presses E; "Too late" starts Q again;
+  a line ending "Enter!" presses Enter; "Tab to choose" presses Tab, then Enter; "Turn:" presses
+  the -Turn arrow (Right by default; the arrows need the extended-key flag). Stops at choices
+  or the death screen (-Answer 1 answers every choice with 1 instead). Run it right after the checkpoint loads (see checkpoint_watch.ps1 -Seconds 0).
+#>
+param([int]$Seconds = 90, [int]$MashMs = 130, [int]$ReactMs = 500, [switch]$HoldQ, [string]$Turn = "Right", [switch]$IgnoreChoices, [int]$Answer = 0, [int]$HoldS = 6, [string]$StartKey = "", [string[]]$Leans = @(),
+      [string]$Skip = "", [string[]]$Prefer = @())
+
+. (Join-Path $PSScriptRoot "game_input.ps1")
+$game = "G:\Steam\steamapps\common\The Walking Dead The Telltale Definitive Series"
+$log = "$game\TWDAccess\twda.log"
+$proc = Get-Process WDC | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+$h = $proc.MainWindowHandle
+
+$fs = [System.IO.File]::Open($log, 'Open', 'Read', 'ReadWrite')
+[void]$fs.Seek(0, 'End')
+$reader = New-Object System.IO.StreamReader($fs)
+
+function Press([int]$code, [string]$label) {
+    [void][GameInput]::Focus($h)
+    [GameInput]::Key([uint16]$code, ($code -ge 0x21 -and $code -le 0x28), 50)
+    "{0:HH:mm:ss.fff} press {1}" -f (Get-Date), $label
+}
+
+# -StartKey Enter: press it once listening (Enter on the death screen reloads a checkpoint that
+# may start the action at once).
+if ($StartKey -eq "Enter") { Press 0x0D "Enter" } elseif ($StartKey -eq "F6") { Press 0x75 "F6" }
+
+$mashing = $false
+$holding = 0
+$sticky = $false
+$holdUntil = Get-Date
+$walkKeys = @()
+$leanIndex = 0
+$lastMash = Get-Date
+$lastFocus = Get-Date
+$end = (Get-Date).AddSeconds($Seconds)
+while ((Get-Date) -lt $end) {
+    while ($null -ne ($line = $reader.ReadLine())) {
+        if ($line -notmatch " say!? (.*)$") { continue }
+        $text = $Matches[1]
+        "{0:HH:mm:ss.fff} heard: {1}" -f (Get-Date), $text
+        # -Skip "regex": lines a test wants left alone (to see what the game does without them).
+        if ($Skip -and $text -match $Skip) { "skipped"; continue }
+        # Anything new said ends a guided move's hold.
+        # (A "Press W to back away!" hold is kept through the fight that goes with it, as a player
+        # would: Enter on "Now! Enter!" while still holding W; the train station, Episode 3.)
+        if ($holding -and -not $sticky -and $text -notmatch "Use the|^Press [WASD] to ") { [GameInput]::KeyState([uint16]$holding, $false); "released"; $holding = 0 }
+        if ($holding -and $text -match "^You are dead") { [GameInput]::KeyState([uint16]$holding, $false); $holding = 0 }
+        # Walking in moving cover (cover.lua): hold the keys on "Walk: A" (and Shift on "Run: Shift
+        # and A"), let go on "Stop".
+        if ($text -match "(Walk|Run|Back): (Shift and )?([WASD](?: and [WASD])?)\s*$") {
+            foreach ($k in $walkKeys) { [GameInput]::KeyState([uint16]$k, $false) }
+            $walkKeys = @($Matches[3] -split " and " | ForEach-Object { [int][char]$_ })
+            if ($Matches[2]) { $walkKeys = @(0x10) + $walkKeys }
+            "walking " + $Matches[2] + $Matches[3]
+        } elseif ($text -match "^Guided path\. Hold W or S" -and $walkKeys.Count -eq 0) {
+            $walkKeys = @([int][char]"W"); "walking W (guided path)"
+        } elseif ($text -match "^Go on: hold ([WASD])\.") {
+            # guided.lua after a stop: move on along the path.
+            foreach ($k in $walkKeys) { [GameInput]::KeyState([uint16]$k, $false) }
+            $walkKeys = @([int][char]$Matches[1]); "walking " + $Matches[1]
+        } elseif (($text -match "Stop$" -or $text -match "^Stop!") -and $walkKeys.Count -gt 0) {
+            foreach ($k in $walkKeys) { [GameInput]::KeyState([uint16]$k, $false) }
+            $walkKeys = @(); "stopped"
+        }
+        # -Leans D,A: on each new "Hiding. To lean out" lean the next way (a player's choice).
+        if ($text -match "^Hiding\. To lean out" -and $leanIndex -lt $Leans.Count) {
+            Start-Sleep -Milliseconds $ReactMs
+            $lk = $Leans[$leanIndex]; $leanIndex++
+            Press ([int][char]$lk) "lean $lk"
+        }
+        if ($text -match "^Struggle[!,]") {
+            Start-Sleep -Milliseconds $ReactMs
+            if ($HoldQ) { [void][GameInput]::Focus($h); [GameInput]::KeyState(0x51, $true); "holding Q" } else { $mashing = $true }
+        }
+        elseif ($text -match "^E now") {
+            Start-Sleep -Milliseconds ([int]($ReactMs / 2)); $mashing = $false
+            if ($HoldQ) { [GameInput]::KeyState(0x51, $false) }
+            Press 0x45 "E"
+        }
+        elseif ($text -match "^Too late") { if ($HoldQ) { [GameInput]::KeyState(0x51, $true) } else { $mashing = $true } }
+        elseif ($text -match "Hold Shift and (W|A|S|D)") {
+            # Run: hold Shift and the key for a few seconds.
+            $code = [int][char]$Matches[1]
+            [void][GameInput]::Focus($h); [GameInput]::KeyState(0x10, $true); [GameInput]::KeyState([uint16]$code, $true)
+            "holding Shift+" + $Matches[1]
+            $end2 = (Get-Date).AddSeconds(4)
+            while ((Get-Date) -lt $end2) { [void][GameInput]::Focus($h); [GameInput]::KeyState([uint16]$code, $true); Start-Sleep -Milliseconds 100 }
+            [GameInput]::KeyState([uint16]$code, $false); [GameInput]::KeyState(0x10, $false)
+        }
+        elseif ($text -match "Use the (W|A|S|D) \(" -or $text -match "^Press (W|A|S|D) to ") {
+            # A guided move ("Use the S (back) key to get away!"): hold the key for up to -HoldS
+            # seconds, or until something else is said.
+            Start-Sleep -Milliseconds $ReactMs
+            $holdKey = $Matches[1]
+            $holding = [int][char]$holdKey
+            $sticky = $text -match "^Press "
+            $holdUntil = (Get-Date).AddSeconds($HoldS)
+            "holding " + $holdKey
+        }
+        elseif ($text -match "^Turn: ") { Start-Sleep -Milliseconds $ReactMs; Press $(if ($Turn -eq "Left") { 0x25 } else { 0x27 }) $Turn }
+        elseif ($text -match "Pick a number, then Enter") {
+            # A choice of actions ("zombie arm: 2 Shoot, 3 Pry"): the first -Prefer word found, else
+            # the first number offered (what Enter alone would do).
+            $num = $null
+            foreach ($w in $Prefer) { if ($text -match "(\d) $w") { $num = [int]$Matches[1]; break } }
+            if (-not $num -and $text -match "(\d) [A-Z]") { $num = [int]$Matches[1] }
+            Start-Sleep -Milliseconds $ReactMs
+            if ($num) { Press (0x30 + $num) "$num" }
+            Press 0x0D "Enter"
+        }
+        elseif ($text -match "Tab to choose") { Start-Sleep -Milliseconds $ReactMs; Press 0x09 "Tab"; Start-Sleep -Milliseconds 600; Press 0x0D "Enter" }
+        elseif ($text -match "Enter!$|Enter to do it.$") { Start-Sleep -Milliseconds $ReactMs; Press 0x0D "Enter" }
+        elseif ($text -match " ([AD]) for the other side\.$") { Start-Sleep -Milliseconds $ReactMs; Press ([int][char]$Matches[1]) "side $($Matches[1])" }
+        elseif ($text -match "her aim is (too far left|too far right|too high|too low|on the bottle)\. Choices\.") {
+            # Clementine's shooting lesson (Episode 3): steer by what the mod says.
+            $key = @{ "too far left" = 2; "too far right" = 1; "too high" = 2; "too low" = 1; "on the bottle" = 3 }[$Matches[1]]
+            Start-Sleep -Milliseconds 800; Press (0x30 + $key) "$key (aim)"
+        }
+        elseif ($text -match "^Choices\." -and $Answer -gt 0) { Start-Sleep -Milliseconds 800; Press (0x30 + $Answer) "$Answer" }
+        elseif (($text -match "^Choices\." -and -not $IgnoreChoices) -or $text -match "^You are dead") { [GameInput]::KeyState(0x51, $false); foreach ($k in $walkKeys) { [GameInput]::KeyState([uint16]$k, $false) }; "stopping"; $reader.Close(); exit 0 }
+    }
+    if ($walkKeys.Count -gt 0) {
+        [void][GameInput]::Focus($h)
+        foreach ($k in $walkKeys) { [GameInput]::KeyState([uint16]$k, $true) }
+    }
+    if ($holding) {
+        if ((Get-Date) -ge $holdUntil) { [GameInput]::KeyState([uint16]$holding, $false); "released"; $holding = 0 }
+        else { [void][GameInput]::Focus($h); [GameInput]::KeyState([uint16]$holding, $true) }
+    }
+    if ($mashing -and ((Get-Date) - $lastMash).TotalMilliseconds -ge $MashMs) {
+        $lastMash = Get-Date
+        [void][GameInput]::Focus($h)
+        [GameInput]::Key([uint16]0x51, $false, 40)
+    }
+    if (((Get-Date) - $lastFocus).TotalSeconds -ge 2) { $lastFocus = Get-Date; [void][GameInput]::Focus($h) }
+    Start-Sleep -Milliseconds 20
+}
+[GameInput]::KeyState(0x51, $false)
+foreach ($k in $walkKeys) { [GameInput]::KeyState([uint16]$k, $false) }
+$reader.Close()
