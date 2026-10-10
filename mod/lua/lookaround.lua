@@ -546,6 +546,7 @@ local function nodeLabel(agent)
   object = object:gsub("%d+$", ""):gsub("(%l)(%u)", "%1 %2"):gsub("_", " "):lower()
   object = object:match("^%s*(.-)%s*$") -- ("shoot_zombie_2" left "zombie " with a space)
   object = object:gsub("baby sitter", "babysitter")
+  object = PRETTY[object] or object
   return object, verb:sub(1, 1):upper() .. verb:sub(2):lower()
 end
 
@@ -791,6 +792,9 @@ end)
 local lastTargetName, lastIndex = nil, 0
 local cycleMoves = 0 -- listMoves at the last Tab
 local preferNext = nil -- name of the hotspot the next Tab goes to (just announced by actions.lua)
+-- A hotspot read out with its numbered actions but not pressed on the player (one that offers
+-- Shoot): the number keys still mean it. { name, at }
+local numbersFor = nil
 local preferNextAt = -10
 -- The same announcement, kept after Tab has used preferNext, for Enter's choice of action.
 local announced = { name = nil, at = -10 }
@@ -1330,6 +1334,11 @@ local function enterPressed()
     end
     if not offered then target = nil end
   end
+  -- So is one chosen before something newer was announced (the shovel Tabbed to at the boy's
+  -- grave, Episode 4, out of reach once "Loose Dirt: Shovel. Enter to do it." came).
+  if target and stillPreferred() and preferNext ~= target.name and preferNextAt > (target.since or 0) then
+    target = nil
+  end
   -- (Even in action scenes this goes through the reticle: the game only applies the chosen action,
   -- such as Take rather than Look, to uses that the reticle started; Main_OnUse on its own leaves
   -- the hotspot's dialog waiting and the scene stalls.)
@@ -1368,6 +1377,17 @@ local function enterPressed()
   -- Something was just announced as new (actions.lua, peek.lua): Enter goes for it, with the
   -- action announced (the truck's "Move To" rather than its first action, "Look At"). Not when
   -- that was a while ago, or the reticle has read out something else since.
+  -- A number was picked for something read out with its numbered actions ("Zombie: 1 Look At,
+  -- 2 Shoot, 3 Bash, 4 Stomp." for the boy in the attic, Episode 4): go and do that.
+  if chosen and chosen.at and TWDA.now() - chosen.at < 15 then
+    for _, entry in ipairs(hotspots()) do
+      if entry.name == chosen.name then
+        target = { agent = entry.agent, name = entry.name, since = TWDA.now(), actOnReach = true }
+        lastTargetName = entry.name
+        return
+      end
+    end
+  end
   if stillPreferred() then
     for _, entry in ipairs(hotspots()) do
       if entry.name == preferNext then
@@ -1375,6 +1395,18 @@ local function enterPressed()
         target = { agent = entry.agent, name = entry.name, since = TWDA.now(), actOnReach = true,
           pickNonLook = not looking }
         lastTargetName, preferNext = entry.name, nil
+        return
+      end
+    end
+  end
+  -- Whichever came last, the announcement or the reticle's last focus (the shovel, read out before
+  -- "Loose Dirt: Shovel. Enter to do it." at the boy's grave, Episode 4; Enter came 20 s later).
+  if announced.name and announced.at > (current.at or -10) then
+    for _, entry in ipairs(hotspots()) do
+      if entry.name == announced.name then
+        target = { agent = entry.agent, name = entry.name, since = TWDA.now(), actOnReach = true,
+          pickNonLook = not onlyLooks(entry.agent) }
+        lastTargetName = entry.name
         return
       end
     end
@@ -1506,12 +1538,13 @@ TWDA.onFrame("lookaround", function()
     -- (Within the same time as Enter goes for it: the pipe in the Savannah sewers was announced
     -- with "1 Turn left, 2 Turn right", 2 was pressed after eight seconds, and Enter turned it left.)
     local announcedName = stillPreferred()
+      or (numbersFor and TWDA.now() - numbersFor.at < 15 and numbersFor.name) or nil
     local name = focused ~= nil and TWDA.agentName(focused) or (target and target.name) or announcedName
       or TWDA.agentName(current.agent)
     local actions = (lastActions and lastActions.name == name) and lastActions.actions or actionList()
     local action = actions[number]
     if action and name ~= "" then
-      chosen = { name = name, index = number }
+      chosen = { name = name, index = number, at = TWDA.now() }
       if focused == nil then TWDA.say(action, { interrupt = true }) end
     end
   end
@@ -1716,6 +1749,9 @@ end
 TWDA.hotspots = hotspots
 -- actions.lua: the next Tab goes to this hotspot first (what was just announced as new).
 -- With an action index, Enter on it does that action (as if picked with its number key).
+function TWDA.numbersMean(name)
+  numbersFor = { name = name, at = TWDA.now() }
+end
 function TWDA.preferNextTab(name, actionIndex)
   preferNext, preferNextAt = name, TWDA.now()
   announced = { name = name, at = preferNextAt }

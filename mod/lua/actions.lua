@@ -649,6 +649,8 @@ TWDA.onFrame("sceneoffers", function()
       TWDA.log("sceneoffers (walking): " .. text)
       TWDA.say(text, { interrupt = true })
       if TWDA.preferNextTab and not violent then TWDA.preferNextTab(here[1].name) end
+      -- (Its numbers still mean it: "3" then Enter bashes the boy in the attic, Episode 4.)
+      if violent and TWDA.numbersMean then TWDA.numbersMean(here[1].name) end
       -- (Its new action has just been read out with the rest.)
       if pendingGain and pendingGain.entry.name == here[1].name then pendingGain = nil end
     end
