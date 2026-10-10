@@ -145,9 +145,174 @@ local function legendButtonText(text)
   return text
 end
 
+-- Season 2's menus (projectseason2's button.lua): the button agent has no text; its label is a
+-- sibling under the same parent (ui_list_button_label_1 beside ui_list_button_button_1), and a
+-- shown "..._lock_N" marks a locked item (My Choices before an episode is played).
+-- (Also the texts under the label: a save file's "Empty" or its date, in the save carousel.)
+local function siblingText(button)
+  local okP, parent = pcall(AgentGetParent, button)
+  if not okP or parent == nil then return nil end
+  local okC, kids = pcall(AgentGetChildren, parent)
+  local texts, locked = {}, false
+  local function add(agent, depth)
+    if depth > 2 or isHidden(agent) then return end
+    local text = TWDA.normalCaps(TWDA.agentText(agent))
+    if text and text ~= "" then texts[#texts + 1] = text end
+    local okK, grand = pcall(AgentGetChildren, agent)
+    for _, g in ipairs(okK and type(grand) == "table" and grand or {}) do add(g, depth + 1) end
+  end
+  for _, kid in ipairs(okC and type(kids) == "table" and kids or {}) do
+    if kid ~= button and not isHidden(kid) then
+      if TWDA.agentName(kid):lower():find("lock", 1, true) then locked = true else add(kid, 1) end
+    end
+  end
+  if #texts == 0 then return nil end
+  if locked then texts[#texts + 1] = "locked" end
+  return table.concat(texts, ", ")
+end
+
+-- A Season 2 menu's title and size, once per menu. The menu is a root agent ("ui_menu_settings",
+-- "ui_coverflow_saveSlots") whose rows ("..._reference_N") are its children or one level down;
+-- the title is its shown "ui_header_N" (none on the main menu). Carousels go left and right.
+local lastSeason2Root, season2WasEmpty = nil, false
+local function season2TitleOf(root)
+  local rootName = root ~= nil and TWDA.agentName(root) or ""
+  if rootName == "" then return nil end
+  local count, title = 0, nil
+  local function scan(agent, depth)
+    if depth > 3 or isHidden(agent) then return end
+    local name = TWDA.agentName(agent)
+    if name:find("^ui_header_%d+$") then
+      title = title or TWDA.normalCaps(TWDA.agentText(agent))
+      return
+    end
+    if name:find("_reference_%d+$") and not name:find("header", 1, true) and not name:lower():find("backbutton", 1, true) then
+      count = count + 1
+      return
+    end
+    local okC, kids = pcall(AgentGetChildren, agent)
+    for _, k in ipairs(okC and type(kids) == "table" and kids or {}) do scan(k, depth + 1) end
+  end
+  local okC, kids = pcall(AgentGetChildren, root)
+  for _, k in ipairs(okC and type(kids) == "table" and kids or {}) do
+    -- (The header's parent is itself hidden while the header shows.)
+    if TWDA.agentName(k):find("^ui_header_reference") then
+      local okH, heads = pcall(AgentGetChildren, k)
+      for _, h in ipairs(okH and type(heads) == "table" and heads or {}) do
+        if TWDA.agentName(h):find("^ui_header_%d+$") and not isHidden(h) then title = title or TWDA.normalCaps(TWDA.agentText(h)) end
+      end
+    else
+      scan(k, 1)
+    end
+  end
+  title = title or (rootName == "ui_menu_main" and "Main" or nil)
+  if not title then return nil end
+  -- (A screen with nothing to choose, Controls' picture of the keys; the frame check waits longer
+  -- for these, since a menu has no rows either just after it is pushed.)
+  if count == 0 then return title .. ". Nothing to choose here, only a picture. Escape goes back", true end
+  local keys = rootName:find("coverflow", 1, true) and "Left and right arrows to choose" or "Up and down arrows to choose"
+  local lower = title:lower()
+  local noun = (lower:find("menu$") or lower:find("^select") or lower:find("^choose")) and "" or " menu"
+  return ("%s%s, %d %s. %s, Enter to select"):format(title, noun, count, count == 1 and "item" or "items", keys)
+end
+local function season2Title(button)
+  -- (Only in Season 2's menus, the UIZ framework; the hub's widget menus have titles of their own.)
+  if type(rawget(G, "UIZ_GetActiveMenu")) ~= "function" then return nil end
+  local okA, root = pcall(UIZ_GetActiveMenu)
+  if not okA or root == nil or (root == lastSeason2Root and not season2WasEmpty) then return nil end
+  local text, empty = season2TitleOf(root)
+  if not text or empty then return nil end
+  lastSeason2Root, season2WasEmpty = root, false
+  return text
+end
+
+-- Season 2's popups (popup.lua's Popup(headerNode, messageNode, ...) pushes a UIZ menu of its
+-- own): everything it shows, header, message and buttons, read when it becomes the active menu.
+local function season2PopupText(root)
+  if not TWDA.agentName(root):lower():find("popup", 1, true) then return nil end
+  local texts = {}
+  local okS, agents = pcall(SceneGetAgents, AgentGetScene(root))
+  for _, a in ipairs(okS and type(agents) == "table" and agents or {}) do
+    local name = TWDA.agentName(a)
+    if not isHidden(a) and (name:find("^ui_popup_header") or name:find("^ui_popup_message")
+      or name:find("^ui_popup_button_label_%d+$")) then
+      local text = TWDA.normalCaps(TWDA.agentText(a))
+      local okPos, pos = pcall(AgentGetScreenPos, a)
+      if text and text ~= "" then texts[#texts + 1] = { text = text, y = okPos and pos and pos.y or 0 } end
+    end
+  end
+  if #texts == 0 then return nil end
+  table.sort(texts, function(a, b) return a.y < b.y end)
+  local parts = {}
+  for _, t in ipairs(texts) do parts[#parts + 1] = t.text end
+  parts[#parts + 1] = "Up and down arrows to choose, Enter to confirm"
+  return TWDA.joinSentences(parts)
+end
+
+-- A Season 2 menu that has just come up, before anything is selected (the game selects nothing
+-- until an arrow is pressed): its title, read at once. The UIZ framework knows the active menu
+-- (UIZ_GetActiveMenu: the menu's root agent; the menus left behind stay "shown").
+local season2CheckAt, season2Pending, season2PendingSince = 0, nil, 0
+TWDA.onFrame("menus.season2", function()
+  if type(rawget(G, "UIZ_GetActiveMenu")) ~= "function" then return end
+  local now = TWDA.now()
+  if now - season2CheckAt < 0.3 then return end
+  season2CheckAt = now
+  local ok, root = pcall(UIZ_GetActiveMenu)
+  if not ok or root == nil or (root == lastSeason2Root and not season2WasEmpty) then return end
+  local popupText = root ~= lastSeason2Root and season2PopupText(root)
+  if popupText then
+    lastSeason2Root, season2WasEmpty = root, false
+    TWDA.lastPopup = popupText
+    queue("popup", popupText)
+    return
+  end
+  -- (Only once the same text has come twice in a row: the rows are added over several frames. A
+  -- menu gone back to can show no rows for a while, so one read as empty is read again if rows come.)
+  local text, empty = season2TitleOf(root)
+  if root == lastSeason2Root and empty then return end
+  if text and text == season2Pending and (not empty or now - season2PendingSince > 2) then
+    lastSeason2Root, season2Pending, season2WasEmpty = root, nil, empty and true or false
+    menuTitle = text
+    queue("title", text)
+  elseif text ~= season2Pending then
+    season2Pending, season2PendingSince = text, now
+  end
+end)
+
+-- Season 2's settings rows: the selected agent is the row's label (ui_list_slider_label_2); its
+-- parent is the row (ui_list_slider_reference_2), which the menu registers as a widget with value,
+-- minVal and maxVal when it is a slider; a toggle shows its value on ui_list_toggle_var_N.
+local function season2RowValue(button)
+  if button == nil or type(rawget(G, "UIZ_GetActiveMenu")) ~= "function" then return nil end
+  local okP, row = pcall(AgentGetParent, button)
+  if not okP or row == nil then return nil end
+  local rowName = TWDA.agentName(row)
+  local n = rowName:match("_(%d+)$")
+  if rowName:find("^ui_list_toggle_reference") and n then
+    local okV, var = pcall(AgentFind, "ui_list_toggle_var_" .. n)
+    return okV and var ~= nil and TWDA.normalCaps(TWDA.agentText(var)) or nil
+  elseif rowName:find("^ui_list_slider_reference") then
+    local okM, menu = pcall(UIZ_GetActiveMenu)
+    for _, w in pairs(okM and menu and rawget(menu, "registeredWidgets") or {}) do
+      if type(w) == "table" and rawget(w, "isSlider") and TWDA.agentName(w) == rowName then
+        local min, max, value = rawget(w, "minVal") or 0, rawget(w, "maxVal") or 1, rawget(w, "value") or 0
+        if max == min then return nil end
+        return math.floor((value - min) / (max - min) * 100 + 0.5) .. " percent"
+      end
+    end
+  end
+  return nil
+end
+
 local function describeButton(button)
   local widget = widgetOf(button)
-  local base = describeWidget(widget) or TWDA.agentText(button)
+  local base = describeWidget(widget) or TWDA.agentText(button) or siblingText(button)
+  if base and type(rawget(G, "UIZ_GetActiveMenu")) == "function" then
+    base = TWDA.normalCaps(base)
+    local value = season2RowValue(button)
+    if value then base = base .. ", " .. value end
+  end
   if base and TWDA.agentName(button):find("legendButton", 1, true) then base = legendButtonText(base) end
   local text = base
   if text and TWDA.settings.tooltips ~= false then
@@ -263,6 +428,11 @@ local function onSelect(button)
   end
   local text, widget, base = describeButton(button)
   local now = TWDA.now()
+  local s2title = season2Title(button)
+  if s2title then
+    menuTitle = s2title
+    queue("title", s2title)
+  end
   if quietButton == button then
     quietButton = nil
     current = { button = button, widget = widget, text = base, time = now }
@@ -331,6 +501,22 @@ TWDA.onFrame("menus.value", function()
     current.text = text
     TWDA.lastMenuItem = text
     queue("value", changed)
+  end
+end)
+
+-- Season 2's rows change with Left and Right (or Enter on a toggle): say the new value.
+local season2Value, season2ValueButton, season2ValueAt = nil, nil, 0
+TWDA.onFrame("menus.season2value", function()
+  if not current or not current.button or type(rawget(G, "UIZ_GetActiveMenu")) ~= "function" then return end
+  local now = TWDA.now()
+  if now - season2ValueAt < 0.12 then return end
+  season2ValueAt = now
+  local value = season2RowValue(current.button)
+  if current.button ~= season2ValueButton then
+    season2ValueButton, season2Value = current.button, value
+  elseif value and value ~= season2Value then
+    season2Value = value
+    queue("value", value)
   end
 end)
 
