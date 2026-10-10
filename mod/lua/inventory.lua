@@ -22,7 +22,7 @@ end
 local BETTER = {
   ["map savannah"] = "map of Savannah", ["tape danger"] = "tape", ["shovel empty"] = "shovel",
   ["valve on"] = "valve wheel", ["bottle whiskey"] = "bottle of whiskey", ["key train station"] = "station key",
-  ["ice climber"] = "climbing pick", ["photo torn"] = "torn photo",
+  ["ice climber"] = "climbing pick", ["photo torn"] = "torn photo", ["dv tape"] = "video tape", ["paper slip logan"] = "paper slip with a code",
 }
 
 local function itemName(item)

@@ -14,11 +14,10 @@ Last updated: 2026-10-09 (fifth session, about 09:00; see the first items).
   fifth session reconstructed it from that session's transcript into "Episode 3 notes", the file
   map (sniper.lua, panels.lua, readables.lua) and the tools list. See "Fifth session" below that
   for what the fifth session itself did.
-- The fifth session finished Episode 3 and played Episode 4 in slot 2 to the outskirts of
-  Crawford (env_crawfordExterior.lua; dev_saves\ep4_crawford, saved 08:38): through the manhole,
-  hiding (lean W), then "Guard: Move To. Enter to do it." and a guided path (sneaking up on the
-  guard with Kenny). Next: gamepressure's Episode IV "Georgia's Last City" pages (Arrival and
-  Battery, then Meds and Escape).
+- The fifth session finished Episode 3 and all of Episode 4 in slot 2 by ear (dev_saves\ep4done:
+  Season 1's menu with Episode 5 "No Time Left" next). See "Episode 4 notes" and the change lists
+  under "Fifth session". The user now closes SteelSeries GG while the agent works (it leaks
+  memory with each game launch).
 - The game closed at 08:44 because the user closed it (not a crash). Free commit memory was then
   4.8 GB of 34: the SteelSeries capture service starts a copy with every game launch and two
   copies held about 10 GB (see the memory note), so the session did not relaunch the game and
@@ -211,8 +210,11 @@ G. (#16) The first Enter after a mod walk arrives sometimes does nothing (Episod
    shed door, grave); a second Enter works. Not solved; see "Fifth session: more mod changes".
 H. (#17) Walks take the shortest way and can lead Lee into walkers (Savannah sewers). A walk now
    stops on the panic vignette or Logic["Dying"] ("Danger! Walk stopped short of ..."), untested.
-I. (#18) saves.txt missed one save (Episode 4 house search); the slot-file watcher in
-   carryover.lua is the fix, not yet seen working.
+I. (#18) Probably not a real problem: a slot has two files, and the main wd1_saveslotN.bundle is
+   rewritten at scene starts, while the checkpoint is _wd1_saveslotN_autosave.bundle (written on
+   SaveSlots_Save, which the hooks catch). Do not change saves.txt by hand because of the main
+   file's time: doing so loaded hallway data with the nurse's office script (reticle stuck off).
+   carryover.lua now also watches the autosave file ("savewatch: ... changed" in twda.log).
 J. (#19) Countdowns said "about 1 second" at each step of the alley chase (Episode 4); the time
    now accounts for the timer's speed and the scene's time scale, untested.
 E. (#14) Long walks are slow and silent (Lee limps: 35 m to Hershel took about 40 s after "Walking
@@ -888,7 +890,7 @@ prompt this time).
 - The house yard (env_manorExteriorDay.lua): Pet Door is locked (needs a dog's collar chip);
   Shovel: Pick Up ("Dirt Mound: Look At, Dig. Enter to do it."), Dirt Mound: 2 Dig, Carcass: 2
   Pick Up (the pet collar), Pet Door: Unlock ("House Door: Unlock" is announced too).
-- Inside (env_manorInteriorHouseSearch.lua; dev_saves\ep4_house): open the three downstairs
+- Inside (env_manorInteriorHouseSearch.lua): open the three downstairs
   Doors, then Christa asks about meds; Ben upstairs: a guided path (W) to the attic
   (env_manorInteriorAttic.lua), the zombie boy: choice 2 ("I'll take care of it"), Zombie: Look
   At, then "Zombie: Look At, Shoot, Bash, Stomp" (3 Bash used), the burial (yard): Grave: Place
@@ -923,15 +925,51 @@ prompt this time).
   stair top is trigger_dialog_stairsTop; S from there goes down. Backyard Door, Shed Door
   ("About 15 seconds left" there is harmless), Clementine and the radio, the planning talk.
 
+- Crawford (env_crawfordExterior.lua, after the user closed SteelSeries GG and the game was
+  restarted at 09:05): "Guard: Move To. Enter to do it." then "Guard: Chop. Enter!" (a walker);
+  the classroom talk (Fuel?, Medicine? ...); Ben (choice 2); the hallways
+  (env_crawfordSchoolHallways.lua): walking to the Exit to Alley leads straight out; the gray shed:
+  Hole (Look At), Shelf: Climb (over the fence); Garage Door: Look At, Open ("jammed"); the
+  Fence: Look At, then the Garage Door again brings Molly (a story timer, timer_enterMolly, no
+  danger); a struggle raises the door. The auto shop (env_crawfordAutoShop.lua;
+  dev_saves\ep4_motorshop): Truck Hood: Open, Hydraulic Hose: Look At, Pry, Molly: "Can I borrow
+  your hook?", Hydraulic Hose: 3 Puncture; then the battery against the clock (Unscrew and
+  Detach each terminal, Battery: Pick Up), "Semi Truck: Climb" (out of reach: "Tab to it, then
+  Enter"), Skylight: 2 Shoot, Hand: Grab, the jump (Hand: Grab), Molly leaves with the battery.
+  Back in the hallways: Vernon and Christa at the nurse's office door; the Classroom Door brings
+  Kenny and Brie with the fuel: a struggle at the door, "Zombie: Shoot", "Hatchet: Pick Up", a
+  struggle (dev_saves\ep4_classroom after). Out of the classroom toward Vernon: hiding behind
+  the vending machine, lean W, "Zombie, 6 of them: Shoot", then the rifle scope (5 hits). The
+  nurse's office (env_crawfordSchoolNursesOffice.lua): Medical File: 2 Pick Up (a video tape),
+  Camcorder: 3 Watch tape #1; Exit to Alley, the white shed ("tv" is beside it): walking up sets
+  off "Hurry: about 3 seconds. Shelf: Climb. Enter!" and a struggle; over the roof; "Zombie:
+  Stomp" (the doctor), "Doctor's Corpse: 2 Search" (tape #2 and a paper slip with a code; Tab
+  skipped the corpse once after a failed try, see Open problems); back in the nurse's office tape
+  #2 plays and the safe is opened by the game (dev_saves\ep4_meds, after the medicine). The
+  classroom: Molly drops in, the rifle scope (one hit saves her), Ben's confession, the vote.
+- The stairs (the escape after the vote; checkpoint just before): "Use the S (back) key to get
+  away!" (a guided path where W, not S, moves: the mod says "S does not move Lee here. Try W")
+  and walkers 4 to 20 come one after another ("Zombie: Shoot ... Enter!"); keep backing up and
+  shoot each before backing into it (cs_deathBackingUpStairs), and keep moving or the timer runs
+  out (cs_deathBackingUpTimeOut). Then Lee's leg is stuck (a turn choice, Up/Down: "Select your
+  leg to free it. Look up to fight off walkers."): look up at once, shoot, look down ("Leg: Pull,
+  below you"), pull on each "Now! Enter!", look up again when "Zombie: Shoot, above you. Turn
+  with the arrow keys" comes. Freed by ear in the end; then "stair zombie phase: Attack" several
+  times, the roof, Ben hanging (choice 1 let him go in the test run), the house
+  (env_cancerGroupHideoutEpilogue.lua), Vernon, Clementine, the morning after (Clementine's Hat,
+  Walkie Talkie, "Zombie: Stomp", show the bite), the radio voice, the statistics and credits.
+  Episode 4 done by ear (dev_saves\ep4done once copied).
+- The game crashed once (a dump at 10:37:00, 16 GB free, so not memory) two seconds into a scene
+  change during a loop where a test script kept going back and forth through the nurse's office
+  door. The mod no longer offers a way through for the first 20 s of a scene.
+
 ### Fifth session: more mod changes made during Episode 4
 
-- carryover.lua: a save the hooks miss is caught by comparing the slot files' contents
-  (wd1_saveslot1..12.bundle under %USERPROFILE%\Documents\Telltale Games\The Walking Dead
-  Definitive, read as the module loads, before the scene's script runs) every 3 s ("slot file
-  changed: save slot ..."). The house search save at 06:26 was missed by every hook (cause not
-  found; Checkpoint() in checkpoint.lua calls SaveSlots_Save or SaveGame, both hooked); the fix
-  was only tested by reading the code, as later saves went through SaveSlots_Save. recordSave
-  logs "a save, but no slot known" when it cannot record.
+- carryover.lua: a backstop for the save hooks compares each slot's checkpoint file
+  (_wd1_saveslotN_autosave.bundle under %USERPROFILE%\Documents\Telltale Games\The Walking
+  Dead Definitive, read as the module loads) every 3 s and logs "savewatch: ... changed". The
+  "missed save" that led to it was a misreading (see item I). recordSave logs "a save, but no
+  slot known" when it cannot record.
 - actions.lua countdown: time left divides by "Timer Speed Multiplier" and the scene's time
   scale (untested; the alley chase said "about 1 second" each step).
 - actions.lua, free walking: a hotspot in view whose action list gains something is announced
@@ -957,7 +995,37 @@ prompt this time).
   calls to every save-looking global in the current state), play_by_ear.ps1 -Prefer Pry,Attack
   (answers "Pick a number" with the first listed word found).
 
+Later changes (afternoon, Crawford; all tested by ear in the scenes named):
+- turnchoice.lua: up and down turns are named "to look up"/"to look down"; up and down work (the
+  game's side numbers 3 and 4 are used when the update thread does not hold them); an arrow
+  pressed while the choice drops out for a moment (during an action) is kept for 4 s and used
+  when it comes back; TWDA.turnChoiceSides() lists the ways Lee can turn now.
+- lookaround.lua, turn choices: the reticle is kept within the game's turning bounds (half the
+  "Choice - Reticle Move Width" from the centre; past that mode_choice's update thread turns
+  Lee); something out of view on a side Lee can turn to is listed and, when chosen, "X is above
+  you. Turn with the arrow keys first."; the "Now! Enter!" strike cue is held back while a threat
+  (shoot, attack, hit...) waits on such a side.
+- actions.lua, turn choices count as action scenes; new things on a turnable side come first
+  with "Turn with the arrow keys"; things that come into view after a turn count as new; while a
+  countdown runs and nothing has been said for 4 s, the mod repeats what can be done ("Leg: Pull.
+  Enter!") or, if nothing this way, "Nothing to do this way. Turn: Down arrow to look down".
+- lookaround.lua, fights: Enter goes for the nearest target (even when the reticle rests on a
+  farther one), and does not switch to an announced target of the same kind.
+- actions.lua: timers whose end node is a plain "logic_" step only count as countdowns when the
+  name sounds like danger (zombie, death, attack, ...); "timer_enterMolly" did not need hurrying.
+  Out-of-reach things in a countdown get "Tab to it, then Enter", and a walk started with Enter
+  in an action scene does the action on arrival.
+- actions.lua: in free walking the door just come through is not offered (nor, for 20 s of a new
+  scene, any way through); the announced-action window is 15 s.
+- carryover.lua: the save watcher compares the autosave file (see item I).
+- Names: "video tape", "paper slip with a code".
+- tools\dev\play_by_ear.ps1: -StickyHold, -Turn Named (press the arrow the line names), follows
+  "Try W", "Turn with the arrow keys ... above you" and "Nothing to do this way. Turn: X arrow",
+  answers "Tab to it, then Enter", and only reads the mod's own "say" lines.
+
 Open problems seen in Episode 4 (also in "Not done yet"):
+- After a failed try, Tab can skip a hotspot that has since become reachable (the doctor's
+  corpse in Crawford) until Lee moves.
 - The first Enter right after a mod walk arrives often does nothing (house doors, the shed door,
   the grave); a second Enter works. Traced once: Enter with focus on the door, doAction ran, no
   Main_OnUse and no retry message. Not solved.
@@ -1213,10 +1281,15 @@ Project root: C:\Users\dengs\Downloads\TWD
   Added in the fifth session: ep3_overpass\ (env_overpass.lua, the train just stopped at the
   overpass, before Omid and Christa), ep3done\ (Episode 3 finished; slot 2 as after the credits,
   saves.txt line env_epilogue.lua, not needed to start Episode 4 from the menu).
-  Episode 4: ep4_house\ (env_manorInteriorHouseSearch.lua), ep4_sewers\ (env_savannahSewers.lua,
+  Episode 4: ep4_house\ (despite the name its checkpoint is probably the yard,
+  env_manorExteriorDay.lua, from the pet door talk: the main file was newer, see item I),
+  ep4_sewers\ (env_savannahSewers.lua,
   arriving), ep4_sewers_after\ (env_savannahSewers.lua, after the walker grab, in the upper
   tunnel), ep4_clemsearch\ (env_manorInteriorClementineSearch.lua, back at the house),
-  ep4_crawford\ (env_crawfordExterior.lua, Crawford's outskirts after the manhole and hiding).
+  ep4_crawford\ (env_crawfordExterior.lua, Crawford's outskirts after the manhole and hiding),
+  ep4_motorshop\ (env_crawfordAutoShop.lua), ep4_classroom\ (env_crawfordSchoolHallways.lua,
+  back in the classroom with the fuel), ep4_meds\ (env_crawfordSchoolNursesOffice.lua, the
+  medicine taken), ep4done\ (Episode 4 finished).
 
 In the game folder (G:\Steam\steamapps\common\The Walking Dead The Telltale Definitive Series):
 Archives\DebugLoader.lua, plus the TWDAccess folder (the mod's Lua, settings.txt, twda.log,

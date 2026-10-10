@@ -355,6 +355,9 @@ local function hotspots()
   -- a screen edge would turn him too.
   local turning = TWDA.turnChoiceActive and TWDA.turnChoiceActive()
   if turning then canTurn, walk = false, false end
+  -- (But what lies on a side the arrows turn to is listed, to be announced with the arrow to
+  -- press: the walker coming down the stairs while Lee pulls at his stuck leg in Crawford.)
+  local turnSides = turning and TWDA.turnChoiceSides and TWDA.turnChoiceSides() or {}
   -- In a close-up (the game's Back button is set: the generator at the dairy, Carley's radio)
   -- only what is close by: steering the reticle to the rest of the area pans the close-up away
   -- (the wind chimes, 12 meters from the generator), but something just below its edge counts
@@ -370,13 +373,16 @@ local function hotspots()
     if name ~= "" and not isPlayer(name) and not isTrigger(name) and prop(agent, "Game Selectable") == true and not isEmpty(agent)
       and not (okHidden and isHidden) and dialogAllows(agent) ~= false then
       local okPos, pos = pcall(AgentGetScreenPos, agent)
-      if okPos and pos and not unreachable[name] then
+      -- (A thing marked unreachable after a failed try counts again once it is within reach: the
+      -- doctor's corpse in the Crawford alley, issue #20.)
+      if okPos and pos and (not unreachable[name] or clickable(agent)) then
         local side = sideOf(agent, pos)
         if closeUp and side ~= nil and (distanceTo(agent) or 99) > 3 then side = "away" end
         local canClick = side ~= "away" and clickable(agent) and (side ~= nil or not tight or visibleAtDot(agent))
         -- Where Lee walks freely, also things in view that he must first walk up to (the game's
         -- clickable test wants him at their use position unless they can be used from afar).
-        if side ~= "away" and ((canClick and (side ~= "behind" or canTurn)) or (canTurn and side ~= nil) or (walk and side == nil)) then
+        if side ~= "away" and ((canClick and (side ~= "behind" or canTurn)) or (canTurn and side ~= nil) or (walk and side == nil)
+          or (side ~= nil and turnSides[side])) then
           list[#list + 1] = { agent = agent, name = name, x = pos.x, y = pos.y, behind = side == "behind",
             side = side, clickable = canClick, n = #list }
         end
@@ -673,6 +679,22 @@ local function checkStrike(focused, actions)
     return
   end
   local name = TWDA.agentName(focused)
+  -- (Not while something to deal with waits on a side the arrows turn to: the walker coming down
+  -- the stairs comes before another pull at Lee's stuck leg, Crawford, Episode 4.)
+  local waiting = false
+  if TWDA.turnChoiceActive and TWDA.turnChoiceActive() and TWDA.turnChoiceSides then
+    local sides = TWDA.turnChoiceSides()
+    for _, entry in ipairs(hotspots()) do
+      local verb = tostring(hotspotVerb(entry.agent) or ""):lower()
+      local threat = verb:find("shoot") or verb:find("attack") or verb:find("hit") or verb:find("kill")
+        or verb:find("stab") or verb:find("kick") or verb:find("shove") or verb:find("punch") or verb:find("bash")
+      if entry.side ~= nil and sides[entry.side] and entry.name ~= name and threat then waiting = true end
+    end
+  end
+  if waiting then
+    lastStrikeName = name
+    return
+  end
   if name == lastStrikeName and TWDA.now() - contractedAt < 10 then
     strikeAt = TWDA.now()
     TWDA.log("lookaround: strike now at " .. name)
@@ -896,9 +918,11 @@ end
 local walking = nil   -- { agent, name, since, done, success, blockedSince }
 local WALK_GIVE_UP_SECONDS = 60
 
-local function startWalk(agent)
+-- act: do the hotspot's action on arrival (the walk was started with Enter on it, rather than by
+-- accepting "Enter walks there" for something only looked up with Tab).
+local function startWalk(agent, act)
   local name = TWDA.agentName(agent)
-  local w = { agent = agent, name = name, since = TWDA.now() }
+  local w = { agent = agent, name = name, since = TWDA.now(), act = act }
   local ok, err = pcall(ThreadStart, function()
     -- To where the game wants Lee to stand to use it, when it says.
     local okPath, result = pcall(AgentPathToAgent, call("Game_GetPlayer"), rawget(agent, "usePosAgent") or agent)
@@ -998,7 +1022,8 @@ local function walkTick()
     return
   end
   forgetUnreachable()
-  target = { agent = w.agent, name = w.name, since = now, afterWalk = true }
+  target = { agent = w.agent, name = w.name, since = now, afterWalk = true, actOnReach = w.act,
+    pickNonLook = w.act }
   lastTargetName = w.name
   lastSpoken = nil
 end
@@ -1011,7 +1036,7 @@ for _, name in ipairs({ "Main_OnUse", "PathToAndUseAgent" }) do
   TWDA.hookBefore(name, function(agent)
     lastUseAt = TWDA.now()
     lastUsed.name, lastUsed.at = TWDA.agentName(agent), lastUseAt
-    TWDA.lastUse = { name = lastUsed.name, at = lastUseAt }
+    TWDA.lastUse = { name = lastUsed.name, at = lastUseAt, label = displayName(lastUsed.name, agent) }
     -- In a fight the camera follows the reticle; holding it where the last target was (the hammer
     -- Clementine held out) turns the view away from the next one, which then cannot be clicked.
     if target and target.agent == agent and call("ReticleUI_InCombatMode") == true then target = nil end
@@ -1114,7 +1139,8 @@ local function enterPressed()
       directUse(offer.agent)
       return
     elseif canWalk() then
-      startWalk(offer.agent)
+      -- (In a hurry the action follows the walk without another Enter.)
+      startWalk(offer.agent, TWDA.inActionScene ~= nil and TWDA.inActionScene() == true)
       return
     end
   end
@@ -1123,7 +1149,12 @@ local function enterPressed()
     -- Something just announced by name ("Sign: Pick Up. Enter to do it.") is what Enter is for,
     -- even when the reticle has drifted onto the thing beside it (the ladder above the sign in the
     -- Savannah sewers, Episode 4), unless Tab has been pressed since.
-    if announced.name and announced.name ~= name and TWDA.now() - announced.at < 8 and lastTabAt < announced.at then
+    -- (Not for another of the same kind: on the stairs of the Crawford school, Episode 4, walkers
+    -- come one after another, each announced as "Zombie: Shoot", and the nearer one the reticle is
+    -- already on is the one to shoot.)
+    local sameKind = announced.name and displayName(announced.name) == displayName(name, focused)
+    if announced.name and announced.name ~= name and not sameKind and TWDA.now() - announced.at < 15
+      and lastTabAt < announced.at then
       for _, entry in ipairs(hotspots()) do
         if entry.name == announced.name and entry.clickable then
           debug("enter: going for the announced " .. entry.name .. " instead")
@@ -1134,9 +1165,26 @@ local function enterPressed()
         end
       end
     end
+    -- In a fight the nearest target comes first, even when the reticle rests on a farther one.
+    if call("ReticleUI_InCombatMode") == true then
+      local here = distanceTo(focused)
+      local nearest, best = nil, (here or 1000) - 1
+      for _, entry in ipairs(hotspots()) do
+        if entry.clickable and entry.name ~= name and not looksOnly(hotspotVerb(entry.agent)) then
+          local d = distanceTo(entry.agent)
+          if d and d < best then nearest, best = entry, d end
+        end
+      end
+      if nearest then
+        debug("enter: going for the nearer " .. nearest.name)
+        target = { agent = nearest.agent, name = nearest.name, since = TWDA.now(), actOnReach = true, picked = true }
+        lastTargetName = nearest.name
+        return
+      end
+    end
     -- Just announced with its action ("Brick Wall: Move To. Enter!"): do that action, unless one
     -- was picked with a number key.
-    local fresh = announced.name == name and TWDA.now() - announced.at < 8 and not (chosen and chosen.name == name)
+    local fresh = announced.name == name and TWDA.now() - announced.at < 15 and not (chosen and chosen.name == name)
     doAction(fresh and not onlyLooks(focused))
     return
   end
@@ -1161,8 +1209,14 @@ local function enterPressed()
       if target and not target.picked and entry.name == target.name then pick = entry end
     end
     if not pick then
+      -- The nearest thing to do first: the closest walker is the one about to get Lee (the stairs
+      -- of the Crawford school, Episode 4).
+      local best = math.huge
       for _, entry in ipairs(list) do
-        if not pick and entry.clickable and not looksOnly(hotspotVerb(entry.agent)) then pick = entry end
+        if entry.clickable and not looksOnly(hotspotVerb(entry.agent)) then
+          local d = distanceTo(entry.agent) or 1000
+          if d < best then pick, best = entry, d end
+        end
       end
     end
     pick = pick or list[1]
@@ -1338,9 +1392,41 @@ TWDA.onFrame("lookaround", function()
     end
     local now = TWDA.now()
     local side = sideOf(target.agent, pos)
+    -- While a turn choice is up, the arrows turn Lee and the game also turns when the reticle is
+    -- held at an edge, so out of view is left to the arrows (Lee's stuck leg in Crawford, Episode
+    -- 4: aiming at the walker above turned the view up and down over and over).
+    if side ~= nil and TWDA.turnChoiceActive and TWDA.turnChoiceActive() and clickable(target.agent) then
+      -- (Its marker is on screen: aim at that, if it lies where the reticle can go without
+      -- turning Lee; see the clamp below.)
+      local ax, ay = aimPoint(target.agent)
+      local okW, width = pcall(AgentGetProperty, "logic_mode_choice", "Choice - Reticle Move Width")
+      local half = (okW and type(width) == "number" and width or 0.6) * 0.5 - 0.03
+      if ax and ay and math.abs(ax - 0.5) <= half + 0.05 and math.abs(ay - 0.5) <= half + 0.05 then side = nil end
+    end
+    -- (A side Lee cannot turn to is no reason to turn: aim at it as well as the bounds allow.)
+    if side ~= nil and TWDA.turnChoiceActive and TWDA.turnChoiceActive() and TWDA.turnChoiceSides
+      and not TWDA.turnChoiceSides()[side] then
+      side = nil
+    end
+    if side ~= nil and TWDA.turnChoiceActive and TWDA.turnChoiceActive() then
+      local where = TWDA.sideWords[side] or side
+      TWDA.say(displayName(target.name, target.agent) .. " is " .. where .. ". Turn with the arrow keys first.",
+        { interrupt = true })
+      target = nil
+      return
+    end
     if side == nil then
       local x, y = aimPoint(target.agent)
-      pcall(ReticleController_SetScreenPos, x or pos.x, y or pos.y, false)
+      x, y = x or pos.x, y or pos.y
+      -- (During a turn choice the game turns Lee when the reticle goes more than half the move
+      -- width from the centre, mode_choice.lua's update thread: keep inside that.)
+      if TWDA.turnChoiceActive and TWDA.turnChoiceActive() then
+        local okW, width = pcall(AgentGetProperty, "logic_mode_choice", "Choice - Reticle Move Width")
+        local half = (okW and type(width) == "number" and width or 0.6) * 0.5 - 0.03
+        x = math.max(0.5 - half, math.min(0.5 + half, x))
+        y = math.max(0.5 - half, math.min(0.5 + half, y))
+      end
+      pcall(ReticleController_SetScreenPos, x, y, false)
     elseif side ~= "behind" then
       -- Out of view to one side: hold the reticle at that edge, which turns the camera that way.
       target.behind = true -- (allow the longer time to reach it)
@@ -1375,7 +1461,7 @@ TWDA.onFrame("lookaround", function()
       local t = target
       target = nil
       if t.actOnReach then
-        startWalk(t.agent)
+        startWalk(t.agent, true)
       else
         walkOffer = { agent = t.agent, name = t.name, at = now, kind = "walk" }
         local d = distanceTo(t.agent)

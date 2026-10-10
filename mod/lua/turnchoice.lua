@@ -16,6 +16,8 @@ local G = _G
 local SIDES = { { "kPropLeftNode", "Left arrow", 0x25, "kSideLeft" }, { "kPropRightNode", "Right arrow", 0x27, "kSideRight" },
   { "kPropUpNode", "Up arrow", 0x26, "kSideUp" }, { "kPropDownNode", "Down arrow", 0x28, "kSideDown" } }
 
+local SIDE_NUMBERS = { kSideLeft = 1, kSideRight = 2, kSideUp = 3, kSideDown = 4 }
+
 local function active()
   local ok, on = pcall(InputMapperIsActive, "mode_choice.imap")
   return ok and on == true
@@ -61,8 +63,12 @@ end
 -- (Each node is named once while the choice lasts: people move about on screen, and a name that
 -- changed with them made the same choice be announced again and again.)
 local named = {}
+local LOOK = { Up = "to look up", Down = "to look down" }
 local function whereUncached(node)
   local target = node:match("To(%u[%w]*)$")
+  -- ("choice_legStuck_DownToUp", Lee's leg stuck on the stairs in Crawford, Episode 4: up is where
+  -- the walkers come from, down is the leg.)
+  if target and LOOK[target] then return LOOK[target] end
   local person = target and personTowards(target)
   if person then return "towards " .. person end
   -- ("choice_centerLeft", "choice_left": only a direction.)
@@ -95,7 +101,9 @@ local function directions()
     local okNode, node = pcall(AgentGetProperty, agent, key)
     if okNode and type(node) == "string" and node:match("%S") then
       parts[#parts + 1] = side[2] .. " " .. where(node)
-      keys[side[3]] = TWDA.upvalue(update, side[4])
+      -- (The update thread only holds the sides a mouse can reach, left and right; up and down are
+      -- the game's constants 3 and 4: Lee's leg stuck on the stairs in Crawford, Episode 4.)
+      keys[side[3]] = TWDA.upvalue(update, side[4]) or SIDE_NUMBERS[side[4]]
     end
   end
   return parts, keys, TWDA.upvalue(left, "transition")
@@ -114,6 +122,24 @@ local lastKey = nil
 local inactiveSince = nil
 local dropped = false -- the mode went away for a moment (a turn or a push played) since the last announcement
 local lastTurn = -10
+local pendingKey = nil -- { vk, at }: an arrow pressed while the choice was briefly away
+-- The ways Lee can turn now, as side words ("up", "down", "left", "right") -> true.
+local SIDE_OF_PROP = { kPropLeftNode = "left", kPropRightNode = "right", kPropUpNode = "up", kPropDownNode = "down" }
+TWDA.turnChoiceSides = function()
+  local out = {}
+  local mode = rawget(G, "mode_choice")
+  if not active() or type(mode) ~= "table" then return out end
+  local left = TWDA.unwrap(rawget(mode, "OnButtonLeft"))
+  local nodesFn = TWDA.upvalue(left, "hasTransitionNodes")
+  local okAgent, agent = pcall(AgentFind, TWDA.upvalue(left, "kLogicAgentName"))
+  if not okAgent or agent == nil or type(nodesFn) ~= "function" then return out end
+  for _, side in ipairs(SIDES) do
+    local okNode, node = pcall(AgentGetProperty, agent, TWDA.upvalue(nodesFn, side[1]))
+    if okNode and type(node) == "string" and node:match("%S") then out[SIDE_OF_PROP[side[1]]] = true end
+  end
+  return out
+end
+
 TWDA.describeTurnChoice = function()
   if not active() then return nil end
   local parts = directions()
@@ -131,15 +157,21 @@ TWDA.onFrame("turnchoice", function()
       lastKey, dropped, named = nil, false, {}
       if type(TWDA.lastHint) == "string" and TWDA.lastHint:find("^Turn: ") then TWDA.lastHint = nil end
     end
-    for _, side in ipairs(SIDES) do pressed(side[3]) end -- keep the key states current
+    -- (Keep the key states current; an arrow pressed while the choice drops out for a moment, as
+    -- it does during each pull at Lee's stuck leg, is kept and used when it comes back.)
+    for _, side in ipairs(SIDES) do
+      if pressed(side[3]) and lastKey ~= nil then pendingKey = { vk = side[3], at = now } end
+    end
     return
   end
   inactiveSince = nil
   local parts, keys, transition = directions()
   if not parts then return end
+  local pending = pendingKey and now - pendingKey.at < 4 and pendingKey.vk or nil
+  pendingKey = nil
   for _, side in ipairs(SIDES) do
     -- (A second press while a turn is still playing is dropped.)
-    if pressed(side[3]) and now - lastTurn > 1.2 then
+    if (pressed(side[3]) or pending == side[3]) and now - lastTurn > 1.2 then
       local number = keys[side[3]]
       if number and type(transition) == "function" then
         lastTurn = now

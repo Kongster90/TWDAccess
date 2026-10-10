@@ -116,16 +116,19 @@ for _, name in ipairs({ "SaveGame", "SaveGameIncremental", "SaveLoad_AutoSave", 
   end)
 end
 
--- The save file itself, as a check on the hooks above: a save they missed still changes the file.
--- (The house in Savannah, Episode 4: the game wrote the slot two seconds into
--- env_manorInteriorHouseSearch.lua and no hooked function was seen, so saves.txt kept the yard
--- outside, and loading the slot would have run the wrong scene.) Compared every few seconds
--- while an episode scene runs; where the save folder is somewhere else, only the hooks count.
+-- The save file itself, as a check on the hooks above: a save they missed would still change the
+-- file. (Added after a misreading: in Episode 4 the slot's main bundle was rewritten at a scene
+-- start with no hooked save; that file is not the checkpoint, see slotContent.) Compared every
+-- few seconds while an episode scene runs; where the save folder is somewhere else, only the
+-- hooks count.
 -- The files are read as this module loads, before the scene's own script runs: the game saves
 -- within a second of a scene starting, often before the mod's first frame.
 local SAVE_DIR = (os.getenv("USERPROFILE") or "") .. "\\Documents\\Telltale Games\\The Walking Dead Definitive\\"
+-- The checkpoint itself is the slot's "_..._autosave.bundle", written when the game saves; the
+-- slot's own bundle is also rewritten at other moments (when a scene starts), so it is not
+-- watched.
 local function slotContent(slot)
-  local file = io.open(SAVE_DIR .. slot, "rb")
+  local file = io.open(SAVE_DIR .. "_" .. slot:gsub("%.bundle$", "_autosave.bundle"), "rb")
   if not file then return nil end
   local data = file:read("*a")
   file:close()
@@ -145,7 +148,10 @@ TWDA.onFrame("savewatch", function()
   local slot = currentSlot()
   local content = slot and slotContent(slot)
   if content == nil then return end
-  if baseline[slot] ~= nil and content ~= baseline[slot] then recordSave("slot file changed") end
+  if baseline[slot] ~= nil and content ~= baseline[slot] then
+    TWDA.log("savewatch: " .. slot .. " changed (" .. #content .. " bytes)")
+    recordSave("slot file changed")
+  end
   baseline[slot] = content
 end)
 

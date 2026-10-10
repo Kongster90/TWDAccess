@@ -10,7 +10,7 @@
   or the death screen (-Answer 1 answers every choice with 1 instead). Run it right after the checkpoint loads (see checkpoint_watch.ps1 -Seconds 0).
 #>
 param([int]$Seconds = 90, [int]$MashMs = 130, [int]$ReactMs = 500, [switch]$HoldQ, [string]$Turn = "Right", [switch]$IgnoreChoices, [int]$Answer = 0, [int]$HoldS = 6, [string]$StartKey = "", [string[]]$Leans = @(),
-      [string]$Skip = "", [string[]]$Prefer = @())
+      [string]$Skip = "", [string[]]$Prefer = @(), [switch]$StickyHold)
 
 . (Join-Path $PSScriptRoot "game_input.ps1")
 $game = "G:\Steam\steamapps\common\The Walking Dead The Telltale Definitive Series"
@@ -43,7 +43,8 @@ $lastFocus = Get-Date
 $end = (Get-Date).AddSeconds($Seconds)
 while ((Get-Date) -lt $end) {
     while ($null -ne ($line = $reader.ReadLine())) {
-        if ($line -notmatch " say!? (.*)$") { continue }
+        # (Only the mod's own "say" lines: a subtitle can contain " say " too.)
+        if ($line -notmatch "^\S+\s+\S+ say!? (.*)$") { continue }
         $text = $Matches[1]
         "{0:HH:mm:ss.fff} heard: {1}" -f (Get-Date), $text
         # -Skip "regex": lines a test wants left alone (to see what the game does without them).
@@ -101,11 +102,34 @@ while ((Get-Date) -lt $end) {
             Start-Sleep -Milliseconds $ReactMs
             $holdKey = $Matches[1]
             $holding = [int][char]$holdKey
-            $sticky = $text -match "^Press "
+            # (-StickyHold: every such hold lasts through the shooting that comes with it, as on the
+            # stairs of the Crawford school, Episode 4: back up with S, Enter at each walker.)
+            $sticky = $StickyHold -or $text -match "^Press "
             $holdUntil = (Get-Date).AddSeconds($HoldS)
             "holding " + $holdKey
         }
-        elseif ($text -match "^Turn: ") { Start-Sleep -Milliseconds $ReactMs; Press $(if ($Turn -eq "Left") { 0x25 } else { 0x27 }) $Turn }
+        elseif ($text -match "^Turn: ") {
+            # -Turn Named: the first arrow the announcement names ("Up arrow to look up").
+            $t = $Turn
+            if ($Turn -eq "Named" -and $text -match "(Left|Right|Up|Down) arrow") { $t = $Matches[1] }
+            $code = @{ Left = 0x25; Up = 0x26; Right = 0x27; Down = 0x28 }[$t]
+            Start-Sleep -Milliseconds $ReactMs; Press $code $t
+        }
+        elseif ($text -match "does not move Lee here\. Try ([WASD])" -and $holding) {
+            # guided.lua: the other key moves the path on; hold that one instead.
+            [GameInput]::KeyState([uint16]$holding, $false)
+            $holdKey = $Matches[1]; $holding = [int][char]$holdKey; $holdUntil = (Get-Date).AddSeconds($HoldS)
+            "now holding " + $holdKey
+        }
+        elseif ($text -match "Turn with the arrow keys" -and $text -match "(above you|below you|to your left|to your right)") {
+            # A turn choice and the thing to deal with is off to that side: turn that way.
+            $arrow = @{ "above you" = 0x26; "below you" = 0x28; "to your left" = 0x25; "to your right" = 0x27 }[$Matches[1]]
+            Start-Sleep -Milliseconds $ReactMs; Press $arrow ("turn " + $Matches[1])
+        }
+        elseif ($text -match "^Nothing to do this way\. Turn: (Left|Right|Up|Down) arrow") {
+            $arrow = @{ Left = 0x25; Up = 0x26; Right = 0x27; Down = 0x28 }[$Matches[1]]
+            Start-Sleep -Milliseconds $ReactMs; Press $arrow ("turn " + $Matches[1])
+        }
         elseif ($text -match "Pick a number, then Enter") {
             # A choice of actions ("zombie arm: 2 Shoot, 3 Pry"): the first -Prefer word found, else
             # the first number offered (what Enter alone would do).
@@ -115,6 +139,10 @@ while ((Get-Date) -lt $end) {
             Start-Sleep -Milliseconds $ReactMs
             if ($num) { Press (0x30 + $num) "$num" }
             Press 0x0D "Enter"
+        }
+        elseif ($text -match "Tab to it, then Enter") {
+            # Something out of reach to use in time: Tab goes to it, Enter walks there and does it.
+            Start-Sleep -Milliseconds $ReactMs; Press 0x09 "Tab"; Start-Sleep -Milliseconds 900; Press 0x0D "Enter"
         }
         elseif ($text -match "Tab to choose") { Start-Sleep -Milliseconds $ReactMs; Press 0x09 "Tab"; Start-Sleep -Milliseconds 600; Press 0x0D "Enter" }
         elseif ($text -match "Enter!$|Enter to do it.$") { Start-Sleep -Milliseconds $ReactMs; Press 0x0D "Enter" }

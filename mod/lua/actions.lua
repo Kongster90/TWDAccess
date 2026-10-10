@@ -60,6 +60,15 @@ local function countdown()
       -- chatter ("logic_ZombieBeakIntoOffice": the walkers breaking in on the Macon pharmacy).
       local counts = lower:find("^cs_") or (lower ~= "" and type(length) == "number" and length >= 5
         and not (lower:find("hint", 1, true) or lower:find("ambient", 1, true) or lower:find("chatter", 1, true)))
+      -- (A plain logic step counts only when it sounds like danger: "logic_mollyTimerElapsed" at
+      -- the auto shop in Crawford, Episode 4, only brings Molly in, and as a countdown it made the
+      -- garage door be offered again and again with "Enter!".)
+      if counts and lower:find("^logic_") then
+        counts = false
+        for _, word in ipairs({ "zombie", "walker", "death", "die", "kill", "attack", "break", "eat", "bite", "fail" }) do
+          if lower:find(word, 1, true) then counts = true end
+        end
+      end
       if counts then timerAgents[#timerAgents + 1] = agent end
     end
     local names = {}
@@ -246,6 +255,7 @@ function TWDA.orderByUrgency(entries)
 end
 
 local known = nil -- names of the hotspots usable at the last check, while a scene lasts
+local knownSide = nil -- name -> the side it was on at the last check (false: in view)
 local lastCheck = 0
 local lastCombat = false
 local autoQueue = {} -- auto mode: names of hotspots still to use, in the order they appeared
@@ -280,15 +290,19 @@ TWDA.onFrame("actions", function()
 
   -- New is what was not on offer at the last check, or has just become usable from here.
   local list = TWDA.hotspots()
-  local usable, fresh, wasUsable = {}, {}, {}
+  local usable, fresh, wasUsable, sideNow = {}, {}, {}, {}
   for _, entry in ipairs(list) do
     usable[entry.name] = entry
     wasUsable[entry.name] = entry.clickable == true
-    if known == nil or known[entry.name] == nil or (entry.clickable and not known[entry.name]) then
+    sideNow[entry.name] = entry.side or false
+    -- (Also what has just come into view: turned to with the arrows, the walker on the stairs.)
+    local cameIntoView = knownSide and knownSide[entry.name] and entry.side == nil and entry.clickable
+      and TWDA.turnChoiceActive and TWDA.turnChoiceActive()
+    if known == nil or known[entry.name] == nil or (entry.clickable and not known[entry.name]) or cameIntoView then
       fresh[#fresh + 1] = entry
     end
   end
-  known = wasUsable
+  known, knownSide = wasUsable, sideNow
 
   -- What can be used right now comes first and alone (the car in the road to push, not the rest
   -- of the yard). Otherwise things out of view to one side (the shotgun beside Lee at the zombie
@@ -315,6 +329,10 @@ TWDA.onFrame("actions", function()
   local turning = TWDA.turnChoiceActive and TWDA.turnChoiceActive()
   -- While the arrow keys turn Lee (turnchoice.lua), and in fights, only what is in the current
   -- view counts.
+  -- (In a turn choice, something new on a side Lee can turn to comes first, with the arrows to
+  -- press: the walker coming down the stairs while Lee pulls at his stuck leg, Crawford, Episode 4.)
+  local turnSides = turning and TWDA.turnChoiceSides and TWDA.turnChoiceSides() or {}
+  local overThere = turning and pick(function(entry) return entry.side ~= nil and turnSides[entry.side] end) or {}
   if turning or combatNow then fresh = first end
   if #first == 0 then first = pick(function(entry) return entry.side ~= "behind" end) end
   if #first > 0 then fresh = first end
@@ -335,6 +353,9 @@ TWDA.onFrame("actions", function()
     end
   end
   fresh = TWDA.orderByUrgency(fresh)
+  if #overThere > 0 then
+    for i = #overThere, 1, -1 do table.insert(fresh, 1, overThere[i]) end
+  end
 
   -- While Lee hides behind cover, peek.lua reads out what comes into view (and says when to get
   -- back, so its short timers are not announced either).
@@ -415,12 +436,24 @@ TWDA.onFrame("actions", function()
       end
       if #choices > 1 then numbered = choices end
     end
-    if mode ~= "auto" and fresh[1].clickable and onlyTargets then
+    local turnable = turning and fresh[1].side ~= nil and TWDA.turnChoiceSides and TWDA.turnChoiceSides()[fresh[1].side]
+    if mode ~= "auto" and turnable then
+      -- (Off to one side while a turn choice is up: the arrows turn Lee towards it; the reticle
+      -- cannot go there without turning him.)
+      parts[#parts + 1] = "Turn with the arrow keys"
+    elseif mode ~= "auto" and fresh[1].clickable and onlyTargets then
       parts[#parts + 1] = "Keep moving. Enter only when told"
     elseif mode ~= "auto" and fresh[1].clickable and numbered then
       parts = { TWDA.hotspotName(fresh[1].agent) .. ": " .. table.concat(numbered, ", "), "Pick a number, then Enter!" }
     elseif mode ~= "auto" and fresh[1].clickable then
       parts[#parts + 1] = #fresh == 1 and "Enter!" or "Tab to choose, Enter"
+    elseif mode ~= "auto" and turning then
+      -- (Out of view while a turn choice is up: the arrow keys bring it into view.)
+      parts[#parts + 1] = "Turn with the arrow keys"
+    elseif mode ~= "auto" and hurry then
+      -- (Out of reach but needed in time: the semi truck to climb in the Crawford auto shop,
+      -- Episode 4. Tab goes to it first; Enter walks there and does it.)
+      parts[#parts + 1] = "Tab to it, then Enter"
     end
     local body = table.concat(parts, ". ")
     -- The time first, so that what to press comes last.
@@ -437,6 +470,33 @@ TWDA.onFrame("actions", function()
     if mode ~= "auto" and TWDA.preferNextTab then TWDA.preferNextTab(fresh[1].name) end
   end
   if hurry then TWDA.say(hurry) end
+
+  -- Against the clock and quiet for a while: say again what can be done here. (Lee's leg stuck on
+  -- the stairs in Crawford, Episode 4: between the walkers to shoot, the leg has to be pulled
+  -- free, and nothing else says so.)
+  local busyOtherwise = (TWDA.coverWalkActive and TWDA.coverWalkActive()) or (TWDA.struggleActive and TWDA.struggleActive())
+  if current and mode ~= "auto" and #fresh == 0 and not busyOtherwise and now - (TWDA.lastSpokenAt or -10) > 4 then
+    local again = nil
+    for _, entry in ipairs(list) do
+      if not again and entry.clickable and not lookOnly(soleVerb(entry.agent)) then again = entry end
+    end
+    if again and turning and again.side ~= nil and TWDA.turnChoiceSides and TWDA.turnChoiceSides()[again.side] then
+      again = nil
+    end
+    if again then
+      local text = table.concat(TWDA.offerTexts({ again }, false), ". ") .. ". Enter!"
+      TWDA.log("actions: again " .. text)
+      TWDA.say(text)
+      if TWDA.preferNextTab then TWDA.preferNextTab(again.name) end
+    elseif turning and TWDA.describeTurnChoice then
+      -- Nothing to do this way: which way there is (look down to the leg again).
+      local turn = TWDA.describeTurnChoice()
+      if turn then
+        TWDA.log("actions: again " .. turn)
+        TWDA.say("Nothing to do this way. " .. turn)
+      end
+    end
+  end
 
   -- Auto mode: one at a time, through the reticle (lookaround.lua), which also turns the camera to
   -- things out of view and picks the first action that is not "Look".
@@ -459,6 +519,7 @@ end)
 -- it appears in view, queued after what is being said. Where he walks, Tab and F6 are enough.
 local sceneKnown, lastSceneCheck, sceneLeft, readySince = nil, 0, nil, nil
 local walkReadySince, walkTold = nil, false
+local stateStartedAt = TWDA.now() -- (this module loads once per Lua state, at the scene's start)
 local walkKnown = nil -- where Lee walks: the actions each hotspot in view offered when last read
 local pendingGain = nil -- { entry, at }: a new action not yet announced
 TWDA.onFrame("sceneoffers", function()
@@ -528,6 +589,28 @@ TWDA.onFrame("sceneoffers", function()
       -- (Not the thing just used: the door propped open in the train station, Episode 3, offers
       -- "Open" again, which takes the tool back and shuts it.)
       local justUsed = TWDA.lastUse and TWDA.lastUse.name == entry.name and now - TWDA.lastUse.at < 15
+      -- (Nor, just after going through a doorway, the door on this side of it: the classroom
+      -- door and the hallway's "Classroom Door" in Crawford, Episode 4, are two hotspots, and
+      -- offering each in turn sent Lee back and forth.)
+      local function wayThrough(label)
+        label = tostring(label or ""):lower()
+        for _, word in ipairs({ "door", "exit", "gate", "ladder", "stair", "passage", "hatch", "window" }) do
+          if label:find(word, 1, true) then return true end
+        end
+        return false
+      end
+      if not justUsed and TWDA.lastUse and now - TWDA.lastUse.at < 15 and wayThrough(TWDA.lastUse.label)
+        and wayThrough(TWDA.hotspotName(entry.agent)) then
+        justUsed = true
+      end
+      -- (A door that changes the scene starts a new Lua state, where the door just used is
+      -- unknown: in the first 20 seconds of a scene, no way through is offered. The nurse's office
+      -- and the hallway in Crawford, Episode 4: "Nurse's Office: Enter" and "Hallway Door: Use"
+      -- offered in turn, and the game crashed during one of the quick scene changes.)
+      if not justUsed and now - stateStartedAt < 20 then
+        local label = tostring(TWDA.hotspotName(entry.agent) or ""):lower()
+        if wayThrough(label) or label:find("office", 1, true) or label:find("room", 1, true) then justUsed = true end
+      end
       if entry.clickable and entry.side == nil and not lookOnly(verb) and not talk and not justUsed then
         here[#here + 1] = entry
       end
