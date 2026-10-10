@@ -31,6 +31,10 @@ local KEYS = { { 0x57, "W", "S" }, { 0x53, "S", "W" }, { 0x41, "A", "D" }, { 0x4
 local lastPct, forwardKey, toldBack, toldHalf = nil, nil, false, false
 local stuck = nil -- { key, since, told }: a key held that moves nothing
 local keyName, keySince = nil, 0 -- the key held now, and since when
+-- A key already held when the path started: the game moves on key presses (mode_Chored_Move.imap's
+-- OnMoveForward), so one held from before moves nothing until it is pressed again (Russell running
+-- to the truck in 400 Days, with W still down from walking).
+local heldAtStart = nil
 
 local function heldKey()
   for _, k in ipairs(KEYS) do
@@ -84,6 +88,8 @@ TWDA.onFrame("guided", function()
   local on = controller() ~= nil
   if on ~= active then
     active, startedAt, told = on, now, false
+    local held = on and heldKey()
+    heldAtStart = held and held[2] or nil
     lastPct, forwardKey, toldBack, toldHalf, stuck = nil, nil, false, false, nil
     TWDA.log("guided: " .. (on and "path started" or "path ended"))
   end
@@ -118,19 +124,25 @@ TWDA.onFrame("guided", function()
     end
   end
   if not active then return end
+  -- (400 Days' cornfield runs on a path too; cornfield.lua says what the keys do there.)
+  if TWDA.cornfieldRunning and TWDA.cornfieldRunning() then return end
   local okPct, pct = pcall(ChoredMovement_GetTimePercent)
   pct = okPct and type(pct) == "number" and pct or nil
   local key = heldKey()
   -- (Only a key held a moment counts: a path can creep on by itself as it starts.)
   if key and keyName ~= key[2] then keyName, keySince = key[2], now end
-  if not key then keyName = nil end
+  if not key then keyName, heldAtStart = nil, nil end
   if key and now - keySince < 0.25 then key = nil end
   -- A key held for a while that moves nothing (W at the foot of those stairs).
   if key and not forwardKey and pct and lastPct and math.abs(pct - lastPct) <= 0.001 then
     stuck = stuck and stuck.key == key[2] and stuck or { key = key[2], since = now }
     if not stuck.told and now - stuck.since > 1.2 then
       stuck.told = true
-      TWDA.say(key[2] .. " does not move Lee here. Try " .. key[3], { interrupt = true })
+      if heldAtStart == key[2] then
+        TWDA.say("Let go of " .. key[2] .. ", then hold it again", { interrupt = true })
+      else
+        TWDA.say(key[2] .. " does not move " .. TWDA.playerName() .. " here. Try " .. key[3], { interrupt = true })
+      end
     end
   elseif not key then
     stuck = nil

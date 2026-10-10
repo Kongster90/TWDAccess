@@ -151,6 +151,60 @@ TWDA.onFrame("seasonstats", function()
   end
 end)
 
+-- The end of 400 Days (ui_whowent.lua, input map ui_whoWent.imap): two rows of the five
+-- characters' photos, the ones lit "Left with Tavia" or "Stayed at the camp", and only a mouse click
+-- goes on (UI_WhoWent_OnLeftClick). Who went is in UI_WhoWent_Open's PlayWhoWentChores' upvalue
+-- whosGoing: name -> { LogicProp (a Logic key), bIsGoing (when that is unset) }.
+local WHOWENT_IMAP = "ui_whoWent.imap"
+local function whoWentText()
+  local whosGoing = TWDA.upvalue(TWDA.upvalue(rawget(G, "UI_WhoWent_Open"), "PlayWhoWentChores"), "whosGoing")
+  if type(whosGoing) ~= "table" then return nil end
+  local went, stayed = {}, {}
+  for name, entry in pairs(whosGoing) do
+    local going = nil
+    pcall(function() going = Logic[entry.LogicProp] end)
+    if going == nil then going = entry.bIsGoing end
+    local list = going and went or stayed
+    list[#list + 1] = tostring(name)
+  end
+  table.sort(went)
+  table.sort(stayed)
+  local parts = {}
+  if #went > 0 then parts[#parts + 1] = "Left with Tavia: " .. table.concat(went, ", ") .. "." end
+  if #stayed > 0 then parts[#parts + 1] = "Stayed at the camp: " .. table.concat(stayed, ", ") .. "." end
+  return table.concat(parts, " ") .. " Enter to continue."
+end
+
+TWDA.describeWhoWent = function()
+  local ok, on = pcall(InputMapperIsActive, WHOWENT_IMAP)
+  if not (ok and on) then return nil end
+  return whoWentText()
+end
+
+local whoWentSaid, whoEnterHeld = false, true
+TWDA.onFrame("whowent", function()
+  local ok, on = pcall(InputMapperIsActive, WHOWENT_IMAP)
+  local okKey, down = pcall(InputPCIsVKeyPressed, 0x0D)
+  down = okKey and down == true
+  local enter = down and not whoEnterHeld
+  whoEnterHeld = down
+  if not (ok and on) then
+    whoWentSaid = false
+    return
+  end
+  if not whoWentSaid then
+    whoWentSaid = true
+    local text = whoWentText()
+    if text then
+      TWDA.lastHint = text
+      TWDA.say(text, { interrupt = true })
+    end
+  end
+  if enter and type(rawget(G, "UI_WhoWent_OnLeftClick")) == "function" then
+    pcall(ThreadStart, function() pcall(UI_WhoWent_OnLeftClick) end)
+  end
+end)
+
 -- An episode's credits (mode_UI_Credits; one long text on ui_credits_text, the episode's name on
 -- ui_credits_textTitle). After an episode they cannot be skipped (OnMouseLDouble only works when
 -- they were opened from the menu); F6 reads them.

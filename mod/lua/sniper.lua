@@ -91,7 +91,7 @@ local function refreshTargets()
 end
 
 local function distanceToLee(agent)
-  local ok, d = pcall(function() return VectorDistance(AgentGetWorldPos(agent), AgentGetWorldPos(Game_GetPlayer())) end)
+  local ok, d = pcall(function() return VectorDistance(AgentGetWorldPos(agent), AgentGetWorldPos(TWDA.player())) end)
   return ok and d or math.huge
 end
 

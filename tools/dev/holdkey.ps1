@@ -10,7 +10,8 @@ $log = "G:\Steam\steamapps\common\The Walking Dead The Telltale Definitive Serie
 $from = (Get-Item $log).Length
 $proc = Get-Process WDC | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
 $h = $proc.MainWindowHandle
-$code = [uint16][int][char]$Key.ToUpper()
+$names = @{ Up = 0x26; Down = 0x28; Left = 0x25; Right = 0x27; Shift = 0x10 }
+$code = if ($names.ContainsKey($Key)) { [uint16]$names[$Key] } else { [uint16][int][char]$Key.ToUpper() }
 $end = (Get-Date).AddMilliseconds($Ms)
 $n = 0
 while ((Get-Date) -lt $end) {

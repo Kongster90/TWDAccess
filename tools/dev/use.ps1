@@ -30,9 +30,16 @@ if ($last -match "Enter walks there") {
     $n0 = (Get-Content $log).Count
     & "$dev\game_input.ps1" -Keys Enter | Out-Null
     $end = (Get-Date).AddSeconds(60)
+    $walksOn = 0
     while ((Get-Date) -lt $end) {
         & "$dev\game_input.ps1" -Focus | Out-Null
         $said = NewSpeech $n0
+        # The game took Lee over on the way (a remark, a short scene): walk on, as told.
+        if ((@($said) -match "cut short.*Enter walks on").Count -gt $walksOn) {
+            $walksOn++
+            & "$dev\game_input.ps1" -Keys Enter | Out-Null
+            $end = (Get-Date).AddSeconds(60)
+        }
         if ($said -match "stopped|blocked|still can't|camera does not show|out of view from here|no further|At the ") { break }
         if (($said | Where-Object { $_ -notmatch "Walking to" }) -match $pattern) { break }
         Start-Sleep -Milliseconds 800

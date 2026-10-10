@@ -50,7 +50,7 @@ local state = nil -- { zone, phase = "walk" | "run" | "stop" | "back", keys, las
 -- Where Lee is in the cover (0 rear, 1 front) and the keys that move him forward, or nil.
 local function measure(zone)
   local rear, front = call(AgentFind, zone.rear), call(AgentFind, zone.front)
-  local lee = call(Game_GetPlayer)
+  local lee = TWDA.player()
   if not rear or not front or not lee then return nil end
   local r, f, p = call(AgentGetWorldPos, rear), call(AgentGetWorldPos, front), call(AgentGetWorldPos, lee)
   if not r or not f or not p then return nil end

@@ -16,6 +16,38 @@ function TWDA.now()
 end
 
 ---------------------------------------------------------------------------------------------------
+-- The character the player controls. The game's Game_GetPlayer is AgentFind("Lee") (wdgame.lua),
+-- nothing in 400 Days; then whoever navigate.lua moves (its upvalue mPlayer: Russell at the truck
+-- stop).
+---------------------------------------------------------------------------------------------------
+
+function TWDA.player()
+  local ok, lee = pcall(G.Game_GetPlayer)
+  if ok and lee ~= nil then return lee end
+  local nav = rawget(G, "Navigate_OnButtonUp")
+  local player = nav and TWDA.upvalue and TWDA.upvalue(nav, "mPlayer")
+  if player ~= nil then return player end
+  return nil
+end
+
+-- What to call the player in speech: "Lee", or "Shel" in 400 Days.
+function TWDA.playerName()
+  local ok, name = pcall(AgentGetName, TWDA.player())
+  if ok and type(name) == "string" and name:find("^%u%l+$") then return name end
+  return "Lee"
+end
+
+-- The scene the player is in, else the bottom scene (the level, under the UI scenes).
+function TWDA.playerScene()
+  local player = TWDA.player()
+  local ok, scene = pcall(AgentGetScene, player)
+  if player ~= nil and ok and scene ~= nil then return scene end
+  local okBottom, bottom = pcall(SceneGetBottomScene)
+  if okBottom then return bottom end
+  return nil
+end
+
+---------------------------------------------------------------------------------------------------
 -- Logging (TWDAccess/twda.log). Buffered and flushed once per frame.
 ---------------------------------------------------------------------------------------------------
 

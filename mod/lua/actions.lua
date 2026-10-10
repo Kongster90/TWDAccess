@@ -49,9 +49,7 @@ local function countdown()
   if now - timerScanAt > 5 then
     timerScanAt, timerAgents = now, {}
     TWDA.trace("countdown scan")
-    local okP, lee = pcall(Game_GetPlayer)
-    local okS, scene = pcall(AgentGetScene, okP and lee or nil)
-    local okA, agents = pcall(SceneGetAgents, okS and scene or nil)
+    local okA, agents = pcall(SceneGetAgents, TWDA.playerScene())
     for _, agent in ipairs(okA and type(agents) == "table" and agents or {}) do
       local node = prop(agent, "Timer Dialog on completion")
       local lower = type(node) == "string" and node:lower() or ""
@@ -85,21 +83,30 @@ local function countdown()
     if type(progress) == "number" then
       local seen = timerSeen[name]
       if not seen or progress ~= seen.progress then
-        timerSeen[name] = { progress = progress, movedAt = (seen and progress > seen.progress) and now or -10 }
-        seen = timerSeen[name]
+        local moving = seen ~= nil and progress > seen.progress
+        local new = { progress = progress, movedAt = moving and now or -10, rate = seen and seen.rate }
+        if moving then
+          -- How fast it fills, measured over the current run (it holds still between the steps of
+          -- the alley chase while Lee pushes the dumpster, opens the manhole ...: a new run).
+          new.run = now - seen.movedAt < 0.5 and seen.run or { p = progress, t = now }
+          if now - new.run.t >= 0.15 then new.rate = (progress - new.run.p) / (now - new.run.t) end
+        end
+        timerSeen[name] = new
+        seen = new
       end
       local length = prop(agent, "Timer Length")
       if progress > 0 and progress < 1 and now - seen.movedAt < 1 and type(length) == "number"
         and prop(agent, "Timer Enabled") == true and prop(agent, "Timer Looping") ~= true then
         -- The game advances it by frame time times the scene's time scale times "Timer Speed
-        -- Multiplier" (timer.lua). (Every step of the alley chase in Savannah, Episode 4, was
-        -- announced as "about 1 second" from the length alone; not yet checked with this.)
+        -- Multiplier" over the length (timer.lua). But some timers read a length of 0 and still
+        -- fill (timer_zombieGroupClosesIn, the alley chase in Savannah, Episode 4: about 29 s in
+        -- all, each step announced as "about 1 second"); then the measured rate tells.
         local speed = prop(agent, "Timer Speed Multiplier")
         speed = type(speed) == "number" and speed > 0 and speed or 1
         local okScale, scale = pcall(function() return SceneGetTimeScale(AgentGetScene(agent)) end)
         scale = okScale and type(scale) == "number" and scale > 0 and scale or 1
-        local left = length * (1 - progress) / (speed * scale)
-        return { name = name, left = left, length = length / (speed * scale) }
+        local total = length > 0 and length / (speed * scale) or (seen.rate and seen.rate > 0 and 1 / seen.rate) or nil
+        return { name = name, left = total and total * (1 - progress), length = total }
       end
     end
   end
@@ -116,6 +123,7 @@ end
 -- F6.
 function TWDA.describeCountdown()
   local current = countdown()
+  if current and not current.left then return "Time is running out" end
   return current and ("About " .. seconds(current.left) .. " left") or nil
 end
 
@@ -191,6 +199,10 @@ function TWDA.offerTexts(entries, withSides)
     end
     local name = TWDA.hotspotName(entry.agent)
     local rest = actions and (": " .. table.concat(actions, ", ")) or entry.place and "" or ", several actions"
+    -- ("Drive away", not "Away: Drive".)
+    if actions and #actions == 1 and TWDA.isAdverbName and TWDA.isAdverbName(name) then
+      name, rest = tostring(actions[1]) .. " " .. name:lower(), ""
+    end
     if withSides and entry.side then rest = rest .. ", " .. TWDA.sideWords[entry.side] end
     local key = name .. "\0" .. rest
     if counts[key] then
@@ -228,10 +240,10 @@ end
 
 -- Whether a line said in the last few seconds names it: Lee's "KEYS! NOW!" in the train station
 -- (Episode 3), while the cage door is on offer too and only the key from Clementine saves him.
-local function mentioned(entry)
+local function mentioned(entry, within)
   local name = TWDA.hotspotName and TWDA.hotspotName(entry.agent) or entry.name
   for _, line in ipairs(recentLines) do
-    if TWDA.now() - line.at < 8 then
+    if TWDA.now() - line.at < (within or 8) then
       for word in tostring(name):lower():gmatch("%a+") do
         if #word >= 3 and line.text:find("%f[%a]" .. word) then return true end
       end
@@ -291,6 +303,10 @@ TWDA.onFrame("actions", function()
     known, autoQueue = nil, {}
     return
   end
+  -- (A countdown whose length is still being measured, a fraction of a second: wait for it, so
+  -- its time is said with what to do.)
+  local measuring = countdown()
+  if measuring and not measuring.left and measuring.name ~= toldCountdown then return end
 
   -- When a fight starts (the reticle goes into combat mode) everything on offer is new again: the
   -- walker just stabbed at the Motor Inn now wants the awl driven in ("Zombie: Stab. Enter!").
@@ -364,6 +380,9 @@ TWDA.onFrame("actions", function()
         break
       end
     end
+    -- Nor against the clock: "Hurry ... Chain: Look At. Enter!" once the chain had been pulled and
+    -- shot (Vince's bus, 400 Days).
+    if measuring then fresh = {} end
   end
   fresh = TWDA.orderByUrgency(fresh)
   if #overThere > 0 then
@@ -379,7 +398,7 @@ TWDA.onFrame("actions", function()
   local current = not hiding and countdown()
   if current and current.name ~= toldCountdown then
     toldCountdown = current.name
-    hurry = "Hurry: about " .. seconds(current.left)
+    hurry = current.left and ("Hurry: about " .. seconds(current.left)) or "Hurry"
   end
 
   -- Walking in moving cover (cover.lua): what is on offer along the way is scenery (the tractor's
@@ -399,7 +418,7 @@ TWDA.onFrame("actions", function()
         end
         return false
       end
-      local lee = select(2, pcall(Game_GetPlayer))
+      local lee = TWDA.player()
       local okLee, from = pcall(AgentGetWorldPos, lee)
       local best, bestScore = nil, math.huge
       for _, entry in ipairs(list) do
@@ -412,7 +431,7 @@ TWDA.onFrame("actions", function()
           if score < bestScore then best, bestScore = entry, score end
         end
       end
-      if best and (named(best) or current.length - current.left > 1) then
+      if best and (named(best) or (current.length and current.length - current.left > 1)) then
         fresh = { best }
       else
         -- (Usable things flicker for a frame as a walk starts: look again, for up to a second.)
@@ -553,6 +572,9 @@ TWDA.onFrame("sceneoffers", function()
   -- Where Lee walks, Tab and F6 are enough, except when control comes back with one thing to do
   -- (the Macon pharmacy: "Counter: Jump Over", and seconds before the walkers get in).
   if walking and not busy then
+    -- (Not while runto.lua guides a run: "Leland: Yell To. Enter to do it." in the middle of
+    -- Bonnie's run, 400 Days, and Enter would yell rather than run.)
+    if TWDA.runtoActive and TWDA.runtoActive() then return end
     local ready = TWDA.hotspots and TWDA.reticleReady and TWDA.reticleReady()
     if not ready then
       walkReadySince, walkTold = nil, false
@@ -604,7 +626,7 @@ TWDA.onFrame("sceneoffers", function()
     end
     if walkTold or now - walkReadySince < 1 then return end
     walkTold = true
-    local here = {}
+    local here, named = {}, nil
     for _, entry in ipairs(TWDA.hotspots()) do
       local verb = soleVerb(entry.agent)
       local talk = type(verb) == "string" and verb:lower():find("^talk")
@@ -636,8 +658,18 @@ TWDA.onFrame("sceneoffers", function()
       if entry.clickable and entry.side == nil and not lookOnly(verb) and not talk and not justUsed then
         here[#here + 1] = entry
       end
+      -- (Something a line has just asked for: "Check through the window", says Nate in the truck
+      -- stop, 400 Days, and the window is the way on but out of Russell's reach. With subtitles
+      -- read as the speaker's name only, nothing else says so.)
+      if not named and not entry.place and not talk and not justUsed and mentioned(entry, 20) then named = entry end
     end
-    if #here == 1 then
+    if #here ~= 1 and named then
+      local text = table.concat(TWDA.offerTexts({ named }, true), ". ")
+        .. (named.clickable and (". " .. enterWords(named)) or ". Enter walks there.")
+      TWDA.log("sceneoffers (walking, named): " .. text)
+      TWDA.say(text, { interrupt = true })
+      if TWDA.preferNextTab then TWDA.preferNextTab(named.name) end
+    elseif #here == 1 then
       -- (Shooting or killing is never pressed on the player where Lee walks freely: the walkers
       -- in the barricade on River Street, Episode 4, are better left alone.)
       local violent = false
@@ -674,6 +706,9 @@ TWDA.onFrame("sceneoffers", function()
   -- scene, announced with its keys and time above.
   readySince = readySince or now
   if now - readySince < 1 then return end
+  -- (Not while the mod turns a view to its far end: what passes by on the way is not news, and
+  -- what is in view at the end is told then.)
+  if TWDA.turningView and TWDA.turningView() then return end
   sceneKnown = sceneKnown or {}
   local fresh = {}
   local list = TWDA.hotspots()

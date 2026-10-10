@@ -10,7 +10,8 @@ local function describe(subtitle)
   local okName, speaker = pcall(SubtitleGetAgentName, subtitle)
   text = okText and type(text) == "string" and TWDA.cleanText(text) or ""
   speaker = okName and type(speaker) == "string" and speaker or ""
-  return SPEAKERS[speaker] or speaker, text
+  -- (Names run together are split: "TinyCarlos", 400 Days.)
+  return SPEAKERS[speaker] or (speaker:gsub("(%l)(%u)", "%1 %2")), text
 end
 
 TWDA.hookBefore("Subtitle_OnCreate", function(subtitle)

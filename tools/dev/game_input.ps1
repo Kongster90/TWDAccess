@@ -76,7 +76,10 @@ public static class GameInput {
     public static void KeyState(ushort vk, bool down) {
         var a = new INPUT[1];
         a[0].type = 1; a[0].u.ki.wVk = vk; a[0].u.ki.wScan = (ushort)MapVirtualKey(vk, 0);
-        a[0].u.ki.dwFlags = 0x0008u | (down ? 0u : 0x0002u);
+        // (Arrows, Page Up/Down, Home, End, Insert and Delete need the extended flag, or they
+        // arrive as number-pad keys.)
+        uint ext = ((vk >= 0x21 && vk <= 0x28) || vk == 0x2D || vk == 0x2E) ? 1u : 0u;
+        a[0].u.ki.dwFlags = 0x0008u | ext | (down ? 0u : 0x0002u);
         SendInput(1, a, Marshal.SizeOf(typeof(INPUT)));
     }
 }

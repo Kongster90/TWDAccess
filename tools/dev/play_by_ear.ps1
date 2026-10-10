@@ -33,8 +33,9 @@ function Press([int]$code, [string]$label) {
 if ($StartKey -eq "Enter") { Press 0x0D "Enter" } elseif ($StartKey -eq "F6") { Press 0x75 "F6" }
 # With -Answer, a choice already waiting when listening starts is answered too.
 if ($Answer -gt 0) {
-    $lastSay = Get-Content $log -Tail 40 | Where-Object { $_ -match "^\S+\s+\S+ say!? " } | Select-Object -Last 1
-    if ($lastSay -match " say!? Choices\.") { Press (0x30 + $Answer) "$Answer (waiting choice)" }
+    # (The last list of choices with no "choices: ended" after it: subtitles may have come since.)
+    $choiceLines = Get-Content $log -Tail 80 | Where-Object { $_ -match "^\S+\s+\S+ (say! Choices\.|choices: ended)" }
+    if (($choiceLines | Select-Object -Last 1) -match " say! Choices\.") { Press (0x30 + $Answer) "$Answer (waiting choice)" }
 }
 
 $mashing = $false
@@ -42,6 +43,7 @@ $holding = 0
 $sticky = $false
 $holdUntil = Get-Date
 $walkKeys = @()
+$runUntil = $null
 $leanIndex = 0
 $lastMash = Get-Date
 $lastFocus = Get-Date
@@ -66,6 +68,9 @@ while ((Get-Date) -lt $end) {
             $walkKeys = @($Matches[3] -split " and " | ForEach-Object { [int][char]$_ })
             if ($Matches[2]) { $walkKeys = @(0x10) + $walkKeys }
             "walking " + $Matches[2] + $Matches[3]
+        } elseif ($text -match "Hold W to run out of the field" -and $walkKeys.Count -eq 0) {
+            # cornfield.lua: the end of the field waits for Bonnie to run.
+            $walkKeys = @([int][char]"W"); "walking W (out of the field)"
         } elseif ($text -match "^Guided path\. Hold W or S" -and $walkKeys.Count -eq 0) {
             $walkKeys = @([int][char]"W"); "walking W (guided path)"
         } elseif ($text -match "^Go on: hold ([WASD])\.") {
@@ -75,6 +80,12 @@ while ((Get-Date) -lt $end) {
         } elseif (($text -match "Stop$" -or $text -match "^Stop!") -and $walkKeys.Count -gt 0) {
             foreach ($k in $walkKeys) { [GameInput]::KeyState([uint16]$k, $false) }
             $walkKeys = @(); "stopped"
+        } elseif ($text -match "^Let go of ([WASD]), then hold it again") {
+            # guided.lua: a key held from before the path moves nothing until it is pressed again.
+            $k = [int][char]$Matches[1]
+            [GameInput]::KeyState([uint16]$k, $false); Start-Sleep -Milliseconds 300
+            if ($walkKeys -notcontains $k) { $walkKeys = @($k) }
+            "pressed $($Matches[1]) again"
         }
         # -Leans D,A: on each new "Hiding. To lean out" lean the next way (a player's choice).
         if ($text -match "^Hiding\. To lean out" -and $leanIndex -lt $Leans.Count) {
@@ -92,14 +103,18 @@ while ((Get-Date) -lt $end) {
             Press 0x45 "E"
         }
         elseif ($text -match "^Too late") { if ($HoldQ) { [GameInput]::KeyState(0x51, $true) } else { $mashing = $true } }
-        elseif ($text -match "Hold Shift and (W|A|S|D)") {
-            # Run: hold Shift and the key for a few seconds.
-            $code = [int][char]$Matches[1]
-            [void][GameInput]::Focus($h); [GameInput]::KeyState(0x10, $true); [GameInput]::KeyState([uint16]$code, $true)
-            "holding Shift+" + $Matches[1]
-            $end2 = (Get-Date).AddSeconds(4)
-            while ((Get-Date) -lt $end2) { [void][GameInput]::Focus($h); [GameInput]::KeyState([uint16]$code, $true); Start-Sleep -Milliseconds 100 }
-            [GameInput]::KeyState([uint16]$code, $false); [GameInput]::KeyState(0x10, $false)
+        elseif ($text -match "Hold Shift and ([WASD](?: and [WASD])?)") {
+            # Run (runto.lua): hold Shift and the keys for up to 6 seconds, following the corrections
+            # it gives ("W and D") as the camera cuts.
+            foreach ($k in $walkKeys) { [GameInput]::KeyState([uint16]$k, $false) }
+            $walkKeys = @(0x10) + @($Matches[1] -split " and " | ForEach-Object { [int][char]$_ })
+            $runUntil = (Get-Date).AddSeconds(6)
+            "running Shift+" + $Matches[1]
+        }
+        elseif ($runUntil -and (Get-Date) -lt $runUntil -and $text -match "^([WASD](?: and [WASD])?)$") {
+            foreach ($k in $walkKeys) { [GameInput]::KeyState([uint16]$k, $false) }
+            $walkKeys = @(0x10) + @($Matches[1] -split " and " | ForEach-Object { [int][char]$_ })
+            "running Shift+" + $Matches[1]
         }
         elseif ($text -match "Use the (W|A|S|D) \(" -or $text -match "^Press (W|A|S|D) to ") {
             # A guided move ("Use the S (back) key to get away!"): hold the key for up to -HoldS
@@ -113,6 +128,26 @@ while ((Get-Date) -lt $end) {
             $holdUntil = (Get-Date).AddSeconds($HoldS)
             "holding " + $holdKey
         }
+        elseif ($text -match "^Grab it: Left or Right arrow") {
+            # The rebar in 400 Days (cornfield.lua): the way to pull first.
+            Start-Sleep -Milliseconds 300
+            Press ($(if ($Turn -eq "Left") { 0x25 } else { 0x27 })) "$Turn (grab)"
+        }
+        elseif ($text -match "^Hold (Left|Right|Up|Down) arrow to pull") {
+            # A drag (drag.lua): hold that arrow until something else is said (or -HoldS seconds).
+            Start-Sleep -Milliseconds $ReactMs
+            $holding = @{ Left = 0x25; Up = 0x26; Right = 0x27; Down = 0x28 }[$Matches[1]]
+            $sticky = $false
+            $holdUntil = (Get-Date).AddSeconds($HoldS)
+            "holding " + $Matches[1] + " (pull)"
+        }
+        elseif ($text -match "^(?:Someone is coming down this row|Still in someone's row)[.!] (Left or Right|Left|Right) arrow") {
+            # The cornfield in 400 Days (cornfield.lua): step into the next row, the -Turn way when
+            # both are offered.
+            Start-Sleep -Milliseconds $ReactMs
+            $way = if ($Matches[1] -eq "Left or Right") { if ($Turn -eq "Left") { "Left" } else { "Right" } } else { $Matches[1] }
+            Press ($(if ($way -eq "Left") { 0x25 } else { 0x27 })) "$way (row)"
+        }
         elseif ($text -match "^Turn: ") {
             # -Turn Named: the first arrow the announcement names ("Up arrow to look up").
             $t = $Turn
@@ -120,7 +155,7 @@ while ((Get-Date) -lt $end) {
             $code = @{ Left = 0x25; Up = 0x26; Right = 0x27; Down = 0x28 }[$t]
             Start-Sleep -Milliseconds $ReactMs; Press $code $t
         }
-        elseif ($text -match "does not move Lee here\. Try ([WASD])" -and $holding) {
+        elseif ($text -match "does not move \w+ here\. Try ([WASD])" -and $holding) {
             # guided.lua: the other key moves the path on; hold that one instead.
             [GameInput]::KeyState([uint16]$holding, $false)
             $holdKey = $Matches[1]; $holding = [int][char]$holdKey; $holdUntil = (Get-Date).AddSeconds($HoldS)
@@ -181,6 +216,10 @@ while ((Get-Date) -lt $end) {
         }
         elseif ($text -match "^Choices\." -and $Answer -gt 0) { Start-Sleep -Milliseconds 800; Press (0x30 + $Answer) "$Answer" }
         elseif (($text -match "^Choices\." -and -not $IgnoreChoices) -or $text -match "^You are dead") { [GameInput]::KeyState(0x51, $false); foreach ($k in $walkKeys) { [GameInput]::KeyState([uint16]$k, $false) }; "stopping"; $reader.Close(); exit 0 }
+    }
+    if ($runUntil -and (Get-Date) -ge $runUntil) {
+        foreach ($k in $walkKeys) { [GameInput]::KeyState([uint16]$k, $false) }
+        $walkKeys = @(); $runUntil = $null; "stopped running"
     }
     if ($walkKeys.Count -gt 0) {
         [void][GameInput]::Focus($h)

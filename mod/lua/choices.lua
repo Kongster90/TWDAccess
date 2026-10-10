@@ -110,6 +110,7 @@ end
 local function onEnd()
   choices = {}
   resumeDialogs()
+  TWDA.log("choices: ended") -- (tools\dev\play_by_ear.ps1 goes by it)
 end
 
 -- Every way of picking (number keys, Enter, a click) goes through mode_dialog.lua's local

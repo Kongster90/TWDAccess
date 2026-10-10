@@ -31,7 +31,7 @@ TWDA.turnChoiceActive = active
 -- its own that is not an object).
 local SIGN = { Left = -1, Right = 1 }
 local function isPerson(agent)
-  local okLee, lee = pcall(Game_GetPlayer)
+  local okLee, lee = true, TWDA.player()
   if okLee and agent == lee then return false end
   -- (Not the walkers hanging on: "Zombie" has a name of its own too.)
   local shown = tostring(TWDA.hotspotName(agent) or ""):lower()

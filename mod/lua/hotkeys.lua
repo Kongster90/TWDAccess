@@ -26,9 +26,13 @@ local function readCurrent()
     or (TWDA.describeStruggle and TWDA.describeStruggle()) or (TWDA.describeAiming and TWDA.describeAiming())
     or (TWDA.describeSniper and TWDA.describeSniper())
     or (TWDA.describeCover and TWDA.describeCover())
+    or (TWDA.describeCornfield and TWDA.describeCornfield())
+    or (TWDA.describeDrag and TWDA.describeDrag())
+    or (TWDA.describeFastSlow and TWDA.describeFastSlow())
     or (TWDA.describeTurnChoice and TWDA.describeTurnChoice())
     or (TWDA.describeStats and TWDA.describeStats())
     or (TWDA.describeSeasonStats and TWDA.describeSeasonStats())
+    or (TWDA.describeWhoWent and TWDA.describeWhoWent())
   if aiming then
     TWDA.say(aiming, { interrupt = true })
     return

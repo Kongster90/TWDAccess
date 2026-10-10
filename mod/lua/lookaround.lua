@@ -237,7 +237,7 @@ local unreachableCamera = nil
 -- dairy) while the second stays "reticleCamV".
 local function cameraName()
   local cam = call("CameraControlReticle_GetCamera")
-  local player = call("Game_GetPlayer")
+  local player = TWDA.player()
   local scene = player and call("AgentGetScene", player)
   local view = scene and call("SceneGetCamera", scene)
   -- (A close-up can keep the camera's name: the meat locker's air conditioner.)
@@ -246,7 +246,7 @@ local function cameraName()
 end
 
 local function playerPos()
-  local player = call("Game_GetPlayer")
+  local player = TWDA.player()
   if player == nil then return nil end
   local ok, pos = pcall(AgentGetWorldPos, player)
   if ok then return pos end
@@ -291,6 +291,14 @@ local SCENE_PLACES = {
   },
 }
 local placeArrive = {} -- agent name -> what to say on arrival
+-- Views (close-up cameras that turn with the reticle) where something happens only once the view
+-- is turned all the way to one side, with no hotspot there to Tab to. Camera name -> { side, name }.
+local SCENE_VIEWS = {
+  -- Episode 4, River Street: through the telescope, turned fully left, Lee spots the stranger
+  -- running into the newsstand (env_savannahRiverStreet.lua plays cs_telescopeLooksFarLeft once
+  -- reticleCamH's pan is under a tenth from the left end). The story waits for it.
+  cam_panningTelescope = { { side = "left", name = "Far left" } },
+}
 local stairAgents, stairScanAt = {}, -10
 
 -- The nearest stair trigger on Lee's floor (trigger_dialog_leeStairsBottom at the foot of the
@@ -313,7 +321,7 @@ function nearestStairs()
   local now = TWDA.now()
   if now - stairScanAt > 5 then
     stairScanAt, stairAgents = now, {}
-    local player = call("Game_GetPlayer")
+    local player = TWDA.player()
     local scene = player and call("AgentGetScene", player)
     local okA, agents = pcall(SceneGetAgents, scene)
     for _, agent in ipairs(okA and type(agents) == "table" and agents or {}) do
@@ -415,6 +423,14 @@ local function hotspots()
         side = side, clickable = false, n = #list, place = true }
     end
   end
+  local player = TWDA.player()
+  local view = player and call("SceneGetCamera", call("AgentGetScene", player))
+  for _, pan in ipairs(view ~= nil and SCENE_VIEWS[TWDA.agentName(view)] or {}) do
+    local name = "view:" .. pan.side
+    places[name] = pan.name
+    list[#list + 1] = { agent = view, name = name, x = 0.5, y = 0.5, clickable = false, n = #list, place = true,
+      pan = pan.side }
+  end
   local names = {}
   for _, entry in ipairs(list) do names[#names + 1] = entry.name end
   table.sort(names)
@@ -431,7 +447,7 @@ local function hotspots()
     if moved then listMoves = listMoves + 1 end
     -- In view first, then out of view to a side, then behind; where Lee walks about, nearest
     -- first within each (28 things at the dairy, the gate he needs 2 meters away).
-    local function rank(entry) return entry.behind and 2 or entry.side and 1 or 0 end
+    local function rank(entry) return entry.pan and 3 or entry.behind and 2 or entry.side and 1 or 0 end
     local distances = {}
     if walk then
       for _, entry in ipairs(list) do distances[entry] = distanceTo(entry.agent) or math.huge end
@@ -527,6 +543,11 @@ end
 local USE_NODE = "WDUseable - Action Use Dialog Start Node"
 
 local ADVERBS = { away = true, back = true, off = true, out = true, over = true, around = true }
+-- A "name" that only completes the verb: "Away" with "Drive" for Shel's way out of the camp (400
+-- Days), shown by the game as "Drive Away". Read as one phrase, not "Away: Drive".
+function TWDA.isAdverbName(name)
+  return type(name) == "string" and ADVERBS[name:lower()] == true
+end
 
 local function nodeLabel(agent)
   if gameName(agent) ~= nil then return nil end
@@ -550,6 +571,41 @@ local function nodeLabel(agent)
   return object, verb:sub(1, 1):upper() .. verb:sub(2):lower()
 end
 
+-- People the game labels alike are told apart by their own names: "Prisoner" for both Danny and
+-- Justin, chained together on the bus in 400 Days (agents "Dan" and "Justin"), when Vince must
+-- shoot one of them free. Name -> true, for names two or more characters on offer share.
+local function isCharacterAgent(agentName)
+  local lower = agentName:lower()
+  return agentName:find("^%u%a+%d*$") ~= nil and not lower:find("zombie", 1, true) and not lower:find("walker", 1, true)
+end
+local sharedAt, shared = -10, {}
+local function sharedNames()
+  local now = TWDA.now()
+  if now - sharedAt < 0.5 then return shared end
+  sharedAt, shared = now, {}
+  local agentsByName = {}
+  for _, agent in ipairs(TWDA.upvalue(rawget(G, "Reticle_Update"), "mUseables") or {}) do
+    local agentName = TWDA.agentName(agent)
+    if isCharacterAgent(agentName) then
+      if knownNames[agentName] == nil then knownNames[agentName] = gameName(agent) or nodeLabel(agent) end
+      local name = knownNames[agentName]
+      if name then
+        agentsByName[name] = agentsByName[name] or {}
+        agentsByName[name][agentName] = true
+      end
+    end
+  end
+  for name, agents in pairs(agentsByName) do
+    if next(agents, next(agents)) ~= nil then shared[name] = true end
+  end
+  return shared
+end
+local function distinctName(agentName, name)
+  if not (type(name) == "string" and isCharacterAgent(agentName) and sharedNames()[name]) then return name end
+  local own = prettyName(agentName)
+  return own ~= name and own or name
+end
+
 local function displayName(agentName, agent)
   if places[agentName] then return places[agentName] end
   -- (Controls in a row that the game names alike, panels.lua: "Switch 2 of 7".)
@@ -562,7 +618,38 @@ local function displayName(agentName, agent)
   -- "Zombie" to attack.)
   local second = type(name) == "string" and name:lower():match("^zombie (%a+)")
   if second and not ZOMBIE_PARTS[second] then return "zombie" end
-  return name
+  return distinctName(agentName, name)
+end
+
+-- The nearest thing within 3 meters, a way out (door, ladder, stairs, gate, hatch, exit) before
+-- anything else: from inside the boxcar or the train's cab (Episode 3) only the door leads
+-- anywhere, with Kenny standing closer. Returns the list entry and its distance, or nil.
+local function nearestWayOut(exceptName)
+  local nearest, nearestDistance, nearestExit = nil, math.huge, false
+  for _, entry in ipairs(hotspots()) do
+    local d = entry.name ~= exceptName and distanceTo(entry.agent)
+    if d and d <= 3 then
+      local label = displayName(entry.name, entry.agent):lower()
+      local exit = label:find("door", 1, true) or label:find("ladder", 1, true) or label:find("stair", 1, true)
+        or label:find("gate", 1, true) or label:find("hatch", 1, true) or label:find("exit", 1, true)
+      if (exit and not nearestExit) or (exit or not nearestExit) and d < nearestDistance then
+        nearest, nearestDistance, nearestExit = entry, d, exit ~= nil
+      end
+    end
+  end
+  return nearest, nearest and nearestDistance or nil
+end
+
+-- What stands in front of a hotspot whose marker is on screen, when the game has put a blocker
+-- there ("blocker_alley" before the truck stop's back door in 400 Days, from the kitchen side: the
+-- way is through the back hall). Its name, or nil.
+local function blockerInFront(agent)
+  local dot = rawget(agent, "dot")
+  local okPos, pos = pcall(AgentGetLogicalScreenPos, dot)
+  if dot == nil or not okPos or not pos or pos.x < 0 or pos.x > 1 or pos.y < 0 or pos.y > 1 then return nil end
+  local okHit, hit = pcall(AgentAtScreenPos, Vector(pos.x, pos.y, 0))
+  local name = okHit and hit ~= nil and TWDA.agentName(hit) or ""
+  return name:lower():find("^blocker") and name or nil
 end
 
 -- The verb shown for a hotspot, or the one its use node implies for a fight target.
@@ -620,6 +707,9 @@ local function describeFocus()
     if state then noun = noun .. ", " .. state end
   end
   local actions = actionList()
+  if #actions <= 1 and TWDA.isAdverbName(noun) and current.verb and current.verb ~= "" then
+    return current.verb .. " " .. noun:lower()
+  end
   if #actions > 1 then
     local parts = {}
     for i, action in ipairs(actions) do parts[#parts + 1] = i .. " " .. action end
@@ -659,6 +749,9 @@ local function speakFocus()
   end
   -- A fight target the reticle landed on by itself is announced with its key by actions.lua.
   if current.fightTarget and not target then return end
+  -- Running for it (runto.lua): the reticle passing over people ("Dee: Yell To") must not cut the
+  -- keys off (Bonnie's run in 400 Days).
+  if not target and TWDA.runtoActive and TWDA.runtoActive() then return end
   if TWDA.now() < quietUntil and not (target and target.name == TWDA.agentName(current.agent)) then return end
   if text == lastSpoken and TWDA.now() - lastSpokenAt < 1.5 then return end
   -- A fight target just announced with its key (actions.lua): do not cut that short.
@@ -680,6 +773,15 @@ TWDA.hookBefore("ReticleUI_Contract", function() contractedAt = TWDA.now() end)
 -- the zombie pilot in the Macon pharmacy takes two blows ("Again! Enter!"). Only for something
 -- with a single action that is not looking: after a look, the reticle just comes back to it.
 local lastUsed = { name = nil, at = -10 }
+-- A blow or a shot ("Punch", "Shoot"): taken again at the same thing, it means another go.
+local function isBlow(verb)
+  verb = tostring(verb or ""):lower()
+  for _, word in ipairs({ "punch", "hit", "kick", "stab", "strike", "smash", "bash", "shove", "elbow", "headbutt",
+    "stomp", "chop", "shoot", "fire" }) do
+    if verb:find("^" .. word) then return true end
+  end
+  return false
+end
 local function checkStrike(focused, actions)
   if focused == nil then return end
   if call("ReticleUI_InCombatMode") ~= true then
@@ -687,9 +789,12 @@ local function checkStrike(focused, actions)
     local single = type(actions) == "table" and #actions == 1 and not looksOnly(tostring(actions[1]))
       and not tostring(actions[1]):lower():find("talk", 1, true)
     -- (Characters only, "zombiePilot": a gate or door is simply offered again after its use; and
-    -- not talking: Clementine is offered again when a short talk with her ends.)
+    -- not talking: Clementine is offered again when a short talk with her ends. Or a blow at a
+    -- part of someone: "Attacker: Punch" on obj_armNate, reaching into the car in 400 Days, takes
+    -- several, and Wyatt died after one.)
     local character = not name:lower():find("^obj_")
-    if single and character and name == lastUsed.name and TWDA.now() - lastUsed.at < 10 then
+    local blow = single and isBlow(actions[1])
+    if single and (character or blow) and name == lastUsed.name and TWDA.now() - lastUsed.at < 10 then
       lastUsed.name = nil
       TWDA.log("lookaround: again at " .. name)
       TWDA.say("Again! Enter!", { interrupt = true })
@@ -771,6 +876,7 @@ TWDA.hookBefore("Tooltip_Show", function(verb, noun)
   if not name then return end
   if focused ~= nil then
     if not rawKey then knownNames[TWDA.agentName(focused)] = name end
+    name = distinctName(TWDA.agentName(focused), name)
     current.agent, current.at = focused, TWDA.now()
   end
   verb = TWDA.keyOrText(verb) or verb
@@ -847,6 +953,13 @@ local function cycle(delta)
   local entry = list[index]
   lastTargetName, lastIndex = entry.name, index
   lastSpoken = nil
+  if entry.pan then
+    -- A view's far end: turned to at once (see the frame loop), quietly past what is on the way.
+    target = { agent = entry.agent, name = entry.name, since = TWDA.now(), pan = entry.pan, camera = cameraName() }
+    TWDA.say(("%s, %d of %d. Turning."):format(displayName(entry.name, entry.agent), index, #list), { interrupt = true })
+    quietUntil = math.huge
+    return
+  end
   -- Where Lee walks freely the cameras are fixed: something the game will not let the reticle take
   -- from here is offered as a walk straight away.
   if canWalk() and not clickable(entry.agent) then
@@ -954,7 +1067,8 @@ local walkCutShort = nil -- { w = the walk, at } when the game took Lee over dur
 local WALK_GIVE_UP_SECONDS = 60
 
 -- The nearest walker that can be seen, as (distance, agent), or nil. Walkers are agents with
--- "zombie" or "walker" in their names that are no helper (obj_, trigger_, lights, sounds).
+-- "zombie" or "walker" in their names that are no helper (obj_, trigger_, lights, sounds) and
+-- have a head bone: River Street's "Zombie_wall_vocals_near_water" (a sound) stopped a walk.
 local function isWalkerName(name)
   local l = name:lower()
   if not (l:find("zombie", 1, true) or l:find("walker", 1, true)) then return false end
@@ -973,7 +1087,8 @@ local function nearestWalker()
     if isWalkerName(TWDA.agentName(agent)) then
       local okHidden, hidden = pcall(AgentIsHidden, agent)
       local okPos, pos = pcall(AgentGetWorldPos, agent)
-      if not (okHidden and hidden) and okPos and pos then
+      local okHead, head = pcall(AgentHasNode, agent, "head")
+      if not (okHidden and hidden) and okPos and pos and okHead and head == true then
         local okD, d = pcall(VectorDistance, from, pos)
         if okD and type(d) == "number" and (not best or d < best) then best, bestAgent = d, agent end
       end
@@ -999,7 +1114,7 @@ local function startWalk(agent, act)
   if not isWalkerName(name) then w.walkerAtStart = nearestWalker() end
   local ok, err = pcall(ThreadStart, function()
     -- To where the game wants Lee to stand to use it, when it says.
-    local okPath, result = pcall(AgentPathToAgent, call("Game_GetPlayer"), rawget(agent, "usePosAgent") or agent)
+    local okPath, result = pcall(AgentPathToAgent, TWDA.player(), rawget(agent, "usePosAgent") or agent)
     if not okPath then TWDA.log("walk: " .. tostring(result)) end
     w.done, w.success = true, okPath and result == true
   end)
@@ -1017,7 +1132,7 @@ local function stopWalk(say)
   if not walking then return end
   walking = nil
   quietUntil = 0
-  pcall(PathAgentStop, call("Game_GetPlayer"))
+  pcall(PathAgentStop, TWDA.player())
   if say then TWDA.say("Stopped.", { interrupt = true }) end
 end
 
@@ -1075,12 +1190,12 @@ local function walkTick()
     end
   end
   if not w.done then
-    local okB, blocked = pcall(PathAgentIsBlocked, call("Game_GetPlayer"))
+    local okB, blocked = pcall(PathAgentIsBlocked, TWDA.player())
     if okB and blocked == true then
       w.blockedSince = w.blockedSince or now
       if now - w.blockedSince > 2 then
         stopWalk(false)
-        TWDA.say("Lee is blocked on the way to " .. displayName(w.name, w.agent) .. ".", { interrupt = true })
+        TWDA.say(TWDA.playerName() .. " is blocked on the way to " .. displayName(w.name, w.agent) .. ".", { interrupt = true })
       end
     else
       w.blockedSince = nil
@@ -1088,7 +1203,7 @@ local function walkTick()
     -- Lee can stop with the path-finding still waiting: in the Savannah sewers a walk to the far
     -- stairs ended at the low passage (which only an action gets through), with nothing said. If
     -- he has not moved for a few seconds, the walk is over.
-    local okPos, pos = pcall(AgentGetWorldPos, call("Game_GetPlayer"))
+    local okPos, pos = pcall(AgentGetWorldPos, TWDA.player())
     if walking and okPos and pos then
       local last = w.lastPos
       if not last or math.abs(pos.x - last.x) + math.abs(pos.y - last.y) + math.abs(pos.z - last.z) > 0.3 then
@@ -1126,27 +1241,14 @@ local function walkTick()
   local floor = where and (" It is " .. where .. ".") or ""
   local left = distanceTo(rawget(w.agent, "usePosAgent") or w.agent)
   if not w.success and not (left and left > 3) then
-    TWDA.say("Lee stopped before reaching " .. displayName(w.name, w.agent) .. "." .. floor, { interrupt = true })
+    TWDA.say(TWDA.playerName() .. " stopped before reaching " .. displayName(w.name, w.agent) .. "." .. floor, { interrupt = true })
     return
   end
   -- The path-finding can report success well short of the goal: a closed gate in the way (the
   -- yard gate at the dairy, on the way to the barn). Say how far he got and what is close by.
   if left and left > 3 then
-    -- A way out is the likelier answer than whatever is nearest: from inside the boxcar or the
-    -- train's cab (Episode 3) only the door leads anywhere, with Kenny standing closer.
-    local nearest, nearestDistance, nearestExit = nil, math.huge, false
-    for _, entry in ipairs(hotspots()) do
-      local d = entry.name ~= w.name and distanceTo(entry.agent)
-      if d and d <= 3 then
-        local label = displayName(entry.name, entry.agent):lower()
-        local exit = label:find("door", 1, true) or label:find("ladder", 1, true) or label:find("stair", 1, true)
-          or label:find("gate", 1, true) or label:find("hatch", 1, true) or label:find("exit", 1, true)
-        if (exit and not nearestExit) or (exit or not nearestExit) and d < nearestDistance then
-          nearest, nearestDistance, nearestExit = entry, d, exit ~= nil
-        end
-      end
-    end
-    TWDA.say(("Lee got to %d meters from %s and can go no further this way.%s%s"):format(left, displayName(w.name, w.agent),
+    local nearest, nearestDistance = nearestWayOut(w.name)
+    TWDA.say(("%s got to %d meters from %s and can go no further this way.%s%s"):format(TWDA.playerName(), left, displayName(w.name, w.agent),
       floor, floor == "" and nearest and nearestDistance <= 3 and (" Close by: " .. displayName(nearest.name, nearest.agent)
         .. ", " .. nearestDistance .. " meters.") or ""), { interrupt = true })
     return
@@ -1170,11 +1272,20 @@ end
 -- follows an Enter (the focus lapsed just then, or the game was still busy), aim again and retry.
 local lastUseAt = -1
 local pendingAction = nil -- { agent, at, tries }
+local doorUse = nil -- { label, from, at }: a door just used; said "Through X." if Lee came out elsewhere
 for _, name in ipairs({ "Main_OnUse", "PathToAndUseAgent" }) do
   TWDA.hookBefore(name, function(agent)
     lastUseAt = TWDA.now()
     lastUsed.name, lastUsed.at = TWDA.agentName(agent), lastUseAt
+    local acts = (lastActions and lastActions.name == lastUsed.name) and lastActions.actions or {}
+    lastUsed.blow = #acts == 1 and isBlow(acts[1])
     TWDA.lastUse = { name = lastUsed.name, at = lastUseAt, label = displayName(lastUsed.name, agent) }
+    -- A door used where Lee stands may take him through to another room of the same scene without
+    -- a sound (the truck stop's Kitchen Doors and Pantry Door, 400 Days): see doorPassed below.
+    local label = TWDA.lastUse.label:lower()
+    if name == "Main_OnUse" and (label:find("door", 1, true) or label:find("gate", 1, true) or label:find("hatch", 1, true)) then
+      doorUse = { label = TWDA.lastUse.label, from = playerPos(), at = lastUseAt }
+    end
     -- In a fight the camera follows the reticle; holding it where the last target was (the hammer
     -- Clementine held out) turns the view away from the next one, which then cannot be clicked.
     if target and target.agent == agent and call("ReticleUI_InCombatMode") == true then target = nil end
@@ -1269,6 +1380,7 @@ local function enterPressed()
   local focused = call("Reticle_GetAgentFocused")
   debug(("enter: focused %s, target %s, last %s"):format(TWDA.agentName(focused),
     target and target.name or "none", TWDA.agentName(current.agent)))
+  if target and target.pan then return end -- (still turning a view: nothing to do yet)
   -- The last thing chosen with Tab was out of view ("Enter walks there").
   if walkOffer and walkOffer.name == lastTargetName and TWDA.now() - walkOffer.at < 30 then
     local offer = walkOffer
@@ -1489,6 +1601,8 @@ TWDA.onFrame("lookaround", function()
   -- (Some close-ups have no reticle at all: the notepad shown from the train's console, Episode 3.)
   if back and not ready and call("WDBackButton_IsOccupied") == true then goBack() end
   if not ready then
+    -- (A scene that starts while a view is being turned is what the turn was for.)
+    if target and target.pan then target, quietUntil = nil, 0 end
     -- The reticle is off while an action or a short cutscene plays; take up the same object again
     -- afterwards, unless that takes too long.
     if target then
@@ -1510,6 +1624,35 @@ TWDA.onFrame("lookaround", function()
     local at = strikeAt
     strikeAt = nil
     if (TWDA.settings.actionscenes or "slow") == "auto" and TWDA.now() - at < 1 then doAction(true) end
+  end
+  -- A blow or a shot whose target stays in the reticle all along: the game does not show its
+  -- actions again, so checkStrike never hears of it ("Window: Shoot" in Russell's story, 400 Days:
+  -- "DON'T stop shooting!"; one shot, and Nate was hit). Still on it a second later: another go.
+  -- Back in control after a door: came out somewhere else? (Nothing else says so.)
+  -- (Watched for a few seconds, as the move can come a moment after control is back; not once
+  -- the player walks off by hand or with Enter.)
+  if doorUse then
+    local d = doorUse
+    local moving = walking ~= nil
+    for _, vk in ipairs({ 0x57, 0x41, 0x53, 0x44, 0x25, 0x26, 0x27, 0x28 }) do
+      local okKey, down = pcall(InputPCIsVKeyPressed, vk)
+      if okKey and down == true then moving = true end
+    end
+    local here = playerPos()
+    local okDist, dist = pcall(VectorDistance, here, d.from)
+    if moving or TWDA.now() - d.at > 6 then
+      doorUse = nil
+    elseif here and okDist and type(dist) == "number" and dist > 1.5 then
+      doorUse = nil
+      TWDA.log("lookaround: through " .. d.label .. " (" .. math.floor(dist + 0.5) .. " m)")
+      TWDA.say("Through " .. d.label .. ".")
+    end
+  end
+  if lastUsed.name and lastUsed.blow and TWDA.now() - lastUsed.at > 1 and TWDA.now() - lastUsed.at < 10
+    and call("ReticleUI_InCombatMode") ~= true and TWDA.agentName(call("Reticle_GetAgentFocused")) == lastUsed.name then
+    TWDA.log("lookaround: again at " .. lastUsed.name .. " (still in the reticle)")
+    lastUsed.name = nil
+    TWDA.say("Again! Enter!", { interrupt = true })
   end
 
   if pendingAction and TWDA.now() - pendingAction.at > 0.7 then
@@ -1569,6 +1712,31 @@ TWDA.onFrame("lookaround", function()
     lastMouse = { x = mouse.x, y = mouse.y }
   end
 
+  if target and target.pan then
+    -- Turning a view to its far end: hold the reticle at that edge until the view stops moving
+    -- (measured by where the hotspots' markers fall on screen).
+    local now = TWDA.now()
+    if cameraName() ~= target.camera then
+      target, quietUntil = nil, 0
+      return
+    end
+    pcall(ReticleController_SetScreenPos, target.pan == "left" and 0.01 or 0.99, 0.5, false)
+    local x = nil
+    for _, agent in ipairs(TWDA.upvalue(rawget(G, "Reticle_Update"), "mUseables") or {}) do
+      local dot = rawget(agent, "dot")
+      local okPos, pos = pcall(AgentGetLogicalScreenPos, dot)
+      if dot ~= nil and okPos and pos and pos.x then x = pos.x break end
+    end
+    if x == nil or target.probeX == nil or math.abs(x - target.probeX) > 0.002 then
+      target.probeX, target.movedAt = x, now
+    end
+    if (now - target.movedAt > 0.6 and now - target.since > 1) or now - target.since > 10 then
+      local side = target.pan
+      target, quietUntil = nil, 0
+      TWDA.say(("Turned as far %s as it goes."):format(side), { interrupt = true })
+    end
+    return
+  end
   if target then
     local okSel = prop(target.agent, "Game Selectable") == true
     local okPos, pos = pcall(AgentGetScreenPos, target.agent)
@@ -1659,6 +1827,17 @@ TWDA.onFrame("lookaround", function()
           .. ". Enter walks there.", { interrupt = true })
         quietUntil = now + 4
       end
+    elseif not target.reached and now - target.since > limit and target.afterWalk and blockerInFront(target.agent) then
+      -- Something the game put in its way: using it anyway (below) only got a confused remark from
+      -- Shel at the truck stop's back door, 400 Days, which opened from the back hall.
+      local t = target
+      target = nil
+      debug("blocked by " .. tostring(blockerInFront(t.agent)))
+      local way, wayDistance = nearestWayOut(t.name)
+      TWDA.say(displayName(t.name, t.agent) .. " can't be used from this side."
+        .. (way and (" Close by: " .. displayName(way.name, way.agent) .. ", " .. wayDistance .. " meters.") or ""),
+        { interrupt = true })
+      quietUntil = now + 4
     elseif not target.reached and now - target.since > limit and target.afterWalk and not presentsChoices(target.agent) then
       -- Still out of view after walking there, but simple enough to use without the reticle.
       local t = target
@@ -1668,7 +1847,7 @@ TWDA.onFrame("lookaround", function()
       local verb = gameVerb(t.agent)
       -- (Named again rather than "it": this is often a person, Ben on the train in Episode 3.)
       local name = displayName(t.name, t.agent)
-      TWDA.say(name .. " is out of view from here, but Lee can still " .. (verb and verb:lower() or "use") .. " "
+      TWDA.say(name .. " is out of view from here, but " .. TWDA.playerName() .. " can still " .. (verb and verb:lower() or "use") .. " "
         .. name .. ". Enter to do it.", { interrupt = true })
       quietUntil = now + 5
     elseif not target.reached and now - target.since > limit then
@@ -1734,6 +1913,11 @@ end
 -- True while the mod is steering the reticle to do something.
 function TWDA.reticleBusy()
   return target ~= nil and target.actOnReach == true
+end
+
+-- True while the mod turns a view to its far end (SCENE_VIEWS).
+function TWDA.turningView()
+  return target ~= nil and target.pan ~= nil
 end
 
 -- index: do that action (as its number key would) instead.
