@@ -225,8 +225,10 @@ I. (#18) Probably not a real problem: a slot has two files, and the main wd1_sav
 J. (#19) Countdowns said "about 1 second" at each step of the alley chase (Episode 4); the time
    now accounts for the timer's speed and the scene's time scale, untested.
 E. (#14) Long walks are slow and silent (Lee limps: 35 m to Hershel took about 40 s after "Walking
-   to Hershel"); maybe say the distance left now and then, and when Lee is stopped by a scene, say
-   nothing rather than "Lee stopped before reaching ..." (the gate at Clementine's).
+   to Hershel"). 2026-10-09: every 10 s of a walk, "N meters to go." while the distance goes down
+   (not yet heard in a test: the sewer walks were shorter). When the game takes Lee over during a
+   walk, nothing is said then; once he can walk again, "The walk to X was cut short, N meters
+   away. Enter walks on." (tested; Enter within 30 s).
 
 1. (#1) More navigation, once the user has tried what exists: manual walking help (W A S D move
    relative to fixed cameras that cut as Lee walks, so say which key heads towards a chosen hotspot,

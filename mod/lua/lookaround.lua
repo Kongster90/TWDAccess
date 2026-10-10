@@ -1096,6 +1096,16 @@ local function walkTick()
         walking = w
       end
     end
+    -- A long walk is not silent (Lee limps the 35 m to Hershel in about 40 s): the distance left
+    -- every 10 seconds, while it goes down.
+    if walking and not w.done and now - (w.toldAt or w.since) >= 10 then
+      w.toldAt = now
+      local left = distanceTo(rawget(w.agent, "usePosAgent") or w.agent)
+      if left and left > 5 and (not w.lastLeft or left < w.lastLeft - 2) then
+        TWDA.say(left .. " meters to go.")
+      end
+      w.lastLeft = left or w.lastLeft
+    end
     if walking and not w.done and now - w.since > WALK_GIVE_UP_SECONDS then
       stopWalk(false)
       w.done, w.success = true, false
