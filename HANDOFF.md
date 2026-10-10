@@ -3,7 +3,7 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-10-09 (fifth session, about 14:20; see the first items).
+Last updated: 2026-10-09 (fifth session, about 15:50; see the first items).
 
 ## Start here (where the last session stopped)
 
@@ -28,6 +28,22 @@ Last updated: 2026-10-09 (fifth session, about 14:20; see the first items).
   restart as rarely as possible.
 - dist\TWDAccess was rebuilt at the end with every change (the installed copy in the game folder
   is replaced from it at the next launch).
+- Where the session stopped (15:50, user asked to stop): replaying Episode 4 from its start
+  (dev_saves\ep3done, Episode 4 "Play") to test the countdown fix (#19) in the alley chase after
+  Molly. Got through the opening, yard, house, attic and burial to River Street; slot 2's
+  checkpoint is now the start of River Street (saves.txt: env_savannahRiverStreet.lua), also
+  copied to the new dev_saves\ep4_riverstreet. Next: Telescope, Newspaper Machine (Bash for
+  coins), Telescope: Use Quarter On, the newsstand, Molly, then the alley chase: check whether
+  "Hurry: about N seconds" now gives real times (timer_zombieGroupClosesIn). The game may still
+  be running (started by the agent); close it before swapping saves.
+- Fixed on the way (committed): number keys after a numbered offer that is not pressed on the
+  player ("Zombie: 1 Look At, 2 Shoot, 3 Bash, 4 Stomp." for the attic boy; Enter did Look At)
+  now apply to it (TWDA.numbersMean); a Tab target chosen before a newer announcement no longer
+  wins ("Shovel can't be reached" at the grave after "Loose Dirt: Shovel. Enter to do it."); after
+  15 s Enter takes whichever came last, announcement or focus; use-node names get PRETTY names
+  ("front door"). Untested oddity: once at the grave, Enter on Loose Dirt said "christa and omid
+  can't be reached from here". play_by_ear.ps1 -Answer misses a choice already waiting when a
+  speaker line was logged after it (the Episode 4 opening sat on Clementine's question).
 - After Season 1 was finished, the sewers (Episode 4) were replayed from dev_saves\ep4_sewers to
   test #17; see "Sewer retest" (after the Episode 5 notes) for eight fixes made there. Slot 2 now
   holds that sewer checkpoint (the leg grab), not ep5done; saves.txt says env_savannahSewers.lua.
@@ -1381,6 +1397,7 @@ Project root: C:\Users\dengs\Downloads\TWD
   saves.txt line env_epilogue.lua, not needed to start Episode 4 from the menu).
   Episode 4: ep4_house\ (despite the name its checkpoint is probably the yard,
   env_manorExteriorDay.lua, from the pet door talk: the main file was newer, see item I),
+  ep4_riverstreet\ (env_savannahRiverStreet.lua, the scene's start, before the telescope),
   ep4_sewers\ (env_savannahSewers.lua,
   arriving), ep4_sewers_after\ (env_savannahSewers.lua, after the walker grab, in the upper
   tunnel), ep4_clemsearch\ (env_manorInteriorClementineSearch.lua, back at the house),
