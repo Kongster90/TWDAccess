@@ -82,6 +82,75 @@ TWDA.onFrame("stats", function()
   end
 end)
 
+-- The season's summary after its last episode (ui_seasonStats.scene, input map ui_seasonstats.imap,
+-- UI_SeasonStats_Open; Season 1's ends after Episode 5): a card per character
+-- ("ui_seasonStats_kenny", lines on ..._text1 to _text4), five to a page. Only a mouse click goes
+-- on (SeasonStats_OnLeftClick, which plays chores and so needs a thread of its own); Enter does it
+-- here. Each page is read as it appears, cards left to right.
+local SEASON_IMAP = "ui_seasonstats.imap"
+local function shown(agent)
+  local okHidden, isHidden = pcall(AgentIsHidden, agent)
+  return agent ~= nil and not (okHidden and isHidden)
+end
+local function seasonText()
+  local cards, order = {}, {}
+  local okA, agents = pcall(SceneGetAgents, "ui_seasonStats.scene")
+  for _, agent in ipairs(okA and type(agents) == "table" and agents or {}) do
+    local who, n = TWDA.agentName(agent):match("^ui_seasonStats_(%a+)_text(%d)$")
+    local okParent, parent = pcall(AgentGetParent, agent)
+    if who and shown(agent) and (not okParent or parent == nil or shown(parent)) then
+      local text = TWDA.agentText(agent)
+      if text and text ~= "" then
+        if not cards[who] then
+          local okPos, pos = pcall(AgentGetScreenPos, agent)
+          cards[who] = { x = okPos and pos and pos.x or 0, lines = {} }
+          order[#order + 1] = who
+        end
+        cards[who].lines[tonumber(n)] = text
+      end
+    end
+  end
+  if #order == 0 then return nil end
+  table.sort(order, function(a, b) return cards[a].x < cards[b].x end)
+  local parts = {}
+  for _, who in ipairs(order) do
+    local lines = {}
+    for i = 1, 4 do
+      if cards[who].lines[i] then lines[#lines + 1] = cards[who].lines[i] end
+    end
+    parts[#parts + 1] = who:sub(1, 1):upper() .. who:sub(2) .. ": " .. TWDA.joinSentences(lines)
+  end
+  return "Season summary. " .. table.concat(parts, " ") .. " Enter to continue."
+end
+
+TWDA.describeSeasonStats = function()
+  local ok, on = pcall(InputMapperIsActive, SEASON_IMAP)
+  if not (ok and on) then return nil end
+  return seasonText()
+end
+
+local seasonSaid, enterHeld = nil, true
+TWDA.onFrame("seasonstats", function()
+  local ok, on = pcall(InputMapperIsActive, SEASON_IMAP)
+  local okKey, down = pcall(InputPCIsVKeyPressed, 0x0D)
+  down = okKey and down == true
+  local enter = down and not enterHeld
+  enterHeld = down
+  if not (ok and on) then
+    seasonSaid = nil
+    return
+  end
+  local text = seasonText()
+  if text and text ~= seasonSaid then
+    seasonSaid = text
+    TWDA.lastHint = text
+    TWDA.say(text, { interrupt = true })
+  end
+  if enter and type(rawget(G, "SeasonStats_OnLeftClick")) == "function" then
+    pcall(ThreadStart, function() pcall(SeasonStats_OnLeftClick) end)
+  end
+end)
+
 -- An episode's credits (mode_UI_Credits; one long text on ui_credits_text, the episode's name on
 -- ui_credits_textTitle). After an episode they cannot be skipped (OnMouseLDouble only works when
 -- they were opened from the menu); F6 reads them.

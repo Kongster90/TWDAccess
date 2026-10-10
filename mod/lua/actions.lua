@@ -176,6 +176,19 @@ function TWDA.offerTexts(entries, withSides)
   for _, entry in ipairs(entries) do
     -- (entry.onlyActions: just the actions it has newly gained, the cage door's "Unlock".)
     local actions = entry.onlyActions or currentActions(entry.agent)
+    -- With two or more things to do, each with its number key ("Baseball Bat: 1 Look At, 2 Grab,
+    -- 3 Kick" at the end of Episode 5), so the choice can be made without Tab.
+    if actions and not entry.onlyActions then
+      local doing = 0
+      for _, action in ipairs(actions) do
+        if not lookOnly(action) then doing = doing + 1 end
+      end
+      if doing >= 2 then
+        local numbered = {}
+        for i, action in ipairs(actions) do numbered[i] = i .. " " .. tostring(action) end
+        actions = numbered
+      end
+    end
     local name = TWDA.hotspotName(entry.agent)
     local rest = actions and (": " .. table.concat(actions, ", ")) or entry.place and "" or ", several actions"
     if withSides and entry.side then rest = rest .. ", " .. TWDA.sideWords[entry.side] end
@@ -553,7 +566,9 @@ TWDA.onFrame("sceneoffers", function()
         local new = {}
         local set = {}
         for _, action in ipairs(actions) do
-          if seen and not seen[tostring(action)] and not lookOnly(action) then new[#new + 1] = action end
+          if seen and not seen[tostring(action)] and not lookOnly(action) and not tostring(action):lower():find("^talk") then
+            new[#new + 1] = action -- (not "Talk To", which Clementine regains after each smear in Episode 5)
+          end
           set[tostring(action)] = true
         end
         if #actions > 0 or not seen then walkKnown[entry.name] = set end

@@ -28,6 +28,7 @@ local function readCurrent()
     or (TWDA.describeCover and TWDA.describeCover())
     or (TWDA.describeTurnChoice and TWDA.describeTurnChoice())
     or (TWDA.describeStats and TWDA.describeStats())
+    or (TWDA.describeSeasonStats and TWDA.describeSeasonStats())
   if aiming then
     TWDA.say(aiming, { interrupt = true })
     return

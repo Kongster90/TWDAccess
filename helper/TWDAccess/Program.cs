@@ -16,7 +16,10 @@ internal static class Program
                 Usage: TWDAccess [options]
                   --no-launch      Do not start the game; just listen for it.
                   --no-install     Do not copy the mod script into the game folder.
-                  --uninstall      Remove the mod script from the game folder and exit.
+                  --uninstall      Remove the mod from the game folder and exit. The small start-up
+                                   script and the save records stay if saves were made with the mod,
+                                   because those saves need them to load.
+                  --all            With --uninstall: remove those as well.
                   --game PATH      Game folder, if it cannot be found through Steam.
                   --backend NAME   Force a Prism backend, for example NVDA, SAPI, JAWS or OneCore.
                   --port N         Local port to listen on (default 41234).
@@ -34,7 +37,7 @@ internal static class Program
                 Console.WriteLine("Game folder not found; nothing to remove.");
                 return 1;
             }
-            return ModInstaller.Uninstall(gameDir);
+            return ModInstaller.Uninstall(gameDir, opts.All);
         }
 
         using var speech = new Speech(opts.Backend);
@@ -96,7 +99,7 @@ internal static class Program
 
     private sealed class Options
     {
-        public bool Help, NoLaunch, NoInstall, Uninstall;
+        public bool Help, NoLaunch, NoInstall, Uninstall, All;
         public string? GameDir, Backend;
         public int Port = 41234;
 
@@ -113,6 +116,7 @@ internal static class Program
                     case "--no-launch": o.NoLaunch = true; break;
                     case "--no-install": o.NoInstall = true; break;
                     case "--uninstall": o.Uninstall = true; break;
+                    case "--all": o.All = true; break;
                     case "--game": o.GameDir = Next(); break;
                     case "--backend": o.Backend = Next(); break;
                     case "--port": if (int.TryParse(Next(), out int p)) o.Port = p; break;

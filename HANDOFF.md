@@ -3,7 +3,7 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-10-09 (fifth session, about 09:00; see the first items).
+Last updated: 2026-10-09 (fifth session, about 14:20; see the first items).
 
 ## Start here (where the last session stopped)
 
@@ -14,10 +14,11 @@ Last updated: 2026-10-09 (fifth session, about 09:00; see the first items).
   fifth session reconstructed it from that session's transcript into "Episode 3 notes", the file
   map (sniper.lua, panels.lua, readables.lua) and the tools list. See "Fifth session" below that
   for what the fifth session itself did.
-- The fifth session finished Episode 3 and all of Episode 4 in slot 2 by ear (dev_saves\ep4done:
-  Season 1's menu with Episode 5 "No Time Left" next). See "Episode 4 notes" and the change lists
-  under "Fifth session". The user now closes SteelSeries GG while the agent works (it leaks
-  memory with each game launch).
+- The fifth session finished Episode 3, then played all of Episodes 4 and 5 in slot 2 by ear:
+  the whole Season 1 story is now playable with the mod (dev_saves\ep5done). See "Episode 4
+  notes", "Episode 5 notes" and the change lists under "Fifth session". Not played yet: the 400
+  Days episode, and Seasons 2 to 4 (only their menus are partly done, issue #5). The user now
+  closes SteelSeries GG while the agent works (it leaks memory with each game launch).
 - The game closed at 08:44 because the user closed it (not a crash). Free commit memory was then
   4.8 GB of 34: the SteelSeries capture service starts a copy with every game launch and two
   copies held about 10 GB (see the memory note), so the session did not relaunch the game and
@@ -244,8 +245,11 @@ E. (#14) Long walks are slow and silent (Lee limps: 35 m to Hershel took about 4
 5. (#5) Check the menus of Season 2, Michonne, A New Frontier and The Final Season. The later seasons
    probably use the same widget framework as the hub; Season 2 probably the same panes as Season 1.
 6. (#6) Escape both releases the hotspot the mod is holding and opens the pause menu.
-7. (#7) Uninstall: ModInstaller --uninstall removes Archives\DebugLoader.lua, but saves made with the mod
-   need it to load (see "Loading saves"); keep it, or warn.
+7. (#7) Done 2026-10-09, not yet run against the real game folder: --uninstall now keeps
+   Archives\DebugLoader.lua and TWDAccess\saves.txt when saves may have been made with the mod
+   (saves.txt has a slot, or a save .bundle is newer than installed.txt), keeps the bootstrap's line
+   in installed.txt so a later install can still update it, and says so; --uninstall --all removes
+   everything. Tested on a fake game folder.
 8. (#8) Later, optional: controller support. Keyboard is the primary target and is enough for the user;
    if a controller is added it will be a PS5 DualSense, so hints should name PlayStation buttons and
    follow the game's own device switch (Menu_UsingJoystick in Season 1). Mod commands (F5 to F11)
@@ -314,8 +318,8 @@ Two parts:
    deleting slots keep it in step, and starting an episode from the menu clears the slot's line),
    then the stored name if it is not ours, then `SubProject_GetEpisodeFirstScript()`.
    Consequence: saves made with the mod need Archives\DebugLoader.lua to load. The bootstrap works
-   on its own without the TWDAccess folder, so an uninstall should leave that one file in place if
-   the player has such saves (ModInstaller --uninstall currently removes it; to do).
+   on its own without the rest of the TWDAccess folder, so --uninstall leaves it and saves.txt in
+   place when the player may have such saves (--uninstall --all removes them too).
    Saves made in a state the mod never reached (before the LoadScript hook existed) name the real
    script and load without the mod until the next scene change.
 6. main.lua guards itself with a global (`TWDA`), so it runs once per Lua state.
@@ -963,6 +967,42 @@ prompt this time).
   change during a loop where a test script kept going back and forth through the nurse's office
   door. The mod no longer offers a way through for the first 20 s of a scene.
 
+### Episode 5 notes (fifth session, 2026-10-09 afternoon)
+
+Played in slot 2 from dev_saves\ep4done ("Episode 5: No Time Left. Play"), all by ear with
+play_by_ear.ps1 except where noted; finished at 14:01 (statistics read in full).
+
+- The morgue: the middle Cabinet (obj_morgueCabinet2): Open, Rib Spreader: 2 Pick Up,
+  Elevator: 4 Use Rib Spreader On, Rib Spreader: Crank; the arm (choice 1 cuts it off); the
+  elevator-shaft ladder is a guided path ("Use the W key to climb").
+- The hospital roof: the Ladder only offers Pick Up after talking to Omid (who stands in a peek
+  station: "Hiding. To lean out: S down"; S steps back out of it); Ladder: Pick Up, the group
+  talk places it, Ladder: 2 Climb ("Climb to the bell tower.", a guided path: hold W), Bell
+  Tower: Jump To, Rope: Pull, the ledge: Jump To.
+- The house siege: two struggles, "lone zombie: Shoot", walkers from the window, Rope: Pull. The
+  attic: Bust: Grab (timed), Coat Rack: Grab, Wall: Break (was read "verb_break"). The
+  neighbours' house: Balcony Door: Open, Balcony: Cross, a guided path. Above River Street: Pole:
+  Grab, two struggles (Christa, then Kenny lost). The banner, then the cleaver gauntlet to the
+  Marsh House ("Walker: Use Cleaver On" many times).
+- The hotel: the Door 7 m ahead: 2 Open; the stranger's long talk (speaker "Campman", now said
+  as "Stranger"); the fight: "Stranger: Tackle. Enter!", struggle, "Stranger: Grab", "Headbutt",
+  struggle, "Stranger: Shoot"; the Door, "Walker: Shoot", Walker: 2 Chop, Walker: Scoop,
+  Clementine: 2 Smear three times (after each smear she offers Talk To again).
+- The herd (a guided path, hold W; the mod's "W does not move Lee here. Try S" was wrong there,
+  W was right), the jewellery shop: struggles, Baseball Bat: Grab (Clementine smashes the Office
+  Door), Chair: Use, Office Door: Open, Handcuffs: Grab, Lee: Handcuff (or the Walker), the gun
+  and keys choice, "Display Stand: Use. Enter to do it." (timed), "Baseball Bat: 1 Look At, 2
+  Grab, 3 Kick" (Kick when handcuffed; a first try timed out because the test script did not
+  pick a number), the last choices, the statistics.
+- After the statistics comes the season summary (ui_seasonStats.scene): a card per character,
+  five to a page, two pages. It only took a mouse click (ui_seasonstats.imap binds 768, the left
+  button, to SeasonStats_OnLeftClick), so a keyboard player was stuck; prompts.lua now reads
+  each page ("Season summary. Kenny: You defended his son in the drugstore. ...  Enter to
+  continue.") and Enter runs SeasonStats_OnLeftClick in a thread; F6 repeats it. Tested on both
+  pages. Then the credits.
+- dev_saves: ep5done (copied at Season 1's menu after the credits; its checkpoint is the last one of the
+  ending, env_jewelryStore.lua, so saves.txt needs "wd1_saveslot2.bundle<TAB>env_jewelryStore.lua").
+
 ### Fifth session: more mod changes made during Episode 4
 
 - carryover.lua: a backstop for the save hooks compares each slot's checkpoint file
@@ -1022,6 +1062,17 @@ Later changes (afternoon, Crawford; all tested by ear in the scenes named):
 - tools\dev\play_by_ear.ps1: -StickyHold, -Turn Named (press the arrow the line names), follows
   "Try W", "Turn with the arrow keys ... above you" and "Nothing to do this way. Turn: X arrow",
   answers "Tab to it, then Enter", and only reads the mod's own "say" lines.
+
+Changes during Episode 5:
+- actions.lua: announcements number the actions when a thing offers two or more things to do
+  ("Baseball Bat: 1 Look At, 2 Grab, 3 Kick. A number key to choose, then Enter."); a newly
+  offered "Talk To" is not announced as news.
+- lookaround.lua: unresolved verb keys ("verb_break") read as words; names from use nodes are
+  trimmed ("zombie , 3 of them"); walkers named after their model ("zombie large low slave a")
+  read as "zombie"; hotspots marked unreachable count again once clickable (issue #20).
+- subtitles.lua: SPEAKERS maps agent names to on-screen names (Campman -> Stranger).
+- tools\dev\play_by_ear.ps1: answers a choice already waiting when it starts; "A number key to
+  choose" is answered like "Pick a number".
 
 Open problems seen in Episode 4 (also in "Not done yet"):
 - After a failed try, Tab can skip a hotspot that has since become reachable (the doctor's
@@ -1172,7 +1223,7 @@ Project root: C:\Users\dengs\Downloads\TWD
 
 - `HANDOFF.md`: this file.
 - `helper/TWDAccess/`: the C# helper.
-  - Program.cs: options (--no-launch, --no-install, --uninstall, --game PATH, --backend NAME,
+  - Program.cs: options (--no-launch, --no-install, --uninstall [--all], --game PATH, --backend NAME,
     --port N); starts everything and launches the game.
   - Speech.cs: Prism on one STA thread (prism_init, prism_registry_acquire_best,
     prism_backend_output). Prism.cs has the P/Invoke declarations.
@@ -1236,7 +1287,8 @@ Project root: C:\Users\dengs\Downloads\TWD
     cues; TWDA.coverWalkActive, TWDA.describeCover for F6.
   - actions.lua also has the countdowns (TWDA.countdown, TWDA.describeCountdown), TWDA.offerTexts
     and the "what is on offer" announcements outside action scenes (sceneoffers).
-  - prompts.lua also reads the end-of-episode statistics and the episode credits.
+  - prompts.lua also reads the end-of-episode statistics, the season summary (Enter goes on;
+    TWDA.describeSeasonStats) and the episode credits.
   - subtitles.lua: speaker and line from Subtitle_OnCreate.
   - hotkeys.lua: F5 repeat, F6 describe screen, F7 subtitle mode, F8 stop, F11 action scenes, F9, F10, Page Up and
     Page Down (the controller's X, Y and bumpers: Season 1 panes first, then the hub's legend
@@ -1289,7 +1341,7 @@ Project root: C:\Users\dengs\Downloads\TWD
   ep4_crawford\ (env_crawfordExterior.lua, Crawford's outskirts after the manhole and hiding),
   ep4_motorshop\ (env_crawfordAutoShop.lua), ep4_classroom\ (env_crawfordSchoolHallways.lua,
   back in the classroom with the fuel), ep4_meds\ (env_crawfordSchoolNursesOffice.lua, the
-  medicine taken), ep4done\ (Episode 4 finished).
+  medicine taken), ep4done\ (Episode 4 finished), ep5done\ (Episode 5 finished: Season 1 done).
 
 In the game folder (G:\Steam\steamapps\common\The Walking Dead The Telltale Definitive Series):
 Archives\DebugLoader.lua, plus the TWDAccess folder (the mod's Lua, settings.txt, twda.log,
@@ -1310,7 +1362,8 @@ Delete dist\TWDAccess\mod before building the helper, so removed files do not li
 Run `dist\TWDAccess\TWDAccess.exe`. It installs the mod, says "TWD Access ready, using NVDA", starts
 the game through Steam, and exits when the game closes. Logs are in dist\TWDAccess\logs:
 TWDAccess.log, speech.log (everything spoken), game.log (console output) and debug.log.
-`TWDAccess.exe --uninstall` removes the mod.
+`TWDAccess.exe --uninstall` removes the mod (keeping the bootstrap and saves.txt if saves were made
+with it; `--uninstall --all` removes those too).
 
 ## Developer tooling and workflow
 

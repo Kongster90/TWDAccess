@@ -508,6 +508,12 @@ local function gameVerb(agent)
   -- "Cs" marks things that play a short scene when looked at (the walkers seen from cover at the
   -- Motor Inn).
   if text:lower() == "cs" then return "Look" end
+  -- An unresolved verb key ("verb_break" on the attic wall, Episode 5): the word in it.
+  local word = text:match("^[Vv]erb_(%a[%w_]*)$")
+  if word then
+    word = word:gsub("(%l)(%u)", "%1 %2"):gsub("_", " ")
+    text = word:sub(1, 1):upper() .. word:sub(2)
+  end
   return TWDA.cleanText(text)
 end
 
@@ -534,6 +540,7 @@ local function nodeLabel(agent)
   -- "cs_" nodes are short scenes played when the thing is looked at.
   if verb:lower() == "cs" then verb = "look" end
   object = object:gsub("%d+$", ""):gsub("(%l)(%u)", "%1 %2"):gsub("_", " "):lower()
+  object = object:match("^%s*(.-)%s*$") -- ("shoot_zombie_2" left "zombie " with a space)
   object = object:gsub("baby sitter", "babysitter")
   return object, verb:sub(1, 1):upper() .. verb:sub(2):lower()
 end
@@ -544,7 +551,10 @@ local function displayName(agentName, agent)
   local label = TWDA.hotspotLabel and TWDA.hotspotLabel(agentName)
   if label then return label end
   if not knownNames[agentName] and agent ~= nil then knownNames[agentName] = gameName(agent) or nodeLabel(agent) end
-  return knownNames[agentName] or prettyName(agentName)
+  local name = knownNames[agentName] or prettyName(agentName)
+  -- (Walkers named after their model: "zombie large low slave a" in the gauntlet, Episode 5.)
+  if type(name) == "string" and name:lower():find("^zombie %a") then return "zombie" end
+  return name
 end
 
 -- The verb shown for a hotspot, or the one its use node implies for a fight target.

@@ -83,13 +83,23 @@ internal static class ModInstaller
         }
     }
 
-    public static int Uninstall(string gameDir)
+    /// <summary>
+    /// Removes the mod. Saves made while the mod ran name the bootstrap as their first script, so
+    /// they only load while Archives\DebugLoader.lua exists; it works without the rest of the mod
+    /// (it reads TWDAccess\saves.txt to find the scene to run). Unless <paramref name="all"/> is set,
+    /// the bootstrap and saves.txt stay when there may be such saves, and the bootstrap stays in the
+    /// manifest so a later install can update it.
+    /// </summary>
+    public static int Uninstall(string gameDir, bool all = false)
     {
         RemoveLegacyFiles(gameDir);
         var manifest = ReadManifest(gameDir);
+        string modDir = Path.Combine(gameDir, ModFolder);
+        bool keepBootstrap = !all && manifest.ContainsKey(BootstrapPath) && MayHaveModSaves(gameDir);
         int removed = 0;
         foreach (var (relative, hash) in manifest)
         {
+            if (keepBootstrap && relative.Equals(BootstrapPath, StringComparison.OrdinalIgnoreCase)) continue;
             string path = Path.Combine(gameDir, relative);
             if (File.Exists(path) && Hash(path) == hash)
             {
@@ -97,16 +107,57 @@ internal static class ModInstaller
                 removed++;
             }
         }
-        string modDir = Path.Combine(gameDir, ModFolder);
-        foreach (var name in UserFiles.Append(ManifestName))
+        var modFiles = UserFiles.Append(ManifestName);
+        if (all) modFiles = modFiles.Concat(SaveRecords);
+        foreach (var name in modFiles)
         {
             string path = Path.Combine(modDir, name);
             if (File.Exists(path)) File.Delete(path);
         }
+        if (keepBootstrap)
+        {
+            Directory.CreateDirectory(modDir);
+            WriteManifest(gameDir, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                [BootstrapPath] = manifest[BootstrapPath],
+            });
+        }
         if (Directory.Exists(modDir) && !Directory.EnumerateFileSystemEntries(modDir).Any())
             Directory.Delete(modDir);
         Console.WriteLine(removed == 0 ? "The mod is not installed." : $"Removed TWD Access ({removed} file(s)).");
+        if (keepBootstrap)
+            Console.WriteLine($"Kept {BootstrapPath} and {ModFolder}\\saves.txt: saves made while the mod ran need them to load. " +
+                              "On their own they do nothing else. To remove them too, run TWDAccess --uninstall --all " +
+                              "(those saves may then fail to load).");
         return 0;
+    }
+
+    private static readonly string BootstrapPath = Path.Combine("Archives", "DebugLoader.lua");
+
+    // The mod's notes for the bootstrap: which scene each save slot's save belongs to, and the next
+    // state's first script.
+    private static readonly string[] SaveRecords = { "saves.txt", "next_script.txt" };
+
+    // True if a save may have been made while the mod ran: the mod has noted a save slot, or a save
+    // file was written after the mod was installed.
+    private static bool MayHaveModSaves(string gameDir)
+    {
+        try
+        {
+            string records = Path.Combine(gameDir, ModFolder, "saves.txt");
+            if (File.Exists(records) && File.ReadAllLines(records).Any(l => l.Contains('\t'))) return true;
+            string manifest = Path.Combine(gameDir, ModFolder, ManifestName);
+            if (!File.Exists(manifest)) return false;
+            DateTime installed = File.GetCreationTimeUtc(manifest);
+            string saves = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "Telltale Games", "The Walking Dead Definitive");
+            return Directory.Exists(saves) && Directory.EnumerateFiles(saves, "*.bundle", SearchOption.AllDirectories)
+                .Any(f => File.GetLastWriteTimeUtc(f) > installed);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return true;
+        }
     }
 
     private static void RemoveLegacyFiles(string gameDir)

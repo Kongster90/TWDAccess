@@ -2,12 +2,15 @@
 -- engine calls it by name for every line, so wrapping that global sees every subtitle.
 local TWDA = ...
 
+-- Speakers whose agent name is not what the game calls them on screen.
+local SPEAKERS = { Campman = "Stranger" } -- (Episode 5's man on the radio)
+
 local function describe(subtitle)
   local okText, text = pcall(SubtitleGetText, subtitle)
   local okName, speaker = pcall(SubtitleGetAgentName, subtitle)
   text = okText and type(text) == "string" and TWDA.cleanText(text) or ""
   speaker = okName and type(speaker) == "string" and speaker or ""
-  return speaker, text
+  return SPEAKERS[speaker] or speaker, text
 end
 
 TWDA.hookBefore("Subtitle_OnCreate", function(subtitle)

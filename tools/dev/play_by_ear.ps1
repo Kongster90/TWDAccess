@@ -31,6 +31,11 @@ function Press([int]$code, [string]$label) {
 # -StartKey Enter: press it once listening (Enter on the death screen reloads a checkpoint that
 # may start the action at once).
 if ($StartKey -eq "Enter") { Press 0x0D "Enter" } elseif ($StartKey -eq "F6") { Press 0x75 "F6" }
+# With -Answer, a choice already waiting when listening starts is answered too.
+if ($Answer -gt 0) {
+    $lastSay = Get-Content $log -Tail 40 | Where-Object { $_ -match "^\S+\s+\S+ say!? " } | Select-Object -Last 1
+    if ($lastSay -match " say!? Choices\.") { Press (0x30 + $Answer) "$Answer (waiting choice)" }
+}
 
 $mashing = $false
 $holding = 0
@@ -130,7 +135,7 @@ while ((Get-Date) -lt $end) {
             $arrow = @{ Left = 0x25; Up = 0x26; Right = 0x27; Down = 0x28 }[$Matches[1]]
             Start-Sleep -Milliseconds $ReactMs; Press $arrow ("turn " + $Matches[1])
         }
-        elseif ($text -match "Pick a number, then Enter") {
+        elseif ($text -match "Pick a number, then Enter|A number key to choose, then Enter") {
             # A choice of actions ("zombie arm: 2 Shoot, 3 Pry"): the first -Prefer word found, else
             # the first number offered (what Enter alone would do).
             $num = $null
