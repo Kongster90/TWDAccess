@@ -149,7 +149,29 @@ while ((Get-Date) -lt $end) {
             # Something out of reach to use in time: Tab goes to it, Enter walks there and does it.
             Start-Sleep -Milliseconds $ReactMs; Press 0x09 "Tab"; Start-Sleep -Milliseconds 900; Press 0x0D "Enter"
         }
-        elseif ($text -match "Tab to choose") { Start-Sleep -Milliseconds $ReactMs; Press 0x09 "Tab"; Start-Sleep -Milliseconds 600; Press 0x0D "Enter" }
+        elseif ($text -match "Tab to choose") {
+            Start-Sleep -Milliseconds $ReactMs
+            # With a -Prefer word on offer ("zombie arm: 1 Look At, 2 Shoot, 3 Pry. Zombie: ..."):
+            # Tab until the focus reads it out, then its number and Enter, as a player would.
+            $want = $Prefer | Where-Object { $text -match "\d $_" } | Select-Object -First 1
+            if ($want) {
+                $num = $null
+                for ($t = 0; $t -lt 5 -and -not $num; $t++) {
+                    Press 0x09 "Tab"
+                    $until = (Get-Date).AddMilliseconds(1500)
+                    while ((Get-Date) -lt $until -and -not $num) {
+                        $l = $reader.ReadLine()
+                        if ($null -eq $l) { Start-Sleep -Milliseconds 50; continue }
+                        if ($l -match "^\S+\s+\S+ say!? (.*)$") {
+                            "{0:HH:mm:ss.fff} heard: {1}" -f (Get-Date), $Matches[1]
+                            if ($Matches[1] -match "(\d) $want") { $num = [int]$Matches[1] }
+                        }
+                    }
+                }
+                if ($num) { Press (0x30 + $num) "$num ($want)" }
+                Press 0x0D "Enter"
+            } else { Press 0x09 "Tab"; Start-Sleep -Milliseconds 600; Press 0x0D "Enter" }
+        }
         elseif ($text -match "Enter!$|Enter to do it.$") { Start-Sleep -Milliseconds $ReactMs; Press 0x0D "Enter" }
         elseif ($text -match " ([AD]) for the other side\.$") { Start-Sleep -Milliseconds $ReactMs; Press ([int][char]$Matches[1]) "side $($Matches[1])" }
         elseif ($text -match "her aim is (too far left|too far right|too high|too low|on the bottle)\. Choices\.") {

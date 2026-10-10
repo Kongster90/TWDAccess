@@ -454,11 +454,15 @@ local knownNames = {}
 -- Agent names made readable where the game gives no name: "obj_doorManor" -> "door manor". A
 -- character's agent keeps its capitals ("ChristaAndOmid" -> "Christa and Omid").
 local PRETTY = { ["bottle breakable"] = "bottle", ["door manor"] = "front door" }
+-- Words after "zombie" that name a part of one, not the model of a walker.
+local ZOMBIE_PARTS = { arm = true, arms = true, hand = true, hands = true, head = true, leg = true, legs = true,
+  foot = true, body = true, corpse = true }
 local function prettyName(agentName)
   local person = agentName:find("^%u%l") ~= nil
   local name = agentName:gsub("^obj_", ""):gsub("^char_", ""):gsub("^peek", ""):gsub("%d+$", "")
   name = name:gsub("(%l)(%u)", "%1 %2"):gsub("_", " ")
-  if name:find("^[Zz]ombie ") then return "zombie" end -- (ZombieAverage1)
+  local second = name:match("^[Zz]ombie (%a+)")
+  if second and not ZOMBIE_PARTS[second:lower()] then return "zombie" end -- (ZombieAverage1)
   if person then
     return (name:gsub(" (%a+)", function(word)
       local lower = word:lower()
@@ -552,8 +556,11 @@ local function displayName(agentName, agent)
   if label then return label end
   if not knownNames[agentName] and agent ~= nil then knownNames[agentName] = gameName(agent) or nodeLabel(agent) end
   local name = knownNames[agentName] or prettyName(agentName)
-  -- (Walkers named after their model: "zombie large low slave a" in the gauntlet, Episode 5.)
-  if type(name) == "string" and name:lower():find("^zombie %a") then return "zombie" end
+  -- (Walkers named after their model: "zombie large low slave a" in the gauntlet, Episode 5. Not
+  -- a part of one: "zombie arm", the walker holding Lee's leg in the Savannah sewers, beside a
+  -- "Zombie" to attack.)
+  local second = type(name) == "string" and name:lower():match("^zombie (%a+)")
+  if second and not ZOMBIE_PARTS[second] then return "zombie" end
   return name
 end
 
@@ -752,6 +759,9 @@ end)
 
 TWDA.hookBefore("Tooltip_Show", function(verb, noun)
   local name, rawKey = nounText(noun)
+  -- A name key with no text behind it can come back as itself ("zombieArm" in the Savannah
+  -- sewers): treated as unresolved, so the hotspot's name below is made readable.
+  if name and name:match("^[%a_][%w_]*$") and (name:find("%l%u") or name:find("_")) then name, rawKey = nil, true end
   local focused = call("Reticle_GetAgentFocused")
   if not name and rawKey and focused ~= nil then
     -- The hotspot's own name property usually resolves where the tooltip's key does not.
@@ -784,6 +794,16 @@ local preferNext = nil -- name of the hotspot the next Tab goes to (just announc
 local preferNextAt = -10
 -- The same announcement, kept after Tab has used preferNext, for Enter's choice of action.
 local announced = { name = nil, at = -10 }
+
+-- preferNext while it still stands: not after 15 seconds, nor once the reticle has read out
+-- something else since. Enter and the number keys both go by it.
+local function stillPreferred()
+  if preferNext and (TWDA.now() - preferNextAt > 15 or (current.agent ~= nil and (current.at or -10) > preferNextAt + 0.5
+    and TWDA.agentName(current.agent) ~= preferNext)) then
+    preferNext = nil
+  end
+  return preferNext
+end
 local lastTabAt = -10 -- (an announcement made before the last Tab no longer steers Enter)
 
 local function cycle(delta)
@@ -926,13 +946,53 @@ end
 -- AgentPathToAgent only returns once Lee has got there (or stopped), so it runs in a thread of its
 -- own and the frame loop watches for it to finish.
 local walking = nil   -- { agent, name, since, done, success, blockedSince }
+local walkCutShort = nil -- { w = the walk, at } when the game took Lee over during a walk
 local WALK_GIVE_UP_SECONDS = 60
+
+-- The nearest walker that can be seen, as (distance, agent), or nil. Walkers are agents with
+-- "zombie" or "walker" in their names that are no helper (obj_, trigger_, lights, sounds).
+local function isWalkerName(name)
+  local l = name:lower()
+  if not (l:find("zombie", 1, true) or l:find("walker", 1, true)) then return false end
+  for _, helper in ipairs({ "^obj_", "^trigger_", "^cam", "^ui_", "^light", "^struggle_", "^group_", "emitter", "sound" }) do
+    if l:find(helper) then return false end
+  end
+  return true
+end
+local function nearestWalker()
+  local from = playerPos()
+  local okScene, scene = pcall(SceneGetBottomScene)
+  local okAgents, agents = pcall(SceneGetAgents, okScene and scene or nil)
+  if not from or not okAgents or type(agents) ~= "table" then return nil end
+  local best, bestAgent = nil, nil
+  for _, agent in ipairs(agents) do
+    if isWalkerName(TWDA.agentName(agent)) then
+      local okHidden, hidden = pcall(AgentIsHidden, agent)
+      local okPos, pos = pcall(AgentGetWorldPos, agent)
+      if not (okHidden and hidden) and okPos and pos then
+        local okD, d = pcall(VectorDistance, from, pos)
+        if okD and type(d) == "number" and (not best or d < best) then best, bestAgent = d, agent end
+      end
+    end
+  end
+  return best, bestAgent
+end
+
+-- "A walker 5 meters away, to your left. "
+local function walkerWords(d, walker)
+  local okScreen, screen = pcall(AgentGetScreenPos, walker)
+  local side = okScreen and screen and offScreenSide(screen)
+  return ("A walker %d meters away, %s. "):format(math.floor(d + 0.5), side and SIDE_WORDS[side] or "in view")
+end
 
 -- act: do the hotspot's action on arrival (the walk was started with Enter on it, rather than by
 -- accepting "Enter walks there" for something only looked up with Tab).
 local function startWalk(agent, act)
   local name = TWDA.agentName(agent)
   local w = { agent = agent, name = name, since = TWDA.now(), act = act }
+  -- Walkers far away when the walk starts that come close on the way stop it (see walkTick);
+  -- not when going for a walker on purpose.
+  if not isWalkerName(name) then w.walkerAtStart = nearestWalker() end
   local ok, err = pcall(ThreadStart, function()
     -- To where the game wants Lee to stand to use it, when it says.
     local okPath, result = pcall(AgentPathToAgent, call("Game_GetPlayer"), rawget(agent, "usePosAgent") or agent)
@@ -966,12 +1026,47 @@ local function walkTick()
   -- Danger on the way (the red panic vignette, or the game's "Dying" flag): stop at once and say
   -- so. A walk takes the shortest way, and in the Savannah sewers (Episode 4) that led Lee past the
   -- walkers at the leaking pipe.
+  -- Danger on the way: stop and say so. Walks take the shortest way, and in the Savannah sewers
+  -- (Episode 4) one past the walkers feeding by the leaking pipe got Lee killed. Signs of it:
+  --   the panic vignette coming up during the walk (near the sewer walkers it shows the whole
+  --   time, and a walk away from them must still go), or the game's "Dying" flag;
+  --   a walker that was at least 8 meters off at the start within 5, with Lee heading for it.
+  -- Neither while the nearest walker is on the move: when walkers come after Lee (the run to the
+  -- low passage when the sewer walkers come), stopping would leave him to them.
   if not w.done then
+    if now - (w.walkerCheckedAt or 0) > 0.25 then
+      w.walkerCheckedAt = now
+      local d, walker = nearestWalker()
+      local here = playerPos()
+      local okW, there = pcall(AgentGetWorldPos, walker)
+      local towards, still = false, false
+      if here and w.checkedFrom and okW and there then
+        local mx, mz = here.x - w.checkedFrom.x, here.z - w.checkedFrom.z
+        towards = mx * (there.x - here.x) + mz * (there.z - here.z) > 0
+        local last = w.walkerSeen
+        still = last ~= nil and last.agent == walker and math.abs(there.x - last.x) + math.abs(there.z - last.z) < 0.15
+      end
+      if here then w.checkedFrom = { x = here.x, z = here.z } end
+      if okW and there then w.walkerSeen = { agent = walker, x = there.x, z = there.z } end
+      w.near = { d = d, walker = walker, towards = towards, still = still }
+    end
+    local near = w.near or {}
+    local chased = near.d ~= nil and near.d < 15 and not near.still
     local okHidden, hidden = pcall(SceneIsHidden, "ui_panicmeter.scene")
+    local panic = okHidden and hidden == false
+    if w.panicAtStart == nil then w.panicAtStart = panic end
     local okLogic, dying = pcall(function() return Logic["Dying"] end)
-    if (okHidden and hidden == false) or (okLogic and dying == true) then
+    local okCombat, combat = pcall(ReticleUI_InCombatMode)
+    local danger = (okLogic and dying == true) and "dying"
+      or (panic and not w.panicAtStart and not chased) and "vignette"
+      or (w.walkerAtStart and w.walkerAtStart >= 8 and near.d and near.d < 5 and near.towards and near.still
+        and not (okCombat and combat == true)) and "walker"
+    if danger then
+      debug(("walk danger (%s): panic %s (at start %s), walker %s m, still %s"):format(danger, tostring(panic),
+        tostring(w.panicAtStart), tostring(near.d), tostring(near.still)))
       stopWalk(false)
-      TWDA.say("Danger! Walk stopped short of " .. displayName(w.name, w.agent) .. ".", { interrupt = true })
+      TWDA.say("Danger! " .. (near.d and near.d < 15 and walkerWords(near.d, near.walker) or "")
+        .. "Walk stopped short of " .. displayName(w.name, w.agent) .. ".", { interrupt = true })
       return
     end
   end
@@ -986,8 +1081,27 @@ local function walkTick()
     else
       w.blockedSince = nil
     end
-    if walking and now - w.since > WALK_GIVE_UP_SECONDS then walking, quietUntil = nil, 0 end
-    return
+    -- Lee can stop with the path-finding still waiting: in the Savannah sewers a walk to the far
+    -- stairs ended at the low passage (which only an action gets through), with nothing said. If
+    -- he has not moved for a few seconds, the walk is over.
+    local okPos, pos = pcall(AgentGetWorldPos, call("Game_GetPlayer"))
+    if walking and okPos and pos then
+      local last = w.lastPos
+      if not last or math.abs(pos.x - last.x) + math.abs(pos.y - last.y) + math.abs(pos.z - last.z) > 0.3 then
+        w.lastPos, w.movedAt = { x = pos.x, y = pos.y, z = pos.z }, now
+      elseif now - (w.movedAt or w.since) > 4 then
+        stopWalk(false)
+        debug("walk to " .. w.name .. ": Lee stopped moving")
+        w.done, w.success = true, false
+        walking = w
+      end
+    end
+    if walking and not w.done and now - w.since > WALK_GIVE_UP_SECONDS then
+      stopWalk(false)
+      w.done, w.success = true, false
+      walking = w
+    end
+    if not w.done then return end
   end
   walking = nil
   quietUntil = 0
@@ -996,13 +1110,13 @@ local function walkTick()
   -- floor; walking onto the stairs by hand starts a guided path up or down (guided.lua).
   local where = floorOf(w.agent)
   local floor = where and (" It is " .. where .. ".") or ""
-  if not w.success then
+  local left = distanceTo(rawget(w.agent, "usePosAgent") or w.agent)
+  if not w.success and not (left and left > 3) then
     TWDA.say("Lee stopped before reaching " .. displayName(w.name, w.agent) .. "." .. floor, { interrupt = true })
     return
   end
   -- The path-finding can report success well short of the goal: a closed gate in the way (the
   -- yard gate at the dairy, on the way to the barn). Say how far he got and what is close by.
-  local left = distanceTo(rawget(w.agent, "usePosAgent") or w.agent)
   if left and left > 3 then
     -- A way out is the likelier answer than whatever is nearest: from inside the boxcar or the
     -- train's cab (Episode 3) only the door leads anywhere, with Kenny standing closer.
@@ -1244,12 +1358,7 @@ local function enterPressed()
   -- Something was just announced as new (actions.lua, peek.lua): Enter goes for it, with the
   -- action announced (the truck's "Move To" rather than its first action, "Look At"). Not when
   -- that was a while ago, or the reticle has read out something else since.
-  local now = TWDA.now()
-  if preferNext and (now - preferNextAt > 15 or (current.agent ~= nil and (current.at or -10) > preferNextAt + 0.5
-    and TWDA.agentName(current.agent) ~= preferNext)) then
-    preferNext = nil
-  end
-  if preferNext then
+  if stillPreferred() then
     for _, entry in ipairs(hotspots()) do
       if entry.name == preferNext then
         local looking = onlyLooks(entry.agent)
@@ -1271,7 +1380,10 @@ local function enterPressed()
     if entry.clickable and entry.side == nil then usable[#usable + 1] = entry end
   end
   if #usable == 1 then
-    target = { agent = usable[1].agent, name = usable[1].name, since = TWDA.now(), actOnReach = true }
+    -- (Its first action that is not looking, as announced: "Pipe: Look At, Place Valve. Enter!" in
+    -- the Savannah sewers; pressed late, Enter looked at the pipe.)
+    target = { agent = usable[1].agent, name = usable[1].name, since = TWDA.now(), actOnReach = true,
+      pickNonLook = not onlyLooks(usable[1].agent) }
     lastTargetName = usable[1].name
     return
   end
@@ -1310,7 +1422,26 @@ TWDA.onFrame("lookaround", function()
   for i = 1, 4 do
     if pressed(0x30 + i) then number = i end
   end
-  if walking and (escape or not canWalk()) then stopWalk(escape) end
+  if walking and (escape or not canWalk()) then
+    -- The game took Lee over (a remark when he came close to something, a cut scene). Say how the
+    -- walk ended once he can walk again; nothing else would.
+    if not escape then walkCutShort = { w = walking, at = TWDA.now() } end
+    stopWalk(escape)
+  end
+  if walkCutShort and canWalk() then
+    local w = walkCutShort.w
+    if TWDA.now() - walkCutShort.at > 120 or walking then
+      walkCutShort = nil
+    elseif TWDA.now() - walkCutShort.at > 0.5 then
+      walkCutShort = nil
+      local left = distanceTo(rawget(w.agent, "usePosAgent") or w.agent)
+      if left and left > 3 then
+        walkOffer = { agent = w.agent, name = w.name, at = TWDA.now(), kind = "walk" }
+        lastTargetName = w.name
+        TWDA.say(("The walk to %s was cut short, %d meters away. Enter walks on."):format(displayName(w.name, w.agent), left))
+      end
+    end
+  end
   walkTick()
   if enter and not ready then debug("enter ignored: reticle not ready") end
   -- (Some close-ups have no reticle at all: the notepad shown from the train's console, Episode 3.)
@@ -1362,7 +1493,9 @@ TWDA.onFrame("lookaround", function()
     local focused = call("Reticle_GetAgentFocused")
     -- (Before the reticle gets there, a number is meant for what was just announced: "Zombie: 1
     -- Shoot, 2 Attack" in the Savannah sewers, not the walker's arm dealt with a moment before.)
-    local announcedName = preferNext and TWDA.now() - preferNextAt < 8 and preferNext or nil
+    -- (Within the same time as Enter goes for it: the pipe in the Savannah sewers was announced
+    -- with "1 Turn left, 2 Turn right", 2 was pressed after eight seconds, and Enter turned it left.)
+    local announcedName = stillPreferred()
     local name = focused ~= nil and TWDA.agentName(focused) or (target and target.name) or announcedName
       or TWDA.agentName(current.agent)
     local actions = (lastActions and lastActions.name == name) and lastActions.actions or actionList()
@@ -1459,6 +1592,10 @@ TWDA.onFrame("lookaround", function()
     -- Where Lee can walk, the cameras are mostly fixed: do not sweep for long before offering a walk.
     if target.behind and canWalk() then limit = REACH_WALK_SECONDS end
     if focused == target.name then
+      -- After a walk the reticle may have settled on it while Lee was still walking, when nothing
+      -- is said; read it out on arrival (the pried passage in the Savannah sewers: silence).
+      -- (speakFocus skips it if it was just said.)
+      if target.afterWalk and not target.reached and not target.actOnReach then speakFocus() end
       target.reached = target.reached or now
       -- Wait for the hotspot's actions to be shown (they come a moment later when a dialog
       -- presents them) before starting one.
@@ -1519,7 +1656,13 @@ function TWDA.describeLookaround()
   if #list == 0 and not focus then return nil end
   local parts = {}
   if call("WDBackButton_IsOccupied") == true then parts[#parts + 1] = "Close-up, Backspace to go back" end
-  if focus then parts[#parts + 1] = focus .. ". Enter to do it" end
+  if focus then
+    local doing = 0
+    for _, action in ipairs(actionList()) do
+      if not looksOnly(tostring(action)) then doing = doing + 1 end
+    end
+    parts[#parts + 1] = focus .. (doing > 1 and ". A number key to choose, then Enter" or ". Enter to do it")
+  end
   local names = {}
   local walk = canWalk()
   for _, entry in ipairs(list) do

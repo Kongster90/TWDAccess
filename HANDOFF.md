@@ -28,6 +28,10 @@ Last updated: 2026-10-09 (fifth session, about 14:20; see the first items).
   restart as rarely as possible.
 - dist\TWDAccess was rebuilt at the end with every change (the installed copy in the game folder
   is replaced from it at the next launch).
+- After Season 1 was finished, the sewers (Episode 4) were replayed from dev_saves\ep4_sewers to
+  test #17; see "Sewer retest" (after the Episode 5 notes) for eight fixes made there. Slot 2 now
+  holds that sewer checkpoint (the leg grab), not ep5done; saves.txt says env_savannahSewers.lua.
+  The game was left running at the upper tunnel, or closed at the end of the session.
 - Game closings in the fourth session: three crashes (with .dmp files in the game folder) at
   22:52, 23:01 and 23:04 on 2026-10-08 were Windows running out of commit memory (the SteelSeries
   leak; see the memory note), not the mod. At 01:54 on 2026-10-09 the game closed with no dump, 45
@@ -209,8 +213,10 @@ F. (#15) Partly done 2026-10-08 (third): stairs are offered as "Stairs" where Le
    (useless). Ideas: list nearby characters and doorways as walk targets in free walking.
 G. (#16) The first Enter after a mod walk arrives sometimes does nothing (Episode 4 house doors,
    shed door, grave); a second Enter works. Not solved; see "Fifth session: more mod changes".
-H. (#17) Walks take the shortest way and can lead Lee into walkers (Savannah sewers). A walk now
-   stops on the panic vignette or Logic["Dying"] ("Danger! Walk stopped short of ..."), untested.
+H. (#17) Walks take the shortest way and can lead Lee into walkers (Savannah sewers). Tested and
+   reworked 2026-10-09 (see "Sewer retest"): stops when the vignette comes up during the walk or
+   when Lee heads for a still walker within 5 m; not while walkers chase him. Still open: routes
+   that must avoid an area.
 I. (#18) Probably not a real problem: a slot has two files, and the main wd1_saveslotN.bundle is
    rewritten at scene starts, while the checkpoint is _wd1_saveslotN_autosave.bundle (written on
    SaveSlots_Save, which the hooks catch). Do not change saves.txt by hand because of the main
@@ -1002,6 +1008,44 @@ play_by_ear.ps1 except where noted; finished at 14:01 (statistics read in full).
   pages. Then the credits.
 - dev_saves: ep5done (copied at Season 1's menu after the credits; its checkpoint is the last one of the
   ending, env_jewelryStore.lua, so saves.txt needs "wd1_saveslot2.bundle<TAB>env_jewelryStore.lua").
+
+### Sewer retest (fifth session, 2026-10-09 about 14:15 to 14:55)
+
+After Season 1 was done: dev_saves\ep4_sewers loaded into slot 2 (saves.txt line set to
+env_savannahSewers.lua) to test the walk danger stop (#17). Played up to the upper tunnel after
+the walker grab; slot 2 is left there (checkpoint at the leg grab). Found and fixed:
+
+- Walks into walkers (#17): the panic vignette is on the whole time near the feeding group, so
+  "vignette visible" stopped every walk at once. Now: the vignette only counts if it came up
+  during the walk; and a walker (agent with zombie/walker in its name, no helper) that was 8 m or
+  more away at the start and comes within 5 m, standing still, with Lee heading for it, stops
+  the walk. Neither while the nearest walker is moving (chasing Lee: the run into the low passage
+  when the sewer walkers come must not stop). Says "Danger! A walker 9 meters away, in view.
+  Walk stopped short of Stairs." Tested: the walk to the far Stairs (the shortest way past the
+  group, which killed Lee once in this test too) now stops; Lee survives.
+- Walks stopped by the game (a remark when Lee comes close, a chore at the low passage) ended in
+  silence. Now, once Lee can walk again: "The walk to X was cut short, 7 meters away. Enter walks
+  on." And a walk where Lee stops moving for 4 s ends with the usual "got to N meters" message
+  (untested: not seen in this run).
+- After a walk the reticle can settle on the target while Lee is still walking, so nothing was
+  said on arrival (the pried passage); now it is read out on arrival.
+- Number keys: a number pressed for a just-announced hotspot only counted for 8 s, Enter for 15
+  s; at the valve pipe, 2 pressed after 8 s and Enter turned it left (action 1). Both now use the
+  same rule (stillPreferred).
+- Enter with nothing chosen and one usable thing ("Pipe: Look At, Place Valve. Enter!" pressed
+  late) looked at it; now it does its first action that is not looking.
+- F6 on a hotspot with several actions now says "A number key to choose, then Enter".
+- Names: "zombie arm" had become "zombie" (the walker-model rule); parts (arm, hand, head, leg,
+  ...) are kept now. The tooltip's raw "zombieArm" is made readable.
+- After a struggle, what is on offer is news again (actions.lua sceneoffers): the walker beyond
+  the arm offered "1 Shoot, 2 Attack" before and after the struggle, was not announced after it,
+  and Lee died. Now "Zombie: 1 Shoot, 2 Attack. Pick a number, then Enter!" comes 3 s after "E
+  now!". Passed by ear (play_by_ear.ps1 -Prefer Pry,Attack -StartKey Enter).
+- play_by_ear.ps1: on "Tab to choose" with a -Prefer word on offer, it Tabs until the focus reads
+  that word out, then presses its number and Enter.
+- The sewer stairs: the mod's walk to "Stairs" stops 2 m short of the top (trigger_dialog_
+  stairsEntrance at x -5.9); S from there slides along the wall. D (toward the stair top), then S
+  goes down. The slope after it is a guided path where D (not W) goes on, and the mod said so.
 
 ### Fifth session: more mod changes made during Episode 4
 

@@ -535,10 +535,17 @@ local walkReadySince, walkTold = nil, false
 local stateStartedAt = TWDA.now() -- (this module loads once per Lua state, at the scene's start)
 local walkKnown = nil -- where Lee walks: the actions each hotspot in view offered when last read
 local pendingGain = nil -- { entry, at }: a new action not yet announced
+local wasStruggling = false
 TWDA.onFrame("sceneoffers", function()
   local now = TWDA.now()
   if now - lastSceneCheck < 0.5 then return end
   lastSceneCheck = now
+  -- After a struggle everything on offer is news again: in the Savannah sewers (Episode 4) the
+  -- walker beyond the one holding Lee's leg offered "Shoot, Attack" before the struggle and the
+  -- same after it, when it had to be dealt with at once, and nothing was said.
+  local struggling = TWDA.struggleActive ~= nil and TWDA.struggleActive() == true
+  if wasStruggling and not struggling then sceneKnown, walkKnown, walkTold = nil, nil, false end
+  wasStruggling = struggling
   local okWalk, walking = pcall(InputMapperIsActive, "Navigate.imap")
   walking = okWalk and walking == true
   local busy = inActionScene() or (TWDA.peekActive and TWDA.peekActive())
