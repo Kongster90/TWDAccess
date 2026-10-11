@@ -10,7 +10,13 @@ local TWDA = ...
 
 local HINT_WAIT = 1.5 -- seconds to wait for the game's own hint
 
+-- (Season 2's choredmovement.lua has no ChoredMovement_GetController; ChoredMovement_IsActive
+-- says the same.)
 local function controller()
+  if type(rawget(_G, "ChoredMovement_GetController")) ~= "function" then
+    local ok, on = pcall(ChoredMovement_IsActive)
+    return (ok and on == true) and true or nil
+  end
   local ok, ctrl = pcall(ChoredMovement_GetController)
   return ok and ctrl or nil
 end

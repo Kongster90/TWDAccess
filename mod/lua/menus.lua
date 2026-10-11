@@ -171,6 +171,97 @@ local function siblingText(button)
   return table.concat(texts, ", ")
 end
 
+-- Season 2's carousels (uiz_coverflow.lua: Chapter Select, the save files, the end-of-episode
+-- choice statistics): Left and Right slide the panels, and Enter takes the one in the centre
+-- (CoverFlow_GetCenterPanel). The buttons on the panels are selected out of step with it (the
+-- arrows also move button.imap's selection), so the centre panel is read instead of them.
+local function activeCoverflow()
+  local enter = rawget(G, "CoverFlow_ButtonEnter")
+  if type(enter) ~= "function" then return nil end
+  local cf = TWDA.upvalue(enter, "mActiveCoverFlow")
+  if type(cf) ~= "table" then return nil end
+  local okA, root = pcall(UIZ_GetActiveMenu)
+  if not okA or root == nil or TWDA.agentName(root) ~= TWDA.agentName(cf) then return nil end
+  return cf
+end
+
+local function inCoverflowPanel(cf, agent)
+  local panels = rawget(cf, "panels") or {}
+  for _ = 1, 6 do
+    for _, panel in ipairs(panels) do
+      if panel == agent then return true end
+    end
+    local ok, parent = pcall(AgentGetParent, agent)
+    if not ok or parent == nil then return false end
+    agent = parent
+  end
+  return false
+end
+
+-- The texts under a Season 2 menu's header: Chapter Select's "Episode 1: All That Remains".
+local function season2Subheader(root)
+  local okC, kids = pcall(AgentGetChildren, root)
+  for _, k in ipairs(okC and type(kids) == "table" and kids or {}) do
+    if TWDA.agentName(k):find("^ui_header_reference") then
+      local okH, heads = pcall(AgentGetChildren, k)
+      for _, h in ipairs(okH and type(heads) == "table" and heads or {}) do
+        if TWDA.agentName(h):find("^ui_subheader_%d+$") and not isHidden(h) then
+          return TWDA.normalCaps(TWDA.agentText(h))
+        end
+      end
+    end
+  end
+  return nil
+end
+
+-- The end-of-episode statistics ("My Choices"): one panel per episode, its rows in agents
+-- ui_coverflow_stat_category3_1, ..._name3_1 and ..._description3_1 (row 3 of panel 1).
+local function statsPanelText(panel)
+  local n = TWDA.agentName(panel):match("^ui_coverflow_stat_reference_(%d+)$")
+  if not n then return nil end
+  local rows = {}
+  local okS, agents = pcall(SceneGetAgents, AgentGetScene(panel))
+  for _, a in ipairs(okS and type(agents) == "table" and agents or {}) do
+    local field, row, p = TWDA.agentName(a):match("^ui_coverflow_stat_(%a+)(%d+)_(%d+)$")
+    if field and p == n and not isHidden(a) then
+      local r = tonumber(row)
+      rows[r] = rows[r] or {}
+      rows[r][field] = TWDA.normalCaps(TWDA.agentText(a))
+    end
+  end
+  local parts = {}
+  for r = 1, 20 do
+    local row = rows[r]
+    if row and (row.name or row.description) then
+      local bits = {}
+      if row.category then bits[#bits + 1] = row.category .. ":" end
+      if row.name then bits[#bits + 1] = row.name end
+      if row.description then bits[#bits + 1] = row.description end
+      parts[#parts + 1] = TWDA.joinSentences(bits)
+    end
+  end
+  if #parts == 0 then return nil end
+  return TWDA.joinSentences(parts)
+end
+
+local function coverflowPanelText(cf, panel)
+  local stats = statsPanelText(panel)
+  if stats then
+    local sub = season2Subheader(cf)
+    -- (Continue is a button under the panel that the Down arrow selects; Enter alone does nothing.)
+    local keys = "Down arrow to Continue, then Enter"
+    return sub and TWDA.joinSentences({ sub, stats, keys }) or TWDA.joinSentences({ stats, keys })
+  end
+  local text = TWDA.visibleText(panel)
+  if rawget(panel, "isDiorama") then
+    -- (The diorama's own text is its button, "Start Episode 2"; which episode it is, with its
+    -- name, is in the header.)
+    local sub = season2Subheader(cf)
+    if sub then text = text and TWDA.joinSentences({ sub, text }) or sub end
+  end
+  return text
+end
+
 -- A Season 2 menu's title and size, once per menu. The menu is a root agent ("ui_menu_settings",
 -- "ui_coverflow_saveSlots") whose rows ("..._reference_N") are its children or one level down;
 -- the title is its shown "ui_header_N" (none on the main menu). Carousels go left and right.
@@ -178,6 +269,26 @@ local lastSeason2Root, season2WasEmpty = nil, false
 local function season2TitleOf(root)
   local rootName = root ~= nil and TWDA.agentName(root) or ""
   if rootName == "" then return nil end
+  local cf = activeCoverflow()
+  if cf then
+    local title
+    local okC, kids = pcall(AgentGetChildren, root)
+    for _, k in ipairs(okC and type(kids) == "table" and kids or {}) do
+      if TWDA.agentName(k):find("^ui_header_reference") then
+        local okH, heads = pcall(AgentGetChildren, k)
+        for _, h in ipairs(okH and type(heads) == "table" and heads or {}) do
+          if TWDA.agentName(h):find("^ui_header_%d+$") and not isHidden(h) then title = TWDA.normalCaps(TWDA.agentText(h)) end
+        end
+      end
+    end
+    local count = #(rawget(cf, "panels") or {})
+    if not title or count == 0 then return nil end
+    if count == 1 then return title end -- (one panel, the episode's statistics: it says the rest)
+    local lower = title:lower()
+    local noun = (lower:find("menu$") or lower:find("^select") or lower:find("^choose")) and "" or " menu"
+    return ("%s%s, %d %s. Left and right arrows to choose, Enter to select"):format(title, noun, count,
+      count == 1 and "item" or "items")
+  end
   local count, title = 0, nil
   local function scan(agent, depth)
     if depth > 3 or isHidden(agent) then return end
@@ -206,11 +317,36 @@ local function season2TitleOf(root)
     end
   end
   title = title or (rootName == "ui_menu_main" and "Main" or nil)
+  -- Screens with a message of their own instead of a header ("ui_menu_importSave_search" shows
+  -- ui_importSave_messageHeader and ui_importSave_messageBody, outside the menu's own agents).
+  local notes = {}
+  local token = rootName:match("^ui_menu_([^_]+)")
+  if not title and token then
+    local found = {}
+    local okS, agents = pcall(SceneGetAgents, AgentGetScene(root))
+    for _, a in ipairs(okS and type(agents) == "table" and agents or {}) do
+      local name = TWDA.agentName(a)
+      if name:sub(1, #token + 4) == "ui_" .. token .. "_" and not isHidden(a) then
+        local text = TWDA.normalCaps(TWDA.agentText(a))
+        local okPos, pos = pcall(AgentGetScreenPos, a)
+        if text and text ~= "" then found[#found + 1] = { text = text, y = okPos and pos and pos.y or 0 } end
+      end
+    end
+    table.sort(found, function(a, b) return a.y < b.y end)
+    for i, f in ipairs(found) do
+      if i == 1 then title = f.text else notes[#notes + 1] = f.text end
+    end
+  end
   if not title then return nil end
   -- (A screen with nothing to choose, Controls' picture of the keys; the frame check waits longer
   -- for these, since a menu has no rows either just after it is pushed.)
   if count == 0 then return title .. ". Nothing to choose here, only a picture. Escape goes back", true end
   local keys = rootName:find("coverflow", 1, true) and "Left and right arrows to choose" or "Up and down arrows to choose"
+  if #notes > 0 then
+    -- (A message with its buttons: say the message, then how to answer.)
+    notes[#notes + 1] = count == 1 and "Enter to select" or (keys .. ", Enter to select")
+    return TWDA.joinSentences({ title, table.unpack(notes) })
+  end
   local lower = title:lower()
   local noun = (lower:find("menu$") or lower:find("^select") or lower:find("^choose")) and "" or " menu"
   return ("%s%s, %d %s. %s, Enter to select"):format(title, noun, count, count == 1 and "item" or "items", keys)
@@ -278,6 +414,33 @@ TWDA.onFrame("menus.season2", function()
   elseif text ~= season2Pending then
     season2Pending, season2PendingSince = text, now
   end
+end)
+
+-- The centre panel of a Season 2 carousel, read once it has stopped there (the header's subheader
+-- follows the panel a moment later).
+local cfCenter, cfCenterSince, cfSpoken = nil, 0, nil
+TWDA.onFrame("menus.coverflow", function()
+  local cf = activeCoverflow()
+  if not cf then
+    cfCenter, cfSpoken = nil, nil
+    return
+  end
+  if TWDA.agentName(lastSeason2Root) ~= TWDA.agentName(cf) then return end -- (after the title)
+  local okM, moving = pcall(CoverFlow_IsMoving, cf)
+  local okC, center = pcall(CoverFlow_GetCenterPanel, cf)
+  if (okM and moving) or not okC or type(center) ~= "table" then return end
+  local now = TWDA.now()
+  if center ~= cfCenter then
+    cfCenter, cfCenterSince = center, now
+    return
+  end
+  if center == cfSpoken or now - cfCenterSince < 0.2 then return end
+  local text = coverflowPanelText(cf, center)
+  if not text then return end
+  cfSpoken = center
+  current = { button = nil, widget = nil, text = text, time = now }
+  TWDA.lastMenuItem = text
+  queue("item", text)
 end)
 
 -- Season 2's settings rows: the selected agent is the row's label (ui_list_slider_label_2); its
@@ -426,6 +589,8 @@ local function onSelect(button)
       return
     end
   end
+  local cf = activeCoverflow()
+  if cf and inCoverflowPanel(cf, button) then return end -- (the centre panel is read instead)
   local text, widget, base = describeButton(button)
   local now = TWDA.now()
   local s2title = season2Title(button)

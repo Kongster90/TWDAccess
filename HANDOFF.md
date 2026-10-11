@@ -3,9 +3,45 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-10-10 (sixth session, about 05:25; see the first item).
+Last updated: 2026-10-11 (seventh session, about 14:30; see the first item).
 
 ## Start here (where the last session stopped)
+
+- Seventh session, 2026-10-10 22:20 to 2026-10-11 14:30 (user: "go ahead and start working on
+  season 2", then away overnight; they came back, closed the game at 14:21 and asked for this
+  handoff and a push). Everything below is committed and pushed (see git log).
+  - Season 2 play is now approved (it was "not yet" on 2026-10-10 morning). The agent's Season 2
+    test save is save file 2 (Season 2's Save Files carousel). The user deleted their own Season 1
+    slot 1 save on 2026-10-10, on purpose; slot 1 being empty is their doing.
+  - Played ALL of Season 2 Episode 1 (All That Remains) in save file 2, mostly by ear (keys and
+    speech; struggles were won in auto mode because PowerShell mashing is too slow), and most of
+    Episode 2. Season 2 runs on a newer Telltale framework (the Wolf Among Us generation), so most
+    Season 1 gameplay modules do nothing there. New modules: choices2, lookaround2 (hotspots,
+    places to walk to, steering), drag2, action2, prompts2 (death screen, inventory). Season 2
+    branches added to struggle.lua, peek.lua, guided.lua and menus.lua (carousels, Import Season 1
+    Save, the end-of-episode "My Choices"). Details: "Season 2 during play (seventh session)".
+  - Shared changes that also touch Season 1: hotkeys.lua F6 now asks TWDA.describeDeath and
+    TWDA.describeAction2 first; text.lua normalCaps treats a curly apostrophe as part of the word
+    ("In Harm's Way", was "Harm’S"); struggle.lua's start text names the mash keys per season.
+  - Where it stopped: Season 2 Episode 2 (A House Divided), Pete route, after the truck, the cabin
+    night with Sarah, Carver's visit and the talk with the group; a guided path ("Guided path.
+    Hold W or S") had just started. Save file 2's checkpoint is there: Season 2 main menu, Play,
+    Continue. dev_saves\s2_ep1done holds save file 2 after Episode 1 (Season 2's files are
+    wd2_saveslot2.bundle, _wd2_saveslot2_autosave.bundle and one _checkpointN.bundle per chapter).
+  - The user's settings.txt is back to actionscenes = normal (it was auto for part of the
+    testing). dist\TWDAccess was rebuilt with every change.
+  - Known gaps in Season 2: the pause menu has no title (season2TitleOf only names ui_menu_main);
+    the credits are not readable with F6 (creditsText knows only the hub's agents); place names
+    can spoil the story ("Dog finds zombie") and some triggers are for other characters and never
+    fire for Clementine; "Change Save File" is spoken on Chapter Select when the mouse is over it;
+    the mod numbers same-named hotspots by distance ("Stall 1", "Stall 2"), so a number can move to
+    another object as Clementine walks; struggles need fast mashing in normal mode (slow mode's
+    hold-Q works for Season 2 too; untested by ear).
+  - Seen in the user's own Season 1 play on 2026-10-10 (slot 1, Episode 1, from the house fight to
+    the fence; they won the babysitter fight): after "Through Gate." the Tab list still offered the
+    backyard's hotspots and every walk to them failed at once ("Lee got to 24 meters from
+    Treehouse and can go no further this way", many times); stale hotspots from the area left
+    behind should be dropped. Not fixed.
 
 - Sixth session, 2026-10-09 evening to 2026-10-10 05:25 (user: "keep going on the game"). See
   "Sixth session: 400 Days", "Season 2's menus" and "400 Days replayed" below. In short: finished
@@ -278,9 +314,10 @@ E. (#14) Long walks are slow and silent (Lee limps: 35 m to Hershel took about 4
    restart.ps1 clicks).
 5. (#5) Check the menus of Season 2, Michonne, A New Frontier and The Final Season. The later seasons
    probably use the same widget framework as the hub. Season 2's menus (their own UIZ framework,
-   not Season 1's panes) were done on 2026-10-10 except Play, which starts a game in a Season 2
-   save file (all three were empty; ask the user before starting one), and My Choices (locked
-   until an episode is played).
+   not Season 1's panes) were done on 2026-10-10; Play, Chapter Select, the save file carousel,
+   Import Season 1 Save and the end-of-episode My Choices were done in the seventh session. Season
+   2 gameplay is under way (Episode 1 done, Episode 2 partly). Michonne, A New Frontier and The
+   Final Season are untouched.
 6. (#6) Escape both releases the hotspot the mod is holding and opens the pause menu.
 7. (#7) Done 2026-10-09, not yet run against the real game folder: --uninstall now keeps
    Archives\DebugLoader.lua and TWDAccess\saves.txt when saves may have been made with the mod
@@ -1080,6 +1117,91 @@ Watch out: Season 1's Save Slots look similar; the agent once ended up there wit
 "Game 1" highlighted and left with Backspace. Loading Season 2's menu writes
 _wd2_saveSlot1_id.estore (93 bytes) in the save folder: not a save game.
 
+### Season 2 during play (seventh session, 2026-10-10/11)
+
+Starting a game: Season 2's main menu, Save Files, pick save file 2 (Enter sets the active file;
+SaveLoad_GetSlot() says "wd2_saveslot2.bundle"), then Play: Chapter Select (a carousel of episode
+dioramas, menu_chapters.lua; Enter plays the centre one, "Continue" when there is a save). A new
+game first imports a Season 1 save ("Import Season 1 Save": search, "Save File Found", then
+"Select a Season 1 Save File"; slot 2's Game 2 was imported). Scene changes use LoadScript (the
+carry-over works unchanged); a death reload starts a new Lua state ("loading a save"), and
+SaveLoad_RestoreCheckpoint() replays the scene's opening WITHOUT resetting item states (do not use
+it; reload through the pause menu, Main Menu, Play, Continue instead). Season 2 keeps one
+_wd2_saveslot2_checkpointN.bundle per chapter.
+
+The framework (projectseason2's scripts; Game_GetMode() returns a table with name and bPlayMode;
+modes Navigate, Cutscene, Dialog, CloseUp, Drag, Struggle, Action, "Dialog Box" for the death
+screen). What each mod module does there:
+- choices2.lua: gamedialog.lua's Dialog_OnChoicesAvailable (the engine calls a stored reference,
+  so wrapping the global sees nothing; the mod wraps its upvalues SetChoices and ActivateChoice,
+  which are gamedialog's shared locals). mMappedChoices (slot -> choice with "Choice Display Text"
+  or "First Line"; mDefaultChoice is "...") and mChoices (the slots' agents) are upvalues of
+  SetChoices, not of Dialog_OnChoicesAvailable. The "Dialog" input map has only clicks and
+  controller buttons, so the mod takes 1-4, Up/Down and Enter and calls Dialog_ActivateChoice(slot)
+  in a thread. Timed choices: the timer bar's controller (upvalue mTimerController) has its time
+  scale held at 0 (heard: waited 28 s).
+- lookaround2.lua: ReticleSelection_GetUsables() (usable agents with a dot), names from
+  Game_GetNounText, verbs from ReticleVerbs_BuildVerbData(agent) + ReticleVerbs_GetAvailableVerbs()
+  ({ Text, Direction "South"/"East"/..., Icon }; rebuilt for the reticle's mInterfaceAgent after).
+  Use = Reticle_SelectAgent, ReticleSelection_Lock(true), ReticleVerbs_SetActiveVerb(verb),
+  Navigate_PathToAndUseAgent(agent) in a thread (it walks there and calls Game_UseAgent; it gives up
+  silently when its path-finding fails, e.g. while Clementine leans on the kitchen door listening:
+  the mod then says "Can't get to X from here"). Tab/Shift+Tab, number keys for verbs, Enter, F6.
+  Announces what is on offer when control comes back ("Clementine can move" only where
+  Navigate.imap walks), "X again? Enter." for blows and other repeatable actions (re-checked 1.5 s
+  after each use, because some blows never leave play mode), fight targets ("Throw rock at zombie
+  1, and 5 more. Enter for the nearest"; auto mode uses them). Places to walk to: enabled
+  walk-in story triggers (trigger_* with "Trigger Enabled", not cam/chore/death ones), put on the
+  walk boxes with WalkBoxesPosOnWalkBoxes(pos, PathAgentGetWalkBoxes(player)); Enter walks there
+  with AgentPathToPosition first, then steers with DirectControl_SetJoystickDirection (screen
+  direction through the scene camera) with detours, stopping on arrival, a scene, a movement key,
+  or when blocked. Engine path-finding (AgentPathToAgent/Position) fails for most trigger spots;
+  steering works. Some triggers are for other characters ("Dog finds zombie") and never fire for
+  the player.
+- drag2.lua: drag.lua's Drag_Enter ends at once unless upvalue mbDragButtonActive is set (the
+  mouse button held from the click); the mod sets it, makes Input_UseCursor false during
+  Drag_Activate, and keeps drag.imap on (it is switched off when the reticle hides). Arrows/WASD
+  then drag (Drag_OnButtonRight...). Directions from logic_drag's "Drag - Direction X Chore"
+  (chore handles, not strings). Used for the lighter flick and the stitches (Right arrow).
+- action2.lua: action.lua's dodges and blows: Action_GetActiveActions() agents with "Move Right
+  Enabled"/"Attack Up Enabled" and a "... Dialog"; action.imap takes arrows/WASD for moves and
+  Enter for attacks (Action_OnEnterKey). Says "Right arrow!", "Enter!"; auto presses; slow mode
+  runs the game at 0.45 while action agents are active.
+- struggle.lua now also does Season 2 (Struggle_Enter, struggle.imap: Q or Enter mash, E
+  finishes). Mashing from PowerShell was too slow to win (the meter drops to 25% after a gap);
+  auto mode wins them.
+- peek.lua: Season 2's Peek mode (logic_peek, "Peek" input map): "Choose: Left arrow towards
+  Nick, Right arrow towards Pete" on choice cameras (cam_choice_peteOrNick); the person on each
+  side is found from screen positions (the left one was missed once).
+- guided.lua: ChoredMovement_IsActive in Season 2 (crawling under the porch).
+- prompts2.lua: death screen (Death_ShowUI; Enter calls Death_OnButtonA), inventory ("Got
+  hammer", "No more needle"; F6 "Carrying: ..." from Inventory_Activate's mContainer). Many "No
+  more" lines come together when a scene takes the items (back in the shed); could be merged.
+- menus.lua: carousels (CoverFlow_GetCenterPanel; the save files, Chapter Select, the end of
+  episode "My Choices" whose rows are ui_coverflow_stat_{category,name,description}N_M), screens
+  with their own message (Import Season 1 Save). Single-button screens need Down before Enter
+  (nothing is selected until an arrow is pressed). Not done: the pause menu has no title
+  ("Pause menu"), Season 2 credits text for F6.
+Dev tools added: tree.lua, scenetext.lua, coverflow.lua, globs (scratch), globals_by_file.lua,
+dumpup.lua (DUMPUP = "Fn": dump a function's upvalue functions), imap.lua (IMAP = "name"),
+watch_s2.lua (WS2 lines: calls to Season 2 gameplay globals; the mod's own polling of
+Action_GetActiveActions and ChoredMovement_IsActive floods it, filter them), watch_s2_all.lua,
+watch_struggle2.lua, usables2.lua, selectables2.lua, triggers2.lua, inv2.lua, run.ps1 (run Lua,
+print new twda.log lines), onsay.ps1 (press keys when the mod says something; "+Q" mashes),
+use2.ps1 (Tab to a named thing, action number, Enter), retry_watch.ps1 (Enter on the death screen,
+then start a watcher in the new state).
+Episode 1 walkthrough notes (what the game wants): bathroom stalls, faucet, bottle; campfire:
+backpack photo, drawing, lighter, Campfire: Look At, Lighter: Flick (Right arrow drag), Campfire:
+Light, Log: Pick Up, Campfire: Add Fuel To, burn the log; scavengers: rock, swing at hand, branch,
+kick (repeat), bite, struggles, dodges (arrows), throw rock at walkers; river shore: stairs; trail
+(places), dog, camp: trash barrel (can), walker tied to the tree (branch, smash x4), knife, lid x3,
+dog fight (punch, kick); Luke and Pete; shed: table, hammer (shelf falls; lift it), board (pry),
+panel (kick), hole; cabin: plywood, nails x2, crawl (guided W), trap door (knife), listen at the
+kitchen door until free, upstairs: Sarah (bedroom door 2), pinky swear, medicine cabinet (needle),
+rags; downstairs closet door, Exit; shed: peroxide, needle thread (twice), suture with Right arrow
+four times, rags; walker: kick, struggle, brick x3, rake, hammer, hit (repeat); river: bodies,
+water choice; Pete or Nick (lean right for Pete), board, walker attack (twice).
+
 ### 400 Days replayed (sixth session, 2026-10-10 about 03:15 to 05:20)
 
 After the River Street retest, 400 Days was replayed in slot 2 to test the open items (from
@@ -1547,9 +1669,14 @@ Project root: C:\Users\dengs\Downloads\TWD
   obsolete first probe, kept only for reference.
 - `mod/lua/`: the mod, plain Lua, installed to <game>\TWDAccess\.
   - main.lua: loads the modules in order: core, settings, text, hooks, carryover, uitext, menus,
-    panes, messagebox, prompts, choices, lookaround, actions, aiming, sniper, struggle, turnchoice,
-    inventory, peek, guided, runto, cornfield, drag, fastslow, cover, readables, panels, subtitles,
-    hotkeys, then discovery and devconsole if enabled.
+    panes, messagebox, prompts, prompts2, choices, choices2, lookaround, lookaround2, actions,
+    action2, aiming, sniper, struggle, turnchoice, inventory, peek, guided, runto, cornfield, drag,
+    drag2, fastslow, cover, readables, panels, subtitles, hotkeys, then discovery and devconsole if
+    enabled.
+  - Season 2 modules (seventh session; see "Season 2 during play"): choices2.lua (dialog choices),
+    lookaround2.lua (hotspots, places to walk to, steering), drag2.lua (drags), action2.lua
+    (dodges and blows), prompts2.lua (death screen, inventory). Each checks for Season 2's own
+    functions and does nothing elsewhere.
   - cornfield.lua (sixth session): 400 Days' cornfield rows and the rebar grab (see "Sixth
     session"); drag.lua: the game's drags by keyboard (mode_drag); fastslow.lua: sneak up or
     jump out by keyboard (mode_fastSlow; see "400 Days replayed").

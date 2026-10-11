@@ -10,7 +10,7 @@ ThreadStart(function()
       local s = table.concat(maps, ",")
       if s ~= last then
         last = s
-        local mode = Mode_GetCurrent()
+        local mode = rawget(_G, "Mode_GetCurrent") and Mode_GetCurrent()
         TWDA.log(("WM %.1f %s | %s"):format(TWDA.now() - t0, s, tostring(mode and mode.name)))
         for _, map in ipairs(maps) do
           if not seen[map] then

@@ -22,7 +22,9 @@ local function repeatLast()
 end
 
 local function readCurrent()
-  local aiming = (TWDA.describeReadable and TWDA.describeReadable())
+  local aiming = (TWDA.describeDeath and TWDA.describeDeath())
+    or (TWDA.describeAction2 and TWDA.describeAction2())
+    or (TWDA.describeReadable and TWDA.describeReadable())
     or (TWDA.describeStruggle and TWDA.describeStruggle()) or (TWDA.describeAiming and TWDA.describeAiming())
     or (TWDA.describeSniper and TWDA.describeSniper())
     or (TWDA.describeCover and TWDA.describeCover())

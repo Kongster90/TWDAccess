@@ -122,6 +122,8 @@ local KEEP_CAPS = { CEO = true, CTO = true, CFO = true, COO = true, SVP = true, 
 
 function TWDA.normalCaps(text)
   if type(text) ~= "string" or text:find("%l") or not text:find("%u%u") then return text end
+  -- (A curly apostrophe is part of the word: "IN HARM’S WAY" is "In Harm's Way", not "Harm’S".)
+  text = text:gsub("\226\128\153", "'")
   return (text:gsub("(%a)([%w']*)", function(first, rest)
     if KEEP_CAPS[first .. rest] then return first .. rest end
     return first .. rest:lower()

@@ -13,26 +13,74 @@
 local TWDA = ...
 local G = _G
 
-local DIRECTIONS = { { "eUp", "W up" }, { "eLeft", "A left" }, { "eRight", "D right" }, { "eDown", "S down" } }
+local DIRECTIONS = { { "eUp", "W up", "Up arrow", 1 }, { "eLeft", "A left", "Left arrow", 3 },
+  { "eRight", "D right", "Right arrow", 4 }, { "eDown", "S down", "Down arrow", 2 } }
+
+-- Season 2 (projectseason2's peek.lua): Peek_Enter and Peek_Activate, the logic agent "logic_peek"
+-- with the same "Peek - Chore Up/Down/Left/Right" (kChores, in that order), and the "Peek" input
+-- map (W A S D and the arrows). Besides hiding, it makes some choices: at the river at the end of
+-- Episode 1, leaning left or right chooses whom to help, Pete or Nick (camera cam_choice_peteOrNick).
+local function season2()
+  return type(rawget(G, "Peek_Enter")) == "function" and type(rawget(G, "Peek_AddDirectionChore")) ~= "function"
+end
 
 local function active()
+  if season2() then
+    for _, name in ipairs({ "Peek.imap", "Peek" }) do
+      local ok, on = pcall(InputMapperIsActive, name)
+      if ok and on == true then return true end
+    end
+    return false
+  end
   local ok, on = pcall(InputMapperIsActive, "mode_peek.imap")
   return ok and on == true
 end
 TWDA.peekActive = active
 
 local function directions()
-  local add = TWDA.unwrap(rawget(G, "Peek_AddDirectionChore"))
-  local logic = TWDA.upvalue(add, "kLogicAgentName")
-  local keys = TWDA.upvalue(add, "kChores")
-  if type(logic) ~= "string" or type(keys) ~= "table" then return nil end
-  local parts = {}
-  for _, d in ipairs(DIRECTIONS) do
-    local key = keys[rawget(G, d[1])]
-    local ok, chore = pcall(AgentGetProperty, logic, key)
-    if key and ok and chore ~= nil and chore ~= "" then parts[#parts + 1] = d[2] end
+  local logic, keys
+  if season2() then
+    local ui = TWDA.upvalue(rawget(G, "Peek_Activate"), "ActivateUI")
+    logic, keys = TWDA.upvalue(ui, "kLogicAgent"), TWDA.upvalue(ui, "kChores")
+  else
+    local add = TWDA.unwrap(rawget(G, "Peek_AddDirectionChore"))
+    logic, keys = TWDA.upvalue(add, "kLogicAgentName"), TWDA.upvalue(add, "kChores")
   end
-  return parts
+  if type(logic) ~= "string" or type(keys) ~= "table" then return nil end
+  local parts, ways = {}, {}
+  for _, d in ipairs(DIRECTIONS) do
+    local key = season2() and keys[d[4]] or keys[rawget(G, d[1])]
+    local ok, chore = pcall(AgentGetProperty, logic, key)
+    if key and ok and chore ~= nil and chore ~= "" then
+      parts[#parts + 1] = d[2]
+      ways[#ways + 1] = d
+    end
+  end
+  return parts, ways
+end
+
+-- For a choice made by leaning (Season 2): the person on each side of the screen. People are named
+-- agents in view that are not props (no "obj_", no underscores) and not the player.
+local function peopleBySide()
+  local player = TWDA.player()
+  local okS, agents = pcall(SceneGetAgents, TWDA.playerScene and TWDA.playerScene() or Game_GetScene())
+  local left, right
+  for _, a in ipairs(okS and type(agents) == "table" and agents or {}) do
+    local name = TWDA.agentName(a)
+    if a ~= player and name:find("^%u%l+$") and not (pcall(AgentIsHidden, a) and AgentIsHidden(a)) then
+      local ok, pos = pcall(AgentGetScreenPos, a)
+      if ok and pos and (pos.z or 1) > 0 and pos.x >= 0 and pos.x <= 1 then
+        if pos.x < 0.5 and (not left or pos.x < left.x) then left = { name = name, x = pos.x } end
+        if pos.x >= 0.5 and (not right or pos.x > right.x) then right = { name = name, x = pos.x } end
+      end
+    end
+  end
+  return left and left.name, right and right.name
+end
+
+local function choiceCamera()
+  local okCam, camera = pcall(function() return SceneGetCamera(TWDA.playerScene and TWDA.playerScene() or Game_GetScene()) end)
+  return okCam and camera ~= nil and TWDA.agentName(camera):lower():find("choice", 1, true) ~= nil
 end
 
 TWDA.peekDirections = function() return active() and directions() or nil end
@@ -143,6 +191,27 @@ TWDA.onFrame("peek", function()
     return
   end
   inactiveSince = nil
+  if season2() then
+    -- (Season 2: no stealth timer warnings or Season 1 hotspot lists here.)
+    local parts, ways = directions()
+    if not parts or #parts == 0 then return end
+    local key = table.concat(parts, ", ")
+    if key == lastKey then return end
+    lastKey = key
+    TWDA.log("peek (season 2): " .. key)
+    if choiceCamera() then
+      local left, right = peopleBySide()
+      local said = {}
+      for _, d in ipairs(ways) do
+        local who = (d[4] == 3 and left) or (d[4] == 4 and right) or nil
+        said[#said + 1] = d[3] .. (who and (" towards " .. who) or "")
+      end
+      TWDA.say("Choose: " .. table.concat(said, ", "), { interrupt = true })
+    else
+      TWDA.say("To lean out: " .. key)
+    end
+    return
+  end
   trackPeeking()
   announceNewlyUsable()
   local parts = directions()
