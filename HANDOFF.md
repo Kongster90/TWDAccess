@@ -8,8 +8,9 @@ Last updated: 2026-10-11 (eighth session, about 18:00; see the first item).
 ## Start here (where the last session stopped)
 
 - Eighth session, 2026-10-11 16:40 to 18:00 (user: "before trying to move forward with the game,
-  we should try to fix some bugs first"). Bug fixes only, all tested in the game unless noted. Not
-  committed yet (ask the user). dist\TWDAccess was rebuilt (restart.ps1) and the game closed.
+  we should try to fix some bugs first"). Bug fixes only, all tested in the game unless noted.
+  Committed and pushed (c8789b1) at the user's request; #6 closed, #16 commented (left open).
+  dist\TWDAccess was rebuilt (restart.ps1) and the game closed.
   - The user's own gate bug (Season 1 Episode 1, night branch: choosing "Get out of here once the
     sun goes down" leads to env_clementineHouseExterior_Night.lua): after "Through Gate." Tab kept
     offering the backyard, and walks there failed at once. lookaround.lua walkTick now says "There
