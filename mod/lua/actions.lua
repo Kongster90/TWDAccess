@@ -55,9 +55,13 @@ local function countdown()
       local lower = type(node) == "string" and node:lower() or ""
       local length = prop(agent, "Timer Length")
       -- A cutscene ("cs_outOfTime"), or anything else of 5 seconds or more that is no hint or
-      -- chatter ("logic_ZombieBeakIntoOffice": the walkers breaking in on the Macon pharmacy).
-      local counts = lower:find("^cs_") or (lower ~= "" and type(length) == "number" and length >= 5
-        and not (lower:find("hint", 1, true) or lower:find("ambient", 1, true) or lower:find("chatter", 1, true)))
+      -- chatter ("logic_ZombieBeakIntoOffice": the walkers breaking in on the Macon pharmacy; not
+      -- timer_KatClemChatter, "idleBanter_katjaa", at Hershel's farm in Episode 1).
+      local chatter = false
+      for _, word in ipairs({ "hint", "ambient", "chatter", "banter", "idle" }) do
+        if lower:find(word, 1, true) or TWDA.agentName(agent):lower():find(word, 1, true) then chatter = true end
+      end
+      local counts = lower:find("^cs_") or (lower ~= "" and type(length) == "number" and length >= 5 and not chatter)
       -- (A plain logic step counts only when it sounds like danger: "logic_mollyTimerElapsed" at
       -- the auto shop in Crawford, Episode 4, only brings Molly in, and as a countdown it made the
       -- garage door be offered again and again with "Enter!".)

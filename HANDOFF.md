@@ -3,9 +3,69 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-10-11 (seventh session, about 14:30; see the first item).
+Last updated: 2026-10-11 (eighth session, about 18:00; see the first item).
 
 ## Start here (where the last session stopped)
+
+- Eighth session, 2026-10-11 16:40 to 18:00 (user: "before trying to move forward with the game,
+  we should try to fix some bugs first"). Bug fixes only, all tested in the game unless noted. Not
+  committed yet (ask the user). dist\TWDAccess was rebuilt (restart.ps1) and the game closed.
+  - The user's own gate bug (Season 1 Episode 1, night branch: choosing "Get out of here once the
+    sun goes down" leads to env_clementineHouseExterior_Night.lua): after "Through Gate." Tab kept
+    offering the backyard, and walks there failed at once. lookaround.lua walkTick now says "There
+    is no way to X from here." when a walk ends with Lee barely moved (under 1.5 m) and either the
+    goal is over 6 m off or the walk failed within 2 s (the second "Bathroom Door" upstairs in the
+    Savannah house, a meter away through the wall). Such things leave the Tab list (noWay) until
+    anything is used (Main_OnUse / PathToAndUseAgent hook) or Lee is 10 m from where it was
+    marked; not things on another floor. A walk that ends where the thing can be used (clickable:
+    Shawn at the farm fence, far use) now counts as arrived instead of "can go no further". The
+    engine facts: AgentPathToAgent to an unreachable spot returns false in 0.4 s without moving;
+    to where Lee already stands it returns true at once; the walk boxes are one mesh
+    (WalkBoxesPosOnWalkBoxes puts the backyard on them from the street), and
+    PathAgentDoesPathReachDestination said true with 0.4 m of path left, so nothing tells in
+    advance. SCENE_PLACES now has "Street" (trigger_MeetShawnNight) for that scene: walking there
+    brings Shawn and Chet; places are listed only while "Trigger Enabled" is not false.
+  - Issue #16 (first Enter after a walk does nothing): reproduced a cause in the Savannah house
+    (dev_saves\ep4_clemsearch). After a walk that ended short, Enter fell back to current.agent,
+    the last thing the reticle passed over silently on the way, and opened the Bathroom Door
+    instead of going on to the Bedroom Door. Now: what the reticle passed during a walk is
+    forgotten (forgetFocusPassed); "Lee stopped before reaching X. Enter walks on." sets a walk
+    offer; and the game's PathToAndUseAgent (navigate.lua; DoAction uses it for "WD Should Path"
+    hotspots) is watched: when it returns without calling Main_OnUse (its post-walk checks give
+    up silently), lookaround.lua logs "PathToAndUseAgent ended without a use of X" and tries the
+    use once more (not within 20 s of the last retry, not with a movement key held). The grave
+    case itself was not reproduced; look for that log line if it comes back. Doors and people
+    worked first time after walks (Kenny, the master bedroom door).
+  - Issue #6: Escape is left to the game (the pause menu). Backspace already let go of a held
+    hotspot outside close-ups (goBack sets target = nil; OnBack does nothing there) and now also
+    stops a mod walk ("Stopped.").
+  - False "Hurry: about 10 seconds. Katjaa: Talk to" at Hershel's farm: timer_KatClemChatter
+    (ends in "idleBanter_katjaa", 10 s) counted as a countdown. actions.lua now skips timers whose
+    end node or own name has hint, ambient, chatter, banter or idle in it (cs_ ends still count).
+  - Season 2: the pause menu (root ui_menu_pause, no header) says "Pause menu, 4 items"; the
+    credits (credits.lua: agent ui_credits_text, node text_credits in ui_credits20<ep>.dlog) read
+    with F6 from the menu and after episodes (menus.lua rawText + formatCredits; also fixed an
+    undefined kTextNode there); Chapter Select no longer says "Change Save File" when the resting
+    mouse pointer is over that nav button (a real, visible PC button at the bottom; Enter still
+    plays the centre panel): in carousels a non-panel selection with no arrow key or Tab in the
+    last 0.5 s and no mouse move in the last 1 s is logged, not read.
+  - Season 2, found and fixed: with the pause menu open over a dialog choice, choices2.lua still
+    took Up, Down, 1-4 and Enter, so Down in the pause menu also read a dialog answer and Enter
+    picked one (seen happen). choices2 now ignores keys while UIZ_GetActiveMenu() is not nil
+    (it is nil while choices are up on their own, "ui_menu_pause" when paused), and hasChoices is
+    false then, so F6 reads the menu. Season 1's hasChoices is false while mode_PauseMenu is up
+    too (its choice keys are the game's own, so only F6 changed there).
+  - Season 2, untested in the game: same-named hotspots are numbered in the order of their agent
+    names, not by distance, so "Stall 2" stays the same stall (lookaround2.lua hotspots()).
+  - Issue #20's fix (an unreachable mark is dropped once the hotspot is clickable) was already in
+    the code; still not replayed at the Crawford alley.
+  - New dev saves: backyard_leaving (env_clementineHouseExterior.lua, day branch, just out of the
+    house after the fight) and backyard_night (env_clementineHouseExterior_Night.lua, the night
+    branch). Slot 2 (Season 1) now holds Episode 4's Clementine search
+    (saves.txt: env_manorInteriorClementineSearch.lua); Season 2 save file 2 is unchanged
+    (CabinInterior.lua). New probes in tools\dev: probe_noway.lua (walk-box distances),
+    probe_walk.lua (what AgentPathToAgent returns), probe_repath.lua, triggers1.lua (Season 1
+    triggers near Lee, TRIG lines).
 
 - Seventh session, 2026-10-10 22:20 to 2026-10-11 14:30 (user: "go ahead and start working on
   season 2", then away overnight; they came back, closed the game at 14:21 and asked for this
@@ -30,18 +90,13 @@ Last updated: 2026-10-11 (seventh session, about 14:30; see the first item).
     wd2_saveslot2.bundle, _wd2_saveslot2_autosave.bundle and one _checkpointN.bundle per chapter).
   - The user's settings.txt is back to actionscenes = normal (it was auto for part of the
     testing). dist\TWDAccess was rebuilt with every change.
-  - Known gaps in Season 2: the pause menu has no title (season2TitleOf only names ui_menu_main);
-    the credits are not readable with F6 (creditsText knows only the hub's agents); place names
-    can spoil the story ("Dog finds zombie") and some triggers are for other characters and never
-    fire for Clementine; "Change Save File" is spoken on Chapter Select when the mouse is over it;
-    the mod numbers same-named hotspots by distance ("Stall 1", "Stall 2"), so a number can move to
-    another object as Clementine walks; struggles need fast mashing in normal mode (slow mode's
-    hold-Q works for Season 2 too; untested by ear).
+  - Known gaps in Season 2 (the pause menu title, the credits, "Change Save File" and the hotspot
+    numbers were fixed in the eighth session): place names can spoil the story ("Dog finds
+    zombie") and some triggers are for other characters and never fire for Clementine; struggles
+    need fast mashing in normal mode (slow mode's hold-Q works for Season 2 too; untested by ear).
   - Seen in the user's own Season 1 play on 2026-10-10 (slot 1, Episode 1, from the house fight to
     the fence; they won the babysitter fight): after "Through Gate." the Tab list still offered the
-    backyard's hotspots and every walk to them failed at once ("Lee got to 24 meters from
-    Treehouse and can go no further this way", many times); stale hotspots from the area left
-    behind should be dropped. Not fixed.
+    backyard's hotspots and every walk to them failed at once. Fixed in the eighth session.
 
 - Sixth session, 2026-10-09 evening to 2026-10-10 05:25 (user: "keep going on the game"). See
   "Sixth session: 400 Days", "Season 2's menus" and "400 Days replayed" below. In short: finished
@@ -274,7 +329,9 @@ F. (#15) Partly done 2026-10-08 (third): stairs are offered as "Stairs" where Le
    and AgentPathToAgent work for these; PathAgentDoesPathReachDestination always returns false
    (useless). Ideas: list nearby characters and doorways as walk targets in free walking.
 G. (#16) The first Enter after a mod walk arrives sometimes does nothing (Episode 4 house doors,
-   shed door, grave); a second Enter works. Not solved; see "Fifth session: more mod changes".
+   shed door, grave); a second Enter works. Eighth session: one cause found and fixed (Enter fell
+   back to a hotspot passed silently on the way) and a retry added for PathToAndUseAgent giving up
+   without a use; the grave case not reproduced. See "Start here".
 H. (#17) Walks take the shortest way and can lead Lee into walkers (Savannah sewers). Tested and
    reworked 2026-10-09 (see "Sewer retest"): stops when the vignette comes up during the walk or
    when Lee heads for a still walker within 5 m; not while walkers chase him. Still open: routes
@@ -318,7 +375,8 @@ E. (#14) Long walks are slow and silent (Lee limps: 35 m to Hershel took about 4
    Import Season 1 Save and the end-of-episode My Choices were done in the seventh session. Season
    2 gameplay is under way (Episode 1 done, Episode 2 partly). Michonne, A New Frontier and The
    Final Season are untouched.
-6. (#6) Escape both releases the hotspot the mod is holding and opens the pause menu.
+6. (#6) Done in the eighth session: Escape is the game's (pause menu); Backspace lets go of the
+   held hotspot and stops a walk.
 7. (#7) Done 2026-10-09, not yet run against the real game folder: --uninstall now keeps
    Archives\DebugLoader.lua and TWDAccess\saves.txt when saves may have been made with the mod
    (saves.txt has a slot, or a save .bundle is newer than installed.txt), keeps the bootstrap's line
@@ -1786,6 +1844,9 @@ Project root: C:\Users\dengs\Downloads\TWD
   Added in the sixth session: 400_shel\ (400 Days, the start of Shel's story in the truck stop
   diner; saves.txt line Chapter5A_TruckStopInterior.lua), 400done\ (400 Days finished; saves.txt
   line Chapter6B_Camp.lua).
+  Added in the eighth session: backyard_leaving\ (env_clementineHouseExterior.lua, Episode 1's
+  day branch, just out of the house after the fight) and backyard_night\
+  (env_clementineHouseExterior_Night.lua, the night branch the user played: the gate bug).
 
 In the game folder (G:\Steam\steamapps\common\The Walking Dead The Telltale Definitive Series):
 Archives\DebugLoader.lua, plus the TWDAccess folder (the mod's Lua, settings.txt, twda.log,

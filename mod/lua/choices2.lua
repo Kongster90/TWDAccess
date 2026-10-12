@@ -149,12 +149,20 @@ local KEYS = {
   [0x61] = 1, [0x62] = 2, [0x63] = 3, [0x64] = 4,
   [0x26] = "up", [0x28] = "down", [0x0D] = "enter",
 }
+-- A menu over the game (the pause menu, ui_menu_pause) has the keyboard; the choices wait behind
+-- it. (While choices are up on their own, UIZ_GetActiveMenu() is nil.)
+local function menuUp()
+  local ok, menu = pcall(UIZ_GetActiveMenu)
+  return ok and menu ~= nil
+end
+
 local held = {}
 local function pollKeys()
+  local menu = menuUp()
   for vk, action in pairs(KEYS) do
     local ok, down = pcall(InputPCIsVKeyPressed, vk)
     down = ok and down == true
-    if down and not held[vk] and #choices > 0 and not picking then
+    if down and not held[vk] and #choices > 0 and not picking and not menu then
       if type(action) == "number" then
         if choices[action] then pick(action) end
       elseif action == "enter" then
@@ -197,7 +205,7 @@ end
 
 local previousHas, previousRead = TWDA.hasChoices, TWDA.readChoices
 TWDA.hasChoices = function()
-  return #choices > 0 or (previousHas ~= nil and previousHas())
+  return (#choices > 0 and not menuUp()) or (previousHas ~= nil and previousHas())
 end
 TWDA.readChoices = function()
   if #choices > 0 or not previousRead then announce(true) else previousRead() end

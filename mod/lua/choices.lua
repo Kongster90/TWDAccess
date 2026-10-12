@@ -71,7 +71,12 @@ local function keepPaused()
   if not dialogsPaused() and callGame("Game_PauseAllDialogs") then pausedByUs = true end
 end
 TWDA.readChoices = function() announce(true) end
-TWDA.hasChoices = function() return #choices > 0 end
+-- (Not while the pause menu is open over them: F6 reads the menu then.)
+TWDA.hasChoices = function()
+  if #choices == 0 then return false end
+  local okMode, mode = pcall(Mode_GetCurrent)
+  return not (okMode and type(mode) == "table" and mode == rawget(G, "mode_PauseMenu"))
+end
 
 -- Text written to the screen while a choice display is being built.
 TWDA.onTextProperty = TWDA.onTextProperty or {}

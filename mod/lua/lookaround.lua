@@ -12,13 +12,14 @@
 -- view: holding the reticle at a screen edge turns the camera that way. Where Lee walks freely,
 -- Tab on something the reticle cannot take from where he stands offers a walk there, and Enter
 -- walks him (and F6 gives distances). The number keys pick an action and are remembered until
--- Enter; Backspace steps back out of a close-up (as a right click does). In a fight (the reticle in
+-- Enter; Backspace steps back out of a close-up (as a right click does), and elsewhere lets go of
+-- the hotspot or stops a walk. Escape is left to the game (the pause menu). In a fight (the reticle in
 -- combat mode) targets are named from their use dialog ("babysitter: Punch") and Enter goes for
 -- the first one on offer.
 local TWDA = ...
 local G = _G
 
-local VK_TAB, VK_SHIFT, VK_ENTER, VK_ESCAPE, VK_BACK = 0x09, 0x10, 0x0D, 0x1B, 0x08
+local VK_TAB, VK_SHIFT, VK_ENTER, VK_BACK = 0x09, 0x10, 0x0D, 0x08
 local REACH_SECONDS = 2.5        -- to focus something in view
 local REACH_BEHIND_SECONDS = 8   -- to turn the camera round to something behind it
 local REACH_WALK_SECONDS = 2.5   -- the same where Lee can walk there instead
@@ -257,6 +258,16 @@ local function forgetUnreachable()
   unreachable, unreachableFrom, unreachableCamera = {}, nil, nil
 end
 
+-- Hotspots Lee has no way to from where he is: a walk there ended well short (see walkTick). Left
+-- out of the list until something is used or he has walked well away.
+local noWay = {} -- agent name -> true
+local noWayFrom = nil -- where Lee was
+local NO_WAY_CLEAR_METERS = 10
+
+local function forgetNoWay()
+  noWay, noWayFrom = {}, nil
+end
+
 -- Free walking (the game's navigate.lua: Navigate.imap is active, W A S D walk relative to the
 -- camera, a click walks to the spot). The mod can walk Lee to a hotspot the camera does not show
 -- with the game's own path-finding (AgentPathToAgent, as PathToAndUseAgent does).
@@ -284,6 +295,11 @@ local places = {}
 -- Places in particular scenes where the way on has no hotspot at all: walking into a trigger
 -- starts the next part. Scene script (lower case) -> { agent, name, arrive (said on arrival) }.
 local SCENE_PLACES = {
+  -- Episode 1, leaving Clementine's house at night: out through the gate, Shawn and Chet turn up
+  -- once Lee walks on towards the street (the yard's things are out of reach from there).
+  ["env_clementinehouseexterior_night.lua"] = {
+    { agent = "trigger_MeetShawnNight", name = "Street" },
+  },
   -- Episode 4, the Savannah sewers: once the walkers have gone to the leaking pipe and Lee has
   -- hidden in the low passage, the tunnel goes on to the left to where Chuck lies.
   ["env_savannahsewers.lua"] = {
@@ -383,7 +399,7 @@ local function hotspots()
       local okPos, pos = pcall(AgentGetScreenPos, agent)
       -- (A thing marked unreachable after a failed try counts again once it is within reach: the
       -- doctor's corpse in the Crawford alley, issue #20.)
-      if okPos and pos and (not unreachable[name] or clickable(agent)) then
+      if okPos and pos and (not (unreachable[name] or noWay[name]) or clickable(agent)) then
         local side = sideOf(agent, pos)
         if closeUp and side ~= nil and (distanceTo(agent) or 99) > 3 then side = "away" end
         local canClick = side ~= "away" and clickable(agent) and (side ~= nil or not tight or visibleAtDot(agent))
@@ -415,7 +431,8 @@ local function hotspots()
   for _, place in ipairs(walk and SCENE_PLACES[script] or {}) do
     local okFind, agent = pcall(AgentFind, place.agent)
     local okPos, pos = pcall(AgentGetScreenPos, agent)
-    if okFind and agent ~= nil and okPos and pos and call("AgentIsHidden", agent) ~= true then
+    if okFind and agent ~= nil and okPos and pos and call("AgentIsHidden", agent) ~= true
+      and prop(agent, "Trigger Enabled") ~= false then
       local side = sideOf(agent, pos)
       places[place.agent] = place.name
       placeArrive[place.agent] = place.arrive or ("At the " .. place.name:lower() .. ".")
@@ -1108,7 +1125,7 @@ end
 -- accepting "Enter walks there" for something only looked up with Tab).
 local function startWalk(agent, act)
   local name = TWDA.agentName(agent)
-  local w = { agent = agent, name = name, since = TWDA.now(), act = act }
+  local w = { agent = agent, name = name, since = TWDA.now(), act = act, from = playerPos() }
   -- Walkers far away when the walk starts that come close on the way stop it (see walkTick);
   -- not when going for a walker on purpose.
   if not isWalkerName(name) then w.walkerAtStart = nearestWalker() end
@@ -1128,8 +1145,16 @@ local function startWalk(agent, act)
   TWDA.say("Walking to " .. displayName(name, agent) .. ".", { interrupt = true })
 end
 
+-- What the reticle passed over on the way was not read out, so it is not what Enter is for next
+-- (issue #16: after a walk upstairs in the Savannah house was cut short, Enter opened the Bathroom
+-- Door passed on the way instead of going on to the Bedroom Door).
+local function forgetFocusPassed(w)
+  if current.agent ~= nil and current.agent ~= w.agent then current.agent = nil end
+end
+
 local function stopWalk(say)
   if not walking then return end
+  forgetFocusPassed(walking)
   walking = nil
   quietUntil = 0
   pcall(PathAgentStop, TWDA.player())
@@ -1234,23 +1259,48 @@ local function walkTick()
   end
   walking = nil
   quietUntil = 0
+  forgetFocusPassed(w)
   debug("walk to " .. w.name .. " finished, success " .. tostring(w.success))
   -- The path-finding does not take stairs (the dairy farmhouse): say when the goal is on another
   -- floor; walking onto the stairs by hand starts a guided path up or down (guided.lua).
   local where = floorOf(w.agent)
   local floor = where and (" It is " .. where .. ".") or ""
   local left = distanceTo(rawget(w.agent, "usePosAgent") or w.agent)
-  if not w.success and not (left and left > 3) then
-    TWDA.say(TWDA.playerName() .. " stopped before reaching " .. displayName(w.name, w.agent) .. "." .. floor, { interrupt = true })
+  -- Usable from where he stopped counts as there (Shawn at the farm's fence, Episode 1: the walk
+  -- ends 4 meters from his use position, but he can be talked to from afar).
+  local usable = clickable(w.agent)
+  -- The path-finding takes Lee as near as it can and can report success well short of the goal: a
+  -- closed gate in the way (the yard gate at the dairy, on the way to the barn). Or there is no way
+  -- at all: once he is out through Clementine's gate at night (Episode 1), walks to the backyard's
+  -- things end at once with him hardly moved. Such a thing is left out of the list (noWay) until
+  -- something is used or he has gone elsewhere; not one on another floor (the stairs lead there).
+  -- (Failed at once without a step is no way either, however near: the second Bathroom Door
+  -- upstairs in the Savannah house, Episode 4, a meter away through the wall.)
+  local okMoved, moved = pcall(VectorDistance, playerPos(), w.from)
+  local stuck = okMoved and type(moved) == "number" and moved < 1.5
+  if stuck and not usable and ((left and left > 6) or (not w.success and now - w.since < 2 and left and left > 0.5)) then
+    if floor == "" then
+      noWay[w.name] = true
+      noWayFrom = noWayFrom or playerPos()
+      TWDA.log("lookaround: no way to " .. w.name)
+    end
+    TWDA.say(("There is no way to %s from here.%s"):format(displayName(w.name, w.agent), floor), { interrupt = true })
     return
   end
-  -- The path-finding can report success well short of the goal: a closed gate in the way (the
-  -- yard gate at the dairy, on the way to the barn). Say how far he got and what is close by.
-  if left and left > 3 then
+  if left and left > 3 and not usable then
+    -- Say how far he got and what is close by.
     local nearest, nearestDistance = nearestWayOut(w.name)
     TWDA.say(("%s got to %d meters from %s and can go no further this way.%s%s"):format(TWDA.playerName(), left, displayName(w.name, w.agent),
       floor, floor == "" and nearest and nearestDistance <= 3 and (" Close by: " .. displayName(nearest.name, nearest.agent)
         .. ", " .. nearestDistance .. " meters.") or ""), { interrupt = true })
+    return
+  end
+  if not w.success and not usable then
+    -- (Often a remark of Lee's on the way cut it short: Enter goes on there.)
+    walkOffer = { agent = w.agent, name = w.name, at = now, kind = "walk" }
+    lastTargetName = w.name
+    TWDA.say(TWDA.playerName() .. " stopped before reaching " .. displayName(w.name, w.agent) .. "." .. floor
+      .. " Enter walks on.", { interrupt = true })
     return
   end
   if placeArrive[w.name] then
@@ -1276,6 +1326,7 @@ local doorUse = nil -- { label, from, at }: a door just used; said "Through X." 
 for _, name in ipairs({ "Main_OnUse", "PathToAndUseAgent" }) do
   TWDA.hookBefore(name, function(agent)
     lastUseAt = TWDA.now()
+    forgetNoWay() -- (a use can open the way: the yard gate at the dairy)
     lastUsed.name, lastUsed.at = TWDA.agentName(agent), lastUseAt
     local acts = (lastActions and lastActions.name == lastUsed.name) and lastActions.actions or {}
     lastUsed.blow = #acts == 1 and isBlow(acts[1])
@@ -1291,6 +1342,33 @@ for _, name in ipairs({ "Main_OnUse", "PathToAndUseAgent" }) do
     if target and target.agent == agent and call("ReticleUI_InCombatMode") == true then target = nil end
   end)
 end
+
+-- PathToAndUseAgent walks Lee up to the thing and then uses it, but gives up without a word when a
+-- check after the walk fails (navigate.lua: the path, the Navigate map and mode_Reticle active, Lee
+-- no longer pathing). Issue #16: at the boy's grave in Episode 4 the first Enter walked Lee up to it
+-- and nothing more; a second Enter dug. When it returns with no use, the use is tried once more.
+local pathUse = nil -- { agent, used }
+local pathRetried = {} -- agent name -> when
+TWDA.hookBefore("Main_OnUse", function(agent)
+  if pathUse and pathUse.agent == agent then pathUse.used = true end
+end)
+TWDA.hookBefore("PathToAndUseAgent", function(agent) pathUse = { agent = agent, used = false } end)
+TWDA.hookAfter("PathToAndUseAgent", function(args)
+  local p = pathUse
+  pathUse = nil
+  if not p or p.used or p.agent ~= args[1] then return end
+  local name, now = TWDA.agentName(p.agent), TWDA.now()
+  TWDA.log("lookaround: PathToAndUseAgent ended without a use of " .. name)
+  if now - (pathRetried[name] or -60) < 20 or prop(p.agent, "Game Selectable") ~= true then return end
+  -- (Not when the player walked off with a movement key.)
+  for _, vk in ipairs({ 0x57, 0x41, 0x53, 0x44, 0x25, 0x26, 0x27, 0x28 }) do
+    local okKey, down = pcall(InputPCIsVKeyPressed, vk)
+    if okKey and down == true then return end
+  end
+  pathRetried[name] = now
+  target = { agent = p.agent, name = name, since = now, actOnReach = true }
+  lastTargetName = name
+end)
 
 -- The first action that is not just looking (for auto mode), as a number-key index.
 -- (Not shooting while there is another way: the gun is loud. In the Savannah sewers, Episode 4,
@@ -1571,16 +1649,18 @@ end
 
 TWDA.onFrame("lookaround", function()
   local ready = reticleReady()
-  local tab, enter, escape, back = pressed(VK_TAB), pressed(VK_ENTER), pressed(VK_ESCAPE), pressed(VK_BACK)
+  -- (Not Escape: that is the game's pause menu, issue #6. Backspace lets go and stops walks.)
+  local tab, enter, back = pressed(VK_TAB), pressed(VK_ENTER), pressed(VK_BACK)
   local number = nil
   for i = 1, 4 do
     if pressed(0x30 + i) then number = i end
   end
-  if walking and (escape or not canWalk()) then
+  if walking and (back or not canWalk()) then
     -- The game took Lee over (a remark when he came close to something, a cut scene). Say how the
     -- walk ended once he can walk again; nothing else would.
-    if not escape then walkCutShort = { w = walking, at = TWDA.now() } end
-    stopWalk(escape)
+    if not back then walkCutShort = { w = walking, at = TWDA.now() } end
+    stopWalk(back)
+    back = false
   end
   if walkCutShort and canWalk() then
     local w = walkCutShort.w
@@ -1671,6 +1751,10 @@ TWDA.onFrame("lookaround", function()
     local okDist, dist = pcall(VectorDistance, pos, unreachableFrom)
     if (pos and okDist and dist > 1) or cameraName() ~= unreachableCamera then forgetUnreachable() end
   end
+  if noWayFrom then
+    local okDist, dist = pcall(VectorDistance, playerPos(), noWayFrom)
+    if okDist and type(dist) == "number" and dist > NO_WAY_CLEAR_METERS then forgetNoWay() end
+  end
 
   if number then
     -- (When the reticle is awake on the object, the game takes the key itself and shows the
@@ -1699,8 +1783,6 @@ TWDA.onFrame("lookaround", function()
     cycle((okShift and shift == true) and -1 or 1)
   elseif enter then
     enterPressed()
-  elseif escape then
-    target = nil -- stop holding the reticle on it
   elseif back then
     goBack()
   end

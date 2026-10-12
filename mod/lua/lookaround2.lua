@@ -138,14 +138,19 @@ local function hotspots()
     if (a.side == nil) ~= (b.side == nil) then return a.side == nil end -- (in view first)
     return (a.distance or 999) < (b.distance or 999)
   end)
-  local count, seen = {}, {}
-  for _, h in ipairs(list) do count[h.name] = (count[h.name] or 0) + 1 end
+  -- (Numbered in the order of their agents' names, not by distance, so that "Stall 2" stays the
+  -- same stall as Clementine walks about.)
+  local alike = {}
   for _, h in ipairs(list) do
-    if count[h.name] > 1 then
-      seen[h.name] = (seen[h.name] or 0) + 1
-      h.label = h.name .. " " .. seen[h.name]
+    alike[h.name] = alike[h.name] or {}
+    table.insert(alike[h.name], h)
+  end
+  for name, group in pairs(alike) do
+    if #group > 1 then
+      table.sort(group, function(a, b) return TWDA.agentName(a.agent) < TWDA.agentName(b.agent) end)
+      for i, h in ipairs(group) do h.label = name .. " " .. i end
     else
-      h.label = h.name
+      group[1].label = name
     end
   end
   return list

@@ -316,7 +316,8 @@ local function season2TitleOf(root)
       scan(k, 1)
     end
   end
-  title = title or (rootName == "ui_menu_main" and "Main" or nil)
+  -- (The main menu and the pause menu have no header.)
+  title = title or ({ ui_menu_main = "Main", ui_menu_pause = "Pause" })[rootName]
   -- Screens with a message of their own instead of a header ("ui_menu_importSave_search" shows
   -- ui_importSave_messageHeader and ui_importSave_messageBody, outside the menu's own agents).
   local notes = {}
@@ -581,6 +582,21 @@ TWDA.onFrame("menus.redirect", function()
   if not ok then TWDA.log("menus redirect: " .. tostring(err)) end
 end)
 
+-- When the player last pressed an arrow key or Tab, and last moved the mouse.
+local navKeyAt, mouseMovedAt, lastCursor = -10, -10, nil
+TWDA.onFrame("menus.input", function()
+  local now = TWDA.now()
+  for _, vk in ipairs({ 0x09, 0x25, 0x26, 0x27, 0x28 }) do
+    local ok, down = pcall(InputPCIsVKeyPressed, vk)
+    if ok and down == true then navKeyAt = now end
+  end
+  local ok, cursor = pcall(CursorGetDevicePos)
+  if ok and cursor then
+    if lastCursor and (math.abs(cursor.x - lastCursor.x) > 2 or math.abs(cursor.y - lastCursor.y) > 2) then mouseMovedAt = now end
+    lastCursor = { x = cursor.x, y = cursor.y }
+  end
+end)
+
 local function onSelect(button)
   if mouseDepth == 0 and isArrowButton(button) then
     local target = redirectTarget(button)
@@ -591,8 +607,15 @@ local function onSelect(button)
   end
   local cf = activeCoverflow()
   if cf and inCoverflowPanel(cf, button) then return end -- (the centre panel is read instead)
-  local text, widget, base = describeButton(button)
+  -- A button the resting mouse pointer happens to be over as a carousel comes up ("Change Save
+  -- File" at the bottom of Season 2's Chapter Select) is not the player's choice; Enter still takes
+  -- the centre panel.
   local now = TWDA.now()
+  if cf and now - navKeyAt > 0.5 and now - mouseMovedAt > 1 then
+    TWDA.log("menus: " .. TWDA.agentName(button) .. " selected under the resting mouse; not read")
+    return
+  end
+  local text, widget, base = describeButton(button)
   local s2title = season2Title(button)
   if s2title then
     menuTitle = s2title
@@ -1070,21 +1093,29 @@ local function formatCredits(raw)
   return TWDA.joinSentences(out)
 end
 
+-- An agent's text as written, line breaks and all: its dialog node's, else its "Text String".
+local function rawText(agent)
+  local okNode, node = pcall(AgentGetProperty, agent, "Text Dialog 2.0 Node Name")
+  if okNode and type(node) == "string" and node ~= "" then
+    local _, file = pcall(AgentGetProperty, agent, "Text Dialog 2.0 File")
+    local ok, text = pcall(function() return DlgEvaluateToNode(file or "ui_menu.dlog", node, "text", false):GetText() end)
+    if ok and type(text) == "string" and text ~= "" and text ~= node then return text end
+  end
+  local ok, raw = pcall(AgentGetProperty, agent, "Text String")
+  return ok and type(raw) == "string" and raw ~= "" and raw or nil
+end
+
+-- The hub's credits (ui_creditsClosing_*), and Season 2's (credits.lua: ui_credits_text, from the
+-- dialog node "text_credits"), both from the menu and after an episode.
 function TWDA.creditsText()
   if not creditsActive then return nil end
   local parts = {}
-  for _, name in ipairs({ "ui_creditsClosing_textTitle", "ui_creditsClosing_text" }) do
+  for _, name in ipairs({ "ui_creditsClosing_textTitle", "ui_creditsClosing_text", "ui_credits_text" }) do
     local okFind, agent = pcall(AgentFind, name)
-    local okNode, node = pcall(AgentGetProperty, agent, kTextNode)
-    if okFind and agent and okNode and type(node) == "string" and node ~= "" then
-      parts[#parts + 1] = TWDA.normalCaps(TWDA.agentText(agent))
-    elseif okFind and agent then
-      local ok, raw = pcall(AgentGetProperty, agent, "Text String")
-      if ok and type(raw) == "string" and raw ~= "" then
-        parts[#parts + 1] = formatCredits(raw)
-      else
-        parts[#parts + 1] = TWDA.agentText(agent)
-      end
+    if okFind and agent then
+      local raw = rawText(agent)
+      local text = raw and raw:find("\n") and formatCredits(raw) or TWDA.normalCaps(TWDA.agentText(agent))
+      if text and text ~= "" then parts[#parts + 1] = text end
     end
   end
   return #parts > 0 and TWDA.joinSentences(parts) or nil
