@@ -152,13 +152,23 @@ local function timeScale()
   return 1
 end
 
-local function setSlow(on)
+-- Slow motion is asked for by several modules: action scenes here, and in Season 2 the action
+-- prompts (action2.lua) and targets in a fight (lookaround2.lua). The game runs slowly while any of
+-- them wants it. (Each module once set the speed itself, and this one put Season 2's back to normal
+-- every frame.)
+local slowFor = {}
+function TWDA.setSlowFor(reason, on)
+  slowFor[reason] = on or nil
   local scale = timeScale()
-  if on and math.abs(scale - 1) < 0.001 then
+  if next(slowFor) ~= nil and math.abs(scale - 1) < 0.001 then
     pcall(SetTimeScale, SLOW_SCALE)
-  elseif not on and math.abs(scale - SLOW_SCALE) < 0.001 then
+  elseif next(slowFor) == nil and math.abs(scale - SLOW_SCALE) < 0.001 then
     pcall(SetTimeScale, 1)
   end
+end
+
+local function setSlow(on)
+  TWDA.setSlowFor("scene", on)
 end
 
 local function lookOnly(verb)

@@ -15,7 +15,6 @@ local G = _G
 
 local DIRS = { "Up", "Down", "Left", "Right" }
 local KEY_WORDS = { Up = "Up arrow", Down = "Down arrow", Left = "Left arrow", Right = "Right arrow" }
-local SLOW_SCALE = 0.45
 
 local function prop(agent, key)
   local ok, value = pcall(AgentGetProperty, agent, key)
@@ -69,16 +68,6 @@ local function press(open)
 end
 
 local lastText, lastOpenAt, autoDone = nil, 0, false
-local slowedByUs = false
-
-local function setSlow(on)
-  if on and not slowedByUs then
-    if pcall(SetTimeScale, SLOW_SCALE) then slowedByUs = true end
-  elseif not on and slowedByUs then
-    pcall(SetTimeScale, 1)
-    slowedByUs = false
-  end
-end
 
 TWDA.onFrame("action2", function()
   if type(rawget(G, "Action_GetActiveActions")) ~= "function" then return end
@@ -86,7 +75,7 @@ TWDA.onFrame("action2", function()
   local open = openNow()
   local okAgents, agents = pcall(Action_GetActiveActions)
   local anyActive = okAgents and type(agents) == "table" and #agents > 0
-  setSlow(mode == "slow" and anyActive)
+  TWDA.setSlowFor("actions", mode == "slow" and anyActive)
   if not open then
     lastText, autoDone = nil, false
     return

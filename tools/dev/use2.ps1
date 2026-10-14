@@ -9,11 +9,11 @@ $dev = $PSScriptRoot
 $speech = Join-Path $dev "..\..\dist\TWDAccess\logs\speech.log"
 $found = $false
 for ($i = 0; $i -lt $MaxTabs; $i++) {
-    $before = (Get-Content $speech).Count
+    $before = (Get-Content -Encoding UTF8 $speech).Count
     & "$dev\game_input.ps1" -Focus | Out-Null
     & "$dev\game_input.ps1" -Keys Tab | Out-Null
     Start-Sleep -Milliseconds 700
-    $said = (Get-Content $speech | Select-Object -Skip $before) -join " "
+    $said = (Get-Content -Encoding UTF8 $speech | Select-Object -Skip $before) -join " "
     # (Whole names only: "Door 1" is not "Bedroom Door 1".)
     if ($said -match ("\] (Place: )?" + [regex]::Escape($Name) + "[:,]")) { $found = $true; "found: $said"; break }
 }

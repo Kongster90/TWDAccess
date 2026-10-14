@@ -3,9 +3,81 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-10-11 (eighth session, about 18:00; see the first item).
+Last updated: 2026-10-12 (ninth session, about 16:45; see the first item).
 
 ## Start here (where the last session stopped)
+
+- Ninth session, 2026-10-12 00:20 to 16:45 (user: "Read the handoff file. Then progress and work
+  through what you can of the rest of season 2"; user away all session). ALL OF SEASON 2 IS NOW
+  PLAYED by ear in save file 2: the rest of Episode 2 (from the group talk after Carver's visit),
+  Episodes 3, 4 and 5, to the ending (alone with AJ) and back to Season 2's main menu. Choices
+  were mostly answer 1, so other branches are unplayed (see "Season 2 walkthrough notes" below).
+  Not committed (ask the user first). dist\TWDAccess was rebuilt with every change and the game was
+  closed. The user's settings.txt is back to actionscenes = normal (it was slow for this testing).
+  A "Playback error" box from the user's music player sat over the game window all session (theirs;
+  left alone; it may have stolen focus now and then).
+  New dev saves (copy all *wd2_saveslot2* files from the folder into the save folder to use one):
+  s2_ep2_cabinnight (save file 2 as the session started), s2_ep2done, s2_ep3done, s2_ep4done,
+  s2_ep5done (season finished).
+  Mod fixes, all tested in the game unless marked untested:
+  - guided.lua: progress is measured from where the held key started, not frame to frame (the
+    chairlift ladder, Episode 2, moves under 0.1% a frame, so "W does not move Clementine" was said
+    wrongly); "Halfway" only when the path crosses it. Season 2: a key held from before a path
+    starts is passed on to the game (ChoredMovement_SetJoystickDirection), because the game moves
+    only on key-down events: the shoe store squeeze (Episode 3: "Hold A to escape!" shown 4 s
+    before a 1.3 s window) was otherwise lost even with A held. When the game's hint names no key
+    ("Don't fall behind!", "Get to Luke!"), "Guided path. Hold W or S" is said at once.
+  - prompts2.lua: Season 2's notices are read: Notification_ShowTutorial hints ("Hold A to
+    escape!", "Push the W key to crawl forward", "Find a way through!") and
+    Notification_ShowChoice ("Kenny will remember that.", "You convinced Jane to re-join the
+    group."). Inventory items use the game's names ("Survival Knife", "Walkie Talkie").
+  - actions.lua: one shared slow-motion switch, TWDA.setSlowFor(reason, on). Before, actions.lua
+    put any 0.45 time scale back to 1 every frame outside a Season 1 action scene, so Season 2's
+    slow mode never slowed dodges (only struggles). action2.lua and lookaround2.lua use it.
+  - lookaround2.lua (hotspots, places, walks):
+    - Fight targets are checked every 0.1 s and said after 0.3 s (the walker's head after the
+      rifle struggle at the lodge is there about 3 s); things appearing where there was nothing
+      after 0.3 s; things flickering in and out of selectable count for 0.8 s; announcements
+      compare which agents are on offer, not only their text (the second "Walker: Chop" in the
+      herd, Episode 3, was never said and Clementine died).
+    - Two or three fight targets of different kinds are all named ("Walker's Arm: Stab, Walker's
+      Knee: Shatter, or Walker's Head: Spike. Enter for the first"): "Sarita's Arm: Hack Off, and
+      1 more" hid a story choice. Several of one kind still read "Walker 1: Shoot, and 2 more".
+    - Slow mode also slows fights while a target is up (untested since the last change).
+    - Things 6 m or more away are run to (Navigate_PathToAndUseAgent's bRun, as a double click;
+      not clearly confirmed by ear).
+    - Places: "warp" triggers are left out; "trigger_cam_nav_*" triggers are offered (the
+      snowstorm's "Rest stop entrance", 115 m away, is the only sign of the way, and W leads away
+      from it); in combat mode places are listed when no target is up. A mod walk pauses while a
+      target is up (Enter shoots it) and walks on after; it says "N meters to go." every 10 s
+      (untested by ear); its time limit grows with its length (it gave up after 120 s).
+    - Unnamed hotspots read better ("Comic shop door", not "Door comic shop use point").
+    - Season 2 close-ups say "Close-up. S steps back." (heard); Backspace steps back too
+      (CloseUp_OnButtonExit; untested).
+  - peek.lua: Season 2 hiding gets Season 1's lean feedback ("Leaning out right. A to get back",
+    "Back in cover", "Get back now, A!" after 3 s; the last may be needless in Jane's lesson).
+  - text.lua: CD, DVD, RV and OK stay in capitals.
+  - Not mod bugs, found on the way: struggles need about 7 presses a second to rise (each adds
+    4%, the meter drains a third a second whenever no press lands in a 40 ms tick); slow mode's
+    hold-Q wins them easily. Some struggles cannot be won by design (the cable in Episode 3: Troy
+    pulls her out; restraining Sarita). After an episode's "My Choices", Escape pressed while the
+    credits screen is still loading does nothing; press it again.
+  - Ideas not done: say "again" when the game asks for the same action twice ("turn it again",
+    Kenny at the truck: the offer is the same as before, so nothing is said); the place names
+    "Zombie snowstorm 1" (walker triggers) and "Freewalk transitions" are offered as places;
+    "Got/No more" announcements are plain; F6 on a Season 2 episode's credits reads them all in
+    one go (F8 stops it).
+  - Test tools (tools\dev): play2.ps1 (play on by ear: answers choices, Enter on single offers and
+    "Enter!", holds Q in struggles and arrows in drags; answers a choice already waiting),
+    onsay.ps1 (keeps mashing through "Halfway"; "^Q" holds a key until another rule fires),
+    game_input.ps1 (refocuses before each key; 120 ms presses), use2.ps1 (reads speech.log as
+    UTF-8), talk.ps1 (answers a choice already waiting), watch_after2.lua (mode, maps, shown dots,
+    action agents), watch_window2.lua (ChoredMovement_Start, Dialog_Play, Game_UseAgent, usables),
+    watch_peek2.lua, probe_chored2.lua and probe_chored3.lua (a guided path's percent and joystick),
+    probe_agent2.lua (one agent's selectable flag and verbs), peek2_try.ps1, shots_after.ps1.
+    Gotchas: piping use2.ps1 into Select-Object -First 1 stops it before it presses Enter (made
+    that mistake twice); a choice that appears between two script runs is missed unless the next
+    run checks for it (play2 and talk now do).
 
 - Eighth session, 2026-10-11 16:40 to 18:00 (user: "before trying to move forward with the game,
   we should try to fix some bugs first"). Bug fixes only, all tested in the game unless noted.
@@ -373,9 +445,9 @@ E. (#14) Long walks are slow and silent (Lee limps: 35 m to Hershel took about 4
 5. (#5) Check the menus of Season 2, Michonne, A New Frontier and The Final Season. The later seasons
    probably use the same widget framework as the hub. Season 2's menus (their own UIZ framework,
    not Season 1's panes) were done on 2026-10-10; Play, Chapter Select, the save file carousel,
-   Import Season 1 Save and the end-of-episode My Choices were done in the seventh session. Season
-   2 gameplay is under way (Episode 1 done, Episode 2 partly). Michonne, A New Frontier and The
-   Final Season are untouched.
+   Import Season 1 Save and the end-of-episode My Choices were done in the seventh session. All of
+   Season 2 was played by ear by the ninth session (one path through the choices). Michonne, A New
+   Frontier and The Final Season are untouched.
 6. (#6) Done in the eighth session: Escape is the game's (pause menu); Backspace lets go of the
    held hotspot and stops a walk.
 7. (#7) Done 2026-10-09, not yet run against the real game folder: --uninstall now keeps
@@ -1261,6 +1333,83 @@ rags; downstairs closet door, Exit; shed: peroxide, needle thread (twice), sutur
 four times, rags; walker: kick, struggle, brick x3, rake, hammer, hit (repeat); river: bodies,
 water choice; Pete or Nick (lean right for Pete), board, walker attack (twice).
 
+### Season 2 during play: more engine facts (ninth session, 2026-10-12)
+
+- Struggles (buttonmash.lua, ButtonMash_DoTheMash and its local MonitorThread): each press adds
+  1 x "Button Mash - Rate of Increase" (4) x a constant (about 0.01) to "Button Mash - Current
+  Percentage"; a 25 Hz monitor drains "Rate of Decay" (0.333) x 0.04 on every tick without a press.
+  About 6.5 presses a second only holds the meter; 8 or more wins. Mashing stops while
+  SceneGetTimeScale is 0.
+- Guided paths (choredmovement.lua): ChoredMovement_SetJoystickDirection(joyVec) sets upvalue
+  mMove to +1 or -1 by comparing the stick (camera right x, forward y) with the move agent's
+  forward vector, 0 when centred; it is called from Navigate's key events only, so a key held from
+  before does nothing (guided.lua now passes it on). ChoredMovement_GetTimePercent is 0 to 1; a
+  long path (the chairlift ladder) moves about 3% a second.
+- Notices (notification.lua): Notification_ShowTutorial(node, delay, duration) and
+  Notification_ShowChoice(node, delay, duration) go through the local ShowNotification, which
+  sets kTextNode on kTextAgents[index] after the delay (index: upvalues kNotificationTutorial,
+  kNotificationChoice); ShowChoice is skipped when the preference "Enable Reticle Hint Dots" is
+  off. Scenes call them from their own scripts (HardwareStoreExterior_ShowShelfSqueezeHint).
+- Inventory: Inventory_AddItem(name) shows icon ui_item_<name>; its label is node item_<name> of
+  the dialog that agent ui_inventory_text reads ("Text Dialog 2.0 File", per episode).
+- Close-ups: Game mode "CloseUp", CloseUp.imap: S (83), Down arrow (40) and right click call
+  CloseUp_OnButtonExit.
+- Navigate_PathToAndUseAgent(agent, bRun): bRun makes the player run (local SetRunning).
+- Combat mode (Reticle_IsCombatMode) can last a whole scene (the snowstorm, Episode 5), with the
+  walkers' heads hidden usables until each attacks.
+- The death checkpoint usually lands a few seconds before the fight that killed Clementine; a
+  fight that starts at once after a reload leaves little time to react.
+
+### Season 2 walkthrough notes, Episodes 2 to 5 (ninth session; what the game wants)
+
+One path, mostly answer 1. Episode 2 (A House Divided), from Carver's visit: the group talk, the
+walk to Pete (guided W), the bridge approach (binoculars: Lodge, Lift, Bridge, Station House);
+bridge: walker knee, head, hammer pull (struggle, then drags Left and Right), Luke stuck: dodge Up,
+knee, head, struggle, dodge Left and Down, struggle, pipe, stab stomach, struggle, head; give Luke
+the pipe or kill the walker; Matthew is shot; station house: Alvin and Rebecca, Nick, door window,
+station house door, cans, trunk (examine, open; take the survival knife; pry open with the knife:
+struggle), canned food, Alvin; lodge rear: the chairlift ladder (guided W, slow; a slip with a
+choice; S down again), look at trees, bridge, light; Kenny; lodge: CD, CD player, Sarita and Sarah,
+box: angel ornament, put it on Christmas tree 2, Ascend stairs (place) to Rebecca, Alvin; dinner
+(sit with Kenny or Luke); Walter outside, Bonnie; Luke, the knife; Walter; the wind turbine:
+control panel: lighter, key, switch: unlock; hiding behind a stump: lean right (D), Cover: Run To,
+dodges Down twice, shoot six walkers, struggle (rifle), then shoot the walker's head within about
+3 s, grab the rifle, shoot; Carver arrives: behind the chair lean up, dodges, choices; the end.
+Episode 3 (In Harm's Way): the truck, Carver's compound yard (talk to everyone; Kenny's plan),
+morning speech, the garden with Bonnie, Sarah, Reggie; the yard walkers: clobber twice, dodge
+Left, "Hold A to escape!" squeeze between the shelves (hold A), struggle, sledgehammer: pulverize,
+dodge Down, power cable (an unwinnable struggle), Troy; place "Grabbed": Luke; roof: Hank and
+Tavia, skylight 2: Enter, guided path (W), pallets down, walkie-talkies: run to, grab, drag Up;
+Mike: jump to; the comic shop; Carver's punishment of Kenny; Carver's office: Alvin, external
+speakers, volume knob, CD receiver, compact disc; Carver: Jump On; the escape in walker guts:
+walker kill, dead walker open, entrails, smear guts on Clementine and Sarah, guided W through
+the herd, chop the walker, dodge Right, then the next walker's head (Chop) within about 5 s,
+struggle, Sarita's arm (hack off) or the walker; the end.
+Episode 4 (Amid the Ruins): walker arm hack, dodges, struggle; Rebecca and Jane; Gap: Walk To;
+skinny walker (Jane: distract it); "Don't fall behind!" guided W (about 7 s to start); the
+truck stop: dead walkers' pockets 1 to 3 (bullets), Sarah's glasses, the walkers by the pickup
+truck: lean right, stab and search the walker, pickup truck: move to, walkers: attack (knee,
+head), dead walker: look at, choose "Let's put him on the horn" (struggle), the three walker
+targets, mobile home door: kick down (twice), struggle, Luke and Sarah, fridge/furniture/milk
+crate (the fridge will not budge), struggles, convince or leave Sarah; Kenny's tent: open (drag
+Right); the observation deck: Rebecca (give pills), the museum: Civil War coat, souvenirs, box:
+move (Clementine stands on it under the shutter), shutter: open (struggle), raccoon, hiding place;
+the deck: telescopes, Arvo (hide, lean up: caught), pain killers, keep or return the bag, Jane;
+deck again: Kenny, Sarah, Mike and Bonnie: follow; walkers: shoot four, cannon: push (struggle),
+grab Sarah's hand (struggle), destroy the deck (support pin: hack three times), the baby, Jane's
+nail file, Luke and Kenny, the Russians, shoot Rebecca or call for help; the end.
+Episode 5 (No Going Back): "Push the W key to crawl forward" (hold W), baby: grab, cover, Luke:
+cover; shoot the walker; the cold walk and talks; Kenny's eye: bandage remove (drag Up), rag wet
+(drag Down), wound clean (twice), bandage; the night watch: Arvo, Kenny (offer rum or talk), Jane
+(offer rum), transformer, fence, sign; the lake: guided W, then help or cover Luke ("Get to
+Luke!" guided W), struggle, punch the ice (twice), kick the walker (three times); the truck: key
+turn (drag Up), turn it again (drag Up); house 1; the stash house; the night with Mike, Bonnie and
+Arvo (threaten or give the gun); the dream of Lee; the truck in the snow: gas pedal, dodge Left,
+shoot the walker, truck: exit; the snowstorm: walk to "Rest stop entrance" (115 m; walkers
+appear one at a time, shoot each), rest stop: enter; Kenny and Jane: Kenny's knee or arm, Jane:
+push, dodge Up, Jane or Kenny: stop, Jane: push, pistol: grab, shoot Kenny or look away; the
+ending with Jane or alone.
+
 ### 400 Days replayed (sixth session, 2026-10-10 about 03:15 to 05:20)
 
 After the River Street retest, 400 Days was replayed in slot 2 to test the open items (from
@@ -1848,6 +1997,11 @@ Project root: C:\Users\dengs\Downloads\TWD
   Added in the eighth session: backyard_leaving\ (env_clementineHouseExterior.lua, Episode 1's
   day branch, just out of the house after the fight) and backyard_night\
   (env_clementineHouseExterior_Night.lua, the night branch the user played: the gate bug).
+  Season 2 copies (all *wd2_saveslot2* files of save file 2): s2_ep1done\ (seventh session), and
+  from the ninth session s2_ep2_cabinnight\ (Episode 2, the group talk after Carver's visit;
+  saves.txt line "wd2_saveslot2.bundle<TAB>CabinInterior.lua" for Continue), s2_ep2done\,
+  s2_ep3done\, s2_ep4done\ (each ready for Chapter Select's "Start Episode N"), s2_ep5done\ (Season
+  2 finished; saves.txt then said FinaleOpenField.lua).
 
 In the game folder (G:\Steam\steamapps\common\The Walking Dead The Telltale Definitive Series):
 Archives\DebugLoader.lua, plus the TWDAccess folder (the mod's Lua, settings.txt, twda.log,

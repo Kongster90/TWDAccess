@@ -118,7 +118,8 @@ end
 -- "THE WALKING DEAD: SEASON TWO" -> "The Walking Dead: Season Two". Only for text with no lower-case
 -- letters at all, which speech would otherwise often spell out.
 local KEEP_CAPS = { CEO = true, CTO = true, CFO = true, COO = true, SVP = true, VP = true, EVP = true, EMEA = true,
-  QA = true, PR = true, UI = true, DLC = true, OG = true, TV = true, USA = true, UK = true, HDR = true, FPS = true }
+  QA = true, PR = true, UI = true, DLC = true, OG = true, TV = true, USA = true, UK = true, HDR = true, FPS = true,
+  CD = true, DVD = true, RV = true, OK = true }
 
 function TWDA.normalCaps(text)
   if type(text) ~= "string" or text:find("%l") or not text:find("%u%u") then return text end

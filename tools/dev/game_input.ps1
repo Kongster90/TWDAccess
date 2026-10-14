@@ -14,7 +14,7 @@ param(
     [double[]]$Click,
     [string[]]$Keys,
     [int]$DelayMs = 250,
-    [int]$HoldMs = 60,
+    [int]$HoldMs = 120,
     [string]$Screenshot
 )
 
@@ -116,6 +116,8 @@ if ($Click -or $Keys -or $Focus) {
         if ($vk.ContainsKey($k)) { $code = $vk[$k] }
         elseif ($k.Length -eq 1) { $code = [int][char]$k.ToUpper() }
         else { Write-Error "Unknown key $k"; continue }
+        # (The desktop app can take the focus back at any moment; a key sent then goes to it.)
+        [void][GameInput]::Focus($h)
         foreach ($m in $mods) { [GameInput]::KeyState([uint16]$m, $true); Start-Sleep -Milliseconds 30 }
         [GameInput]::Key([uint16]$code, $extended -contains $k, $HoldMs)
         foreach ($m in $mods) { [GameInput]::KeyState([uint16]$m, $false) }

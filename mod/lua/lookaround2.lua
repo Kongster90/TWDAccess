@@ -41,10 +41,28 @@ local function prop(agent, name)
   return nil
 end
 
+-- Some things flicker in and out of being selectable as they move: the walker's head to finish
+-- off in the herd (Episode 3) is usable for half a second, then not for a quarter, for about two
+-- and a half seconds. Anything usable in the last RECENT_SECONDS still counts (if not hidden).
+local RECENT_SECONDS = 0.8
+local recentlyUsable = setmetatable({}, { __mode = "k" }) -- agent -> when last seen usable
+
 local function usableNow(agent)
   if agent == nil or call("AgentIsHidden", agent) == true then return false end
-  if prop(agent, "Game Selectable") == false then return false end
+  if prop(agent, "Game Selectable") == false then
+    return TWDA.now() - (recentlyUsable[agent] or -10) <= RECENT_SECONDS
+  end
+  recentlyUsable[agent] = TWDA.now()
   return true
+end
+
+-- Whether anything at all can be used now (cheaper than the full list, which builds every
+-- thing's verbs).
+local function anyUsable()
+  for _, agent in pairs(call("ReticleSelection_GetUsables") or {}) do
+    if type(agent) == "table" and usableNow(agent) then return true end
+  end
+  return false
 end
 
 local function playerPos()
@@ -83,6 +101,12 @@ local function nameOf(agent)
   local name = TWDA.agentName(agent):gsub("^obj_", ""):gsub("^logical", ""):gsub("^logic_", "")
   name = name:gsub("([%l])(%u)", "%1 %2"):gsub("(%a)(%d)", "%1 %2")
   name = name:gsub("_", " "):lower():gsub("^%s+", "")
+  -- ("obj_doorComicShopUsePoint" -> "Comic shop door", not "Door comic shop use point".)
+  name = name:gsub("%s*use ?point$", "")
+  local first, rest = name:match("^(%a+)%s+(.+)$")
+  if first and ({ door = true, gate = true, window = true, hatch = true, ladder = true })[first] then
+    name = rest .. " " .. first
+  end
   return (name:gsub("^%l", string.upper))
 end
 
@@ -165,7 +189,11 @@ end
 -- with the way to go on screen, worked out again every frame as the camera cuts).
 ---------------------------------------------------------------------------------------------------
 
-local NOT_PLACES = { "cam", "chore", "depth", "tracking", "death", "dies", "die_", "kill", "pursuer", "fail", "lose" }
+-- ("warp" triggers move the player between the parts of a room or yard that have walk boxes of
+-- their own, in pairs: "Warp tables to fireplace" and back. Walks to the things on the far side
+-- cross them anyway.)
+local NOT_PLACES = { "cam", "chore", "depth", "tracking", "death", "dies", "die_", "kill", "pursuer", "fail", "lose",
+  "warp" }
 
 local function canWalk()
   if onGuidedPath() then return false end
@@ -174,7 +202,7 @@ local function canWalk()
 end
 
 local function placeName(agentName)
-  local name = agentName:gsub("^trigger_", ""):gsub("^path_", ""):gsub("^dialog_", "")
+  local name = agentName:gsub("^trigger_", ""):gsub("^cam_nav_", ""):gsub("^path_", ""):gsub("^dialog_", "")
   name = name:gsub("([%l])(%u)", "%1 %2"):gsub("(%a)(%d)", "%1 %2"):gsub("_", " "):lower()
   return (name:gsub("^%l", string.upper))
 end
@@ -194,6 +222,10 @@ local function places()
       for _, word in ipairs(NOT_PLACES) do
         if lower:find(word, 1, true) then skip = true break end
       end
+      -- (Camera triggers are no places, except "cam_nav" ones, which mark where a walk leads: in
+      -- the snowstorm, Episode 5, "trigger_cam_nav_restStopEntrance" is the only sign of the way,
+      -- 115 m off, and W leads away from it.)
+      if lower:find("^trigger_cam_nav_") and not lower:find("death", 1, true) then skip = false end
       local okP, pos = pcall(AgentGetWorldPos, agent)
       if not skip and okP and pos and okWB then
         local okG, ground = pcall(WalkBoxesPosOnWalkBoxes, pos, walkBoxes)
@@ -225,7 +257,7 @@ end
 -- The game's own path-finding first (AgentPathToPosition: it goes round things, but gives up on
 -- many places straight away); steering takes over from wherever it stops.
 local function startWalk(h)
-  local w = { agent = h.agent, label = h.label, target = h.target, best = h.distance, bestAt = TWDA.now(),
+  local w = { agent = h.agent, label = h.label, target = h.target, best = h.distance, first = h.distance, bestAt = TWDA.now(),
     start = TWDA.now(), pathing = true }
   walk = w
   TWDA.log("lookaround2: walking to " .. h.label)
@@ -256,6 +288,8 @@ local function steer()
   if not walk then return end
   local now = TWDA.now()
   if not playMode() or not canWalk() then
+    -- (Shooting the target the walk waited for leaves play mode for a moment: walk on after it.)
+    if walk.paused and now - walk.paused < 15 then return end
     -- (Something has started: a scene, a talk. It speaks for itself.)
     TWDA.log("lookaround2: walk interrupted (play " .. tostring(playMode()) .. ", walking " .. tostring(canWalk()) .. ")")
     stopWalk(nil)
@@ -288,8 +322,38 @@ local function steer()
   local d = horizontalDistance(here, walk.target)
   -- (Half a meter: a story trigger has to be stepped into, and many are small.)
   if d < 0.5 then return stopWalk("At " .. walk.label .. ".") end
+  -- Long walks say how far is left every 10 s, while it goes down.
+  if now - (walk.toldAt or walk.start) >= 10 and not walk.paused then
+    walk.toldAt = now
+    local m = math.floor(d + 0.5)
+    if m < (walk.toldMeters or math.huge) - 1 then
+      walk.toldMeters = m
+      TWDA.say(m .. " meters to go.")
+    end
+  end
+  -- A target in a fight (a walker out of the snowstorm, Episode 5): stand still until it is dealt
+  -- with (Enter goes for it), then walk on.
+  if combatMode() and anyUsable() then
+    if not walk.paused then
+      walk.paused = now
+      TWDA.log("lookaround2: walk paused for a target")
+      pcall(DirectControl_SetJoystickDirection, Vector(0, 0, 0))
+      if walk.pathing then
+        pcall(PathAgentStop, TWDA.player())
+        walk.pathing = false
+      end
+    end
+    walk.bestAt = now
+    return
+  end
+  if walk.paused then
+    walk.start, walk.paused = walk.start + (now - walk.paused), nil
+  end
   if walk.pathing then return end -- (the game's path-finding is walking her)
-  if now - walk.start > 120 then return stopWalk("Gave up walking to " .. walk.label .. ".") end
+  -- (Given up on after a time that grows with the way: 115 m of snowstorm take minutes.)
+  if now - walk.start > 60 + 2.5 * (walk.first or 24) then
+    return stopWalk("Gave up walking to " .. walk.label .. ".")
+  end
   if d < walk.best - 0.3 then walk.best, walk.bestAt, walk.detours = d, now, 0 end
   -- Stuck against something: try going round it, one side then the other, before giving up.
   local detour = walk.detour
@@ -386,6 +450,7 @@ local REPEATABLE = { smash = true, hit = true, kick = true, punch = true, stab =
   ["listen at"] = true, eavesdrop = true, puncture = true, attack = true, ["swing rock at"] = true, bite = true }
 local chosenVerb = nil
 local busyUntil = 0
+local RUN_METERS = 6 -- things at least this far away are run to
 
 local function speak(text)
   TWDA.say(text, { interrupt = true })
@@ -394,7 +459,9 @@ end
 -- Tab's list: the things to interact with, then the places to walk to.
 local function entries()
   local list = hotspots()
-  if not combatMode() then
+  -- (In a fight Tab goes through the targets only; with none in sight, as between the walkers in
+  -- the snowstorm, Episode 5, the places count again.)
+  if not combatMode() or #list == 0 then
     for _, p in ipairs(places()) do list[#list + 1] = p end
   end
   return list
@@ -449,13 +516,16 @@ local function use(h, verbIndex)
   end
   local startPos = playerPos()
   local fight = combatMode()
+  -- (Its second argument runs there, as a double click does: walking pace is slow, ten meters
+  -- across the yard at Carver's compound in Episode 3 took over half a minute.)
+  local run = d >= RUN_METERS and not fight
   local ok, err = pcall(ThreadStart, function()
     usedAgent = nil
     local okUse, errUse = pcall(function()
       Reticle_SelectAgent(agent)
       ReticleSelection_Lock(true)
       ReticleVerbs_SetActiveVerb(verb)
-      Navigate_PathToAndUseAgent(agent)
+      Navigate_PathToAndUseAgent(agent, run)
     end)
     if not okUse then TWDA.log("lookaround2: use failed: " .. tostring(errUse)) end
     -- (Navigate_PathToAndUseAgent gives up without a word when the path-finding cannot get there,
@@ -476,7 +546,8 @@ end
 
 local function enter()
   if TWDA.now() < busyUntil then return end
-  if walk then
+  -- (A target in a fight comes first: a walker out of the snowstorm, Episode 5, while walking.)
+  if walk and not (combatMode() and anyUsable()) then
     local here = playerPos()
     speak(("Walking to %s, %d meters to go."):format(walk.label, here and math.floor(horizontalDistance(here, walk.target) + 0.5) or 0))
     return
@@ -518,7 +589,7 @@ local previousDescribe = TWDA.describeLookaround
 TWDA.describeLookaround = function()
   if not isSeason2() or not playMode() then return previousDescribe and previousDescribe() or nil end
   local list = hotspots()
-  local walkTo = combatMode() and {} or places()
+  local walkTo = (combatMode() and #list > 0) and {} or places()
   local sentences = {}
   if walk then sentences[#sentences + 1] = "Walking to " .. walk.label end
   local parts = {}
@@ -541,7 +612,7 @@ end
 -- say what there is once (a second later, when things have settled). Nothing is said when it is
 -- the same as last time.
 local wasPlay, settleFrom, checkPending = false, 0, false
-local lastNames, namesCheckedAt, lastSignature = nil, 0, nil
+local lastNames, namesCheckedAt, lastSignature, fromNothing = nil, 0, nil, false
 local function usableNames()
   local names = {}
   for _, agent in pairs(call("ReticleSelection_GetUsables") or {}) do
@@ -549,6 +620,15 @@ local function usableNames()
   end
   table.sort(names)
   return table.concat(names, ",")
+end
+
+-- Whether the things on offer are all of one kind (three walkers to shoot): then naming the first
+-- is enough.
+local function allAlike(list)
+  for i = 2, #list do
+    if list[i].name ~= list[1].name then return false end
+  end
+  return true
 end
 
 local function announceControl()
@@ -561,21 +641,31 @@ local function announceControl()
   if recheckAt and now >= recheckAt then
     recheckAt, checkPending, settleFrom = nil, true, now - 1
   end
-  if now - namesCheckedAt > 0.5 then
+  -- (Targets in a fight can be up for only a few seconds: the walker's head after the rifle
+  -- struggle at the lodge, Episode 2, about three. They are looked for more often and said sooner.)
+  -- (Something appearing where there was nothing is said sooner too: that walker's head in the
+  -- herd is there for two and a half seconds.)
+  local fight = combatMode()
+  if now - namesCheckedAt > (fight and 0.1 or 0.2) then
     namesCheckedAt = now
     local names = usableNames()
-    if names ~= lastNames then lastNames, settleFrom, checkPending = names, now, true end
+    if names ~= lastNames then
+      fromNothing = lastNames == "" or lastNames == nil
+      lastNames, settleFrom, checkPending = names, now, true
+    end
   end
-  if not checkPending or now - settleFrom < 1 then return end
+  if not checkPending or now - settleFrom < ((fight or fromNothing) and 0.3 or 1) then return end
   checkPending = false
   local list = hotspots()
   local parts = {}
   for _, h in ipairs(list) do parts[#parts + 1] = entryText(h, false) end
   -- (The same things in another order, as Clementine moves, are not news.)
+  -- (Which things, not only what they are called: after one walker is chopped in the herd,
+  -- Episode 3, the next is "Walker: Chop" too.)
   local sorted = {}
-  for i, p in ipairs(parts) do sorted[i] = p end
+  for i, p in ipairs(parts) do sorted[i] = TWDA.agentName(list[i].agent) .. "=" .. p end
   table.sort(sorted)
-  local signature = table.concat(sorted, "; ")
+  local signature = table.concat(sorted, ";")
   -- The thing just used, still offered with the same action (a walker that takes several blows):
   -- offer it again, and let Enter repeat it.
   local used = lastUsed
@@ -623,8 +713,17 @@ local function announceControl()
       use(list[1], nil)
       return
     end
-    TWDA.say(#list == 1 and (first .. ". Enter!")
-      or ("%s, and %d more. Enter for the nearest, or Tab to choose."):format(first, #list - 1))
+    -- (Two or three are all named: in the herd, Episode 3, they are "Sarita's Arm: Hack Off" and
+    -- the walker biting her, a choice that matters.)
+    local text
+    if #list == 1 then
+      text = first .. ". Enter!"
+    elseif #list <= 3 and not allAlike(list) then
+      text = ("%s, or %s. Enter for the first, or Tab to choose."):format(table.concat(parts, ", ", 1, #list - 1), parts[#list])
+    else
+      text = ("%s, and %d more. Enter for the nearest, or Tab to choose."):format(first, #list - 1)
+    end
+    TWDA.say(text)
   elseif #list == 1 and #list[1].verbs > 1 then
     current, chosenVerb = { agent = list[1].agent, label = list[1].label }, nil
     TWDA.say(("%s%s. A number picks one, then Enter."):format(prefix, entryText(list[1], true)))
@@ -637,7 +736,7 @@ local function announceControl()
       what = table.concat(parts, ". ")
     else
       local before, new = {}, {}
-      for part in (previousSignature or ""):gmatch("[^;]+") do before[part:gsub("^%s+", "")] = true end
+      for entry in (previousSignature or ""):gmatch("[^;]+") do before[entry:gsub("^[^=]*=", "")] = true end
       for _, part in ipairs(parts) do
         if not before[part] and #new < 3 then new[#new + 1] = part end
       end
@@ -653,6 +752,11 @@ local KEYS = { VK_TAB, VK_ENTER, 0x31, 0x32, 0x33, 0x34 }
 local held = {}
 TWDA.onFrame("lookaround2", function()
   if not isSeason2() then return end
+  -- (Slow mode slows targets in a fight too, as it does the action prompts, action2.lua; only while
+  -- there is something to hit or shoot: the snowstorm in Episode 5 is in combat mode throughout.)
+  if TWDA.setSlowFor then
+    TWDA.setSlowFor("targets", TWDA.settings.actionscenes == "slow" and playMode() and combatMode() and anyUsable())
+  end
   announceControl()
   local active = playMode() and not (TWDA.hasChoices and TWDA.hasChoices())
   for _, vk in ipairs(KEYS) do
@@ -678,4 +782,27 @@ TWDA.onFrame("lookaround2", function()
     end
     held[vk] = down
   end
+end)
+
+-- Close-ups (Game mode "CloseUp", inside the truck at the overlook in Episode 4): the game steps back
+-- on S, Down arrow or a right click (CloseUp.imap: CloseUp_OnButtonExit), not on Backspace as in
+-- Season 1. The mod says so on the way in, and Backspace steps back too.
+local inCloseUp, backHeld = false, false
+TWDA.onFrame("lookaround2.closeup", function()
+  if not isSeason2() then return end
+  local okMode, mode = pcall(Game_GetMode)
+  local now = okMode and type(mode) == "table" and rawget(mode, "name") == "CloseUp"
+  if now and not inCloseUp then
+    TWDA.say("Close-up. S steps back.")
+  end
+  inCloseUp = now
+  local ok, down = pcall(InputPCIsVKeyPressed, 0x08)
+  down = ok and down == true
+  if down and not backHeld and now then
+    pcall(ThreadStart, function()
+      local okExit, err = pcall(CloseUp_OnButtonExit, {})
+      if not okExit then TWDA.log("lookaround2: close-up exit: " .. tostring(err)) end
+    end)
+  end
+  backHeld = down
 end)

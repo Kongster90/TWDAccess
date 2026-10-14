@@ -192,7 +192,10 @@ TWDA.onFrame("peek", function()
   end
   inactiveSince = nil
   if season2() then
-    -- (Season 2: no stealth timer warnings or Season 1 hotspot lists here.)
+    -- (Season 2: what comes into view is announced by lookaround2.lua. Leaning sticks after a tap
+    -- here too, and peeking too long gets Clementine seen: behind the chair when Carver's people
+    -- search the lodge, Episode 2.)
+    if not choiceCamera() then trackPeeking() end
     local parts, ways = directions()
     if not parts or #parts == 0 then return end
     local key = table.concat(parts, ", ")

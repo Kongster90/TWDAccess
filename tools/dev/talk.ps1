@@ -8,9 +8,17 @@ param([string[]]$Answers = @("1"), [int]$Seconds = 300, [int]$Quiet = 25)
 
 $dev = $PSScriptRoot
 $log = "G:\Steam\steamapps\common\The Walking Dead The Telltale Definitive Series\TWDAccess\twda.log"
-$n0 = (Get-Content $log).Count
+$all = Get-Content $log
+$n0 = $all.Count
 $seen = $n0
 $i = 0
+# A choice already waiting when this starts (use2.ps1 stops as it comes up): answer it first.
+$lastAsk = ($all | Select-String "say! Choices" | Select-Object -Last 1).LineNumber
+$lastAnswer = ($all | Select-String "say! \d: " | Select-Object -Last 1).LineNumber
+if ($lastAsk -and $lastAsk -gt $n0 - 40 -and (-not $lastAnswer -or $lastAnswer -lt $lastAsk)) {
+    & "$dev\game_input.ps1" -Keys $Answers[0] | Out-Null
+    $i = 1
+}
 $end = (Get-Date).AddSeconds($Seconds)
 $lastChange = Get-Date
 $lastCount = $n0

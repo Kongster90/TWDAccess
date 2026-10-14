@@ -34,13 +34,30 @@ local active, startedAt, told = false, 0, false
 local KEYS = { { 0x57, "W", "S" }, { 0x53, "S", "W" }, { 0x41, "A", "D" }, { 0x44, "D", "A" },
   { 0x26, "Up arrow", "Down arrow" }, { 0x28, "Down arrow", "Up arrow" },
   { 0x25, "Left arrow", "Right arrow" }, { 0x27, "Right arrow", "Left arrow" } }
-local lastPct, forwardKey, toldBack, toldHalf = nil, nil, false, false
-local stuck = nil -- { key, since, told }: a key held that moves nothing
+local forwardKey, toldBack = nil, false
+-- (nil until the path's first position is known: one that starts past halfway, such as the way
+-- back down that tower, has no halfway to say.)
+local toldHalf = nil
+local stuck = false -- a key held that moves nothing, said once per hold
 local keyName, keySince = nil, 0 -- the key held now, and since when
+-- Where the path was when the held key started to count. Movement is measured from there, not
+-- frame to frame: a slow path (the ladder up the chairlift tower in Season 2's Episode 2 takes
+-- 30 s) moves less than a hundredth of a percent a frame.
+local moveRef = nil -- { key, pct, at }
 -- A key already held when the path started: the game moves on key presses (mode_Chored_Move.imap's
 -- OnMoveForward), so one held from before moves nothing until it is pressed again (Russell running
 -- to the truck in 400 Days, with W still down from walking).
 local heldAtStart = nil
+
+-- Whether a hint says which key to use: a key's letter on its own, or a word for one.
+local function namesKey(text)
+  if text:find("%f[%w][WASDQE]%f[%W]") then return true end
+  local lower = text:lower()
+  for _, word in ipairs({ "key", "arrow", "shift", "space", "stick" }) do
+    if lower:find("%f[%a]" .. word) then return true end
+  end
+  return false
+end
 
 local function heldKey()
   for _, k in ipairs(KEYS) do
@@ -89,6 +106,32 @@ TWDA.describeGuided = function()
     .. (forwardKey and (". Hold " .. forwardKey .. " to go on") or ". Hold W or S to move along it")
 end
 
+-- Season 2 moves along a path only on the game's own key-down events (Navigate's key handlers call
+-- ChoredMovement_SetJoystickDirection), so a key already held when the path starts does nothing.
+-- Yet the game says to hold it beforehand: "Hold A to escape!" comes about four seconds before the
+-- squeeze between the shelves in the shoe store (Episode 3), and that path is lost after 1.3 s. So
+-- while the game has no direction (upvalue mMove is 0) and a movement key is down, the mod passes
+-- the key on, and takes it back when the key is let go.
+local DIRECTION_OF = { W = { 0, 1 }, ["Up arrow"] = { 0, 1 }, S = { 0, -1 }, ["Down arrow"] = { 0, -1 },
+  A = { -1, 0 }, ["Left arrow"] = { -1, 0 }, D = { 1, 0 }, ["Right arrow"] = { 1, 0 } }
+local pushed = nil -- the key name the mod passed on
+local function pushHeldKey(key)
+  if type(rawget(_G, "ChoredMovement_GetController")) == "function" then return end -- (Season 1)
+  local set = rawget(_G, "ChoredMovement_SetJoystickDirection")
+  if type(set) ~= "function" then return end
+  local move = TWDA.upvalue(set, "mMove")
+  if key and (move == 0 or move == nil) then
+    local d = DIRECTION_OF[key[2]]
+    if d and pcall(set, Vector(d[1], d[2], 0)) then
+      if pushed ~= key[2] then TWDA.log("guided: passed " .. key[2] .. " on to the path") end
+      pushed = key[2]
+    end
+  elseif not key and pushed then
+    pushed = nil
+    pcall(set, Vector(0, 0, 0))
+  end
+end
+
 TWDA.onFrame("guided", function()
   local now = TWDA.now()
   local on = controller() ~= nil
@@ -96,7 +139,7 @@ TWDA.onFrame("guided", function()
     active, startedAt, told = on, now, false
     local held = on and heldKey()
     heldAtStart = held and held[2] or nil
-    lastPct, forwardKey, toldBack, toldHalf, stuck = nil, nil, false, false, nil
+    forwardKey, toldBack, toldHalf, stuck, moveRef = nil, false, nil, false, nil
     TWDA.log("guided: " .. (on and "path started" or "path ended"))
   end
   -- (The path can drop out for a moment when Lee is halted; the stop is kept a while.)
@@ -134,27 +177,30 @@ TWDA.onFrame("guided", function()
   if TWDA.cornfieldRunning and TWDA.cornfieldRunning() then return end
   local okPct, pct = pcall(ChoredMovement_GetTimePercent)
   pct = okPct and type(pct) == "number" and pct or nil
+  if toldHalf == nil and pct then toldHalf = pct >= 0.5 end
   local key = heldKey()
+  pushHeldKey(key)
   -- (Only a key held a moment counts: a path can creep on by itself as it starts.)
   if key and keyName ~= key[2] then keyName, keySince = key[2], now end
   if not key then keyName, heldAtStart = nil, nil end
   if key and now - keySince < 0.25 then key = nil end
-  -- A key held for a while that moves nothing (W at the foot of those stairs).
-  if key and not forwardKey and pct and lastPct and math.abs(pct - lastPct) <= 0.001 then
-    stuck = stuck and stuck.key == key[2] and stuck or { key = key[2], since = now }
-    if not stuck.told and now - stuck.since > 1.2 then
-      stuck.told = true
-      if heldAtStart == key[2] then
-        TWDA.say("Let go of " .. key[2] .. ", then hold it again", { interrupt = true })
-      else
-        TWDA.say(key[2] .. " does not move " .. TWDA.playerName() .. " here. Try " .. key[3], { interrupt = true })
-      end
-    end
-  elseif not key then
-    stuck = nil
+  if not (key and pct) then
+    moveRef, stuck = nil, false
+  elseif not moveRef or moveRef.key ~= key[2] then
+    moveRef, stuck = { key = key[2], pct = pct, at = now }, false
   end
-  if pct and lastPct and key and math.abs(pct - lastPct) > 0.001 then
-    if pct > lastPct then
+  local moved = moveRef and (pct - moveRef.pct) or 0
+  -- A key held for a while that moves nothing (W at the foot of those stairs).
+  if moveRef and not forwardKey and not stuck and math.abs(moved) <= 0.0005 and now - moveRef.at > 1.2 then
+    stuck = true
+    if heldAtStart == key[2] then
+      TWDA.say("Let go of " .. key[2] .. ", then hold it again", { interrupt = true })
+    else
+      TWDA.say(key[2] .. " does not move " .. TWDA.playerName() .. " here. Try " .. key[3], { interrupt = true })
+    end
+  end
+  if moveRef and math.abs(moved) > 0.002 then
+    if moved > 0 then
       if not forwardKey then
         forwardKey = key[2]
         -- (Only worth saying where it is not W, or nothing has said it.)
@@ -168,12 +214,20 @@ TWDA.onFrame("guided", function()
       toldBack = true
       TWDA.say(key[2] .. " goes back. " .. key[3] .. " goes on", { interrupt = true })
     end
+    moveRef.pct = pct
   end
-  lastPct = pct
-  if told or now - startedAt < HINT_WAIT then return end
+  if told then return end
+  -- The game's own hint, shown around the start, usually says which key ("Use the S (back) key to
+  -- get away!", "Hold A to escape!"). One that names none ("Don't fall behind!" following Jane
+  -- through the herd, Episode 4: about seven seconds before she is gone) means the path is
+  -- urgent, so the mod says how to move at once.
+  local hint = (TWDA.lastHintAt or -10) > startedAt - 5 and TWDA.lastHint or nil
+  if type(hint) == "string" and namesKey(hint) then
+    told = true
+    return
+  end
+  if not hint and now - startedAt < HINT_WAIT then return end
   told = true
   if forwardKey then return end -- already said which key goes on
-  -- The game's own hint, shown around the start, already says which key.
-  if (TWDA.lastHintAt or -10) > startedAt - 3 then return end
-  TWDA.say("Guided path. Hold W or S to move along it")
+  TWDA.say("Guided path. Hold W or S to move along it", { interrupt = hint ~= nil })
 end)
