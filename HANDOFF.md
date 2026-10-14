@@ -12,7 +12,7 @@ Last updated: 2026-10-12 (ninth session, about 16:45; see the first item).
   PLAYED by ear in save file 2: the rest of Episode 2 (from the group talk after Carver's visit),
   Episodes 3, 4 and 5, to the ending (alone with AJ) and back to Season 2's main menu. Choices
   were mostly answer 1, so other branches are unplayed (see "Season 2 walkthrough notes" below).
-  Not committed (ask the user first). dist\TWDAccess was rebuilt with every change and the game was
+  Committed and pushed (2daa27a) at the user's request. dist\TWDAccess was rebuilt with every change and the game was
   closed. The user's settings.txt is back to actionscenes = normal (it was slow for this testing).
   A "Playback error" box from the user's music player sat over the game window all session (theirs;
   left alone; it may have stolen focus now and then).
