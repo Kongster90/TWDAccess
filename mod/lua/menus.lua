@@ -167,6 +167,9 @@ end
 -- shown "..._lock_N" marks a locked item (My Choices before an episode is played).
 -- (Also the texts under the label: a save file's "Empty" or its date, in the save carousel.)
 local function siblingText(button)
+  -- (Not for a mouse arrow, which has no label: Season Select's arrows sit at the top of the menu,
+  -- so their siblings are the whole screen, "Escape Previous Menu" first.)
+  if TWDA.agentName(button):lower():find("arrow", 1, true) then return nil end
   local okP, parent = pcall(AgentGetParent, button)
   if not okP or parent == nil then return nil end
   local okC, kids = pcall(AgentGetChildren, parent)

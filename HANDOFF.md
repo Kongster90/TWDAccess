@@ -3,9 +3,22 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-10-24 (tenth session, about 12:30; see the first item).
+Last updated: 2026-10-24 (eleventh session, about 16:00; see the first item).
 
 ## Start here (where the last session stopped)
+
+- Eleventh session, 2026-10-24 15:35 to about 16:00 (user in the game: "NVDA keeps saying escape
+  before each season selection"). Season Select said "Escape Previous Menu, Michonne, Haunted
+  by ..." on every Left and Right. Cause: after Menu_Seasons_Select, the game selects the mouse-only
+  ui_seasons_arrowLeft from inside a WidgetInputHandler mouse function (mouseDepth 1, even on
+  keyboard input), so onSelect read it rather than redirecting. The arrow has no text, and
+  siblingText (Season 2's label-beside-button fallback) read its siblings: the whole screen under
+  ui_seasons_reference, legend button first. That replaced the queued season text. Fix in menus.lua:
+  siblingText returns nil for arrow buttons. Tested by the user in the game (patched live, then
+  synced): each press now says "Michonne. Haunted by ... Left and right for other seasons, Enter to
+  play". The redirect to the Play button still happens (Menu_Seasons_Select's hook sets it).
+  dist\TWDAccess\mod has the new menus.lua (copied; the helper was running, so not rebuilt).
+  Not committed.
 
 - Tenth session, 2026-10-24 01:30 to about 12:30 (user: "Work through the next season if you
   can", then asleep; questions saved for the end). The season after Season 2 in the hub's Season
@@ -539,6 +552,13 @@ E. (#14) Long walks are slow and silent (Lee limps: 35 m to Hershel took about 4
 9. (#9) Before release: set discovery and devconsole to false in the installed settings.txt, delete the
    TWDAccess\dumps folder in the game directory, and remove the stale TWDAccess\globals_*.txt,
    trap.log and stack_*.luac files.
+   The user's release plan (2026-10-24): build a release only after the whole game has been
+   played through with the mod (The Final Season and Michonne are still to do). The release must
+   bundle the .NET runtime (a self-contained build; today's helper is framework-dependent,
+   SelfContained false), so players need not install .NET. Also planned then: a zip without the
+   dev modules (devconsole, devtools, discovery), a players' read-me (requirements, keys,
+   uninstall, what is covered), Prism's NOTICE and licence files, a licence for the mod, release
+   notes, and a GitHub release (the repository is private; going public is the user's call).
 
 ## Hard constraints and decisions (do not undo these)
 
@@ -659,6 +679,9 @@ Two parts:
   focuses it when the screen opens; the spoken hint is "Enter to play". Tested by keys on
   2026-10-03 (Down, Enter, Right, Left, Enter into Season 1).
   Do not poll Buttons_GetSelected and reselect each frame: that looped (the season text repeated).
+  The game selects the left arrow from inside its mouse handlers even on keyboard Left and Right,
+  so menus.lua treats it as mouse focus; the arrow must have no text (siblingText skips arrows),
+  or it overrides the season text (2026-10-24).
 - Popups: `DialogBox(message, header, button1Node, ..., dlogFile)`, usually through UI_Confirm.
   Popups have no Escape binding, and nothing is selected until an arrow is pressed.
 - Credits: `Credits(...)` plays a dialog; the text is one long block on agent
