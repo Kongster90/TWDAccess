@@ -3,9 +3,84 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-10-12 (ninth session, about 16:45; see the first item).
+Last updated: 2026-10-24 (tenth session, about 12:30; see the first item).
 
 ## Start here (where the last session stopped)
+
+- Tenth session, 2026-10-24 01:30 to about 12:30 (user: "Work through the next season if you
+  can", then asleep; questions saved for the end). The season after Season 2 in the hub's Season
+  Select is A NEW FRONTIER (Season 3, Javier); the carousel order is Season 1, Season 2, A New
+  Frontier, The Final Season, Michonne. ALL OF A NEW FRONTIER IS NOW PLAYED by ear, Episodes 1 to 5,
+  in its Save 2 (the user's Save 1 is untouched and empty), story imported from Season 2's save
+  file 2 ("Clem is on the road with AJ"), choices mostly answer 1. Committed and pushed at the
+  user's request after they woke (see git log). dist\TWDAccess was rebuilt at the end and the game
+  closed.
+  See "A New Frontier (tenth session)" below for how its framework works and what the mod does;
+  the walkthrough notes are there too. New dev saves: s3_ep1done ... s3_ep5done (all
+  *wd3_saveslot2* files; copy them all into the save folder to use one).
+  Fixed or added, all tested in the game unless marked:
+  - Bootstrap (mod\src\DebugLoader.lua): A New Frontier's engine boot script (_boot.lua) requires
+    DebugLoader.lua before the engine runs it as the state's first script; the require run used to
+    delete next_script.txt, so entering the season fell back to the hub. The note is now kept on
+    the require path. (Season 3 states log "bootstrap: running ..." as before.)
+  - menus.lua (A New Frontier's menus are the hub's widget framework): titles one level down
+    ("ui_menuSettings_header_header") and headers that are not widgets (the Save Files popup, the
+    story setup); a capitals heading run together with its sentence is split ("Choose How To Begin
+    Your Story, 2 items. The Walking Dead: A New Frontier can be started ..."); a screen that
+    changes its heading in place is read again ("Your Story So Far"); help text in a screen's own
+    tooltip agent is read after the item ("Continue this story: Clem is on the road with AJ.");
+    the save file in use says "checked"; legend icons ("iconCopy") are not read; the X button is
+    "Close"; a widget holding several buttons counts each; "Paused" is "Pause menu"; legend keys
+    of a popup no longer stick to the menu under it (mostly; "Close" is left out of titles); a
+    legend button under the resting mouse is not read as a menu opens. The Episodes screen: on PC
+    its arrows only move a thumbnail highlight and Enter there does nothing, so the mod makes Left
+    and Right switch episodes (Carousel SelectElement) with focus kept on "Start Episode N" (Enter
+    plays it); it is read once settled. The end-of-episode choice statistics (menu_stats.lua) are
+    read page by page ("Choice 2 of 6. Left and right arrows for the others", last page "Enter
+    continues"), and the season summary after Episode 5.
+  - New qte3.lua: A New Frontier's quick-time events. Prompts (QTE_UI_ShowPrompt) say their key:
+    "Enter!" for the face buttons, or "E!"/"Q!" where the QTE has "Alt Keyboard Keys" (the screen
+    shows E or Q then, and Enter does not work), "Left arrow!" etc.; held prompts "Hold Enter!" and
+    "Let go!" (the latter untested). Prompts that are things to pick ("obj_rockClem": "Rock:
+    Enter!"; "Conrad's hand: Enter!") are found in the QTE agents' promptsCurrent and Enter does
+    them (ExecuteAction). Multi-prompt QTEs (MultiQTE_Enable): "E, 3 times, fast!", "Press Shift
+    and E together!". Slow mode slows all of these; auto mode does them. TWDA.qteBusy() keeps
+    lookaround2 from saying "Javier can move" between the prompts of one QTE.
+  - New drag3.lua: A New Frontier's drags (hold Enter, then the arrow the drag allows). The mod
+    says "Drag: hold Down arrow." and holds the button itself while an arrow is held; a drag with no
+    direction says "Hold Enter!" (filling the syringe). (Tested by calling the functions and with
+    the user's keys as Enter plus arrow; the arrow-only path was not exercised by a real key.)
+  - struggle.lua: A New Frontier's StruggleQTE ("Struggle! Press Q over and over. Then E when
+    told.", "Halfway", "E now!"; meter "Struggle - Current Percentage" 0 to 1). Mashing needs about
+    10 or more presses a second in normal mode; slow and auto modes work. Waggle and circle types
+    have texts but were never met.
+  - lookaround2.lua: ReticleSelection_GetUseables (A New Frontier's spelling) so Tab, Enter and F6
+    work; stations (Game mode "Station", door or car close-ups) say "Close-up. Backspace steps
+    back." and Backspace does it; places leave out camera zones (OTS, rack focus), walk-speed
+    switches, and anything named zombie or walker (walker triggers, and spoilers like "Zombie
+    attack"); a walk the game interrupts goes on by itself when control returns (within 20 s);
+    walks steer around walkers (their "trigger_zombieN" triggers) and keep trying instead of
+    "Blocked" among them. This is how the herd to the generator (Episode 5) was crossed.
+  - guided.lua: A New Frontier has no ChoredMovement_GetTimePercent; progress comes from the
+    controller's time, so "Halfway", "W does not move Javier here. Try S" and "S goes on" work.
+  - prompts2.lua: the death screen is read in A New Frontier (Death_OnButtonPress; Enter is the
+    game's own there, so the mod does not press it again).
+  - Not fixed, seen on the way: struggles at 7 to 8 presses a second (the test tool's rate) often
+    fall back; the Episodes screen announces the right episode only after 0.6 s; "Share this
+    choice" can be read after the last statistics page; "Grab X, walking there." is said inside a
+    close-up; place lists can include triggers in another room (the trailer's exterior from
+    inside); a mouse pointer resting over menu items can still select them as things move under it
+    (restart.ps1's click leaves the pointer at the bottom middle, over the Episodes thumbnails).
+  - Game memory: WDC.exe itself grew to about 10 GB of commit over ten hours of play (free commit
+    fell to 3 GB); restarting the game freed it. Restart it every few hours in long sessions.
+  - Test tools (tools\dev): sync.ps1 (build and copy the Lua into the game folder; the next Lua
+    state uses it), to_season.ps1 -Season 3 [-FromSeason3], watch_s3.lua (WS2 lines for A New
+    Frontier's QTE, struggle, multi-QTE, drag, station, reticle and death calls), menu3.lua (the
+    current widget menu's widgets and texts), tree.lua now dumps widget menus too, useall.ps1
+    (use named things in turn, "Name#2" for action 2, letting play2 answer and press), chord.ps1
+    (hold one key then another). play2.ps1 now mashes Q at about 12 a second (onsay presses keys
+    directly), holds W on guided paths, presses E/Q/Shift+E cues, and picks up lines from the 1.5 s
+    before it starts; use2.ps1 has -NoFollow; holdkey.ps1 and game_input.ps1 know Enter.
 
 - Ninth session, 2026-10-12 00:20 to 16:45 (user: "Read the handoff file. Then progress and work
   through what you can of the rest of season 2"; user away all session). ALL OF SEASON 2 IS NOW
@@ -446,8 +521,9 @@ E. (#14) Long walks are slow and silent (Lee limps: 35 m to Hershel took about 4
    probably use the same widget framework as the hub. Season 2's menus (their own UIZ framework,
    not Season 1's panes) were done on 2026-10-10; Play, Chapter Select, the save file carousel,
    Import Season 1 Save and the end-of-episode My Choices were done in the seventh session. All of
-   Season 2 was played by ear by the ninth session (one path through the choices). Michonne, A New
-   Frontier and The Final Season are untouched.
+   Season 2 was played by ear by the ninth session (one path through the choices). A New Frontier
+   (its menus, which are the hub's widget framework, and all five episodes) was done in the tenth
+   session. Michonne and The Final Season are untouched.
 6. (#6) Done in the eighth session: Escape is the game's (pause menu); Backspace lets go of the
    held hotspot and stops a walk.
 7. (#7) Done 2026-10-09, not yet run against the real game folder: --uninstall now keeps
@@ -1410,6 +1486,93 @@ appear one at a time, shoot each), rest stop: enter; Kenny and Jane: Kenny's kne
 push, dodge Up, Jane or Kenny: stop, Jane: push, pistol: grab, shoot Kenny or look away; the
 ending with Jane or alone.
 
+### A New Frontier (tenth session, 2026-10-24)
+
+Reached from the hub with to_season.ps1 -Season 3 (SubProject_ResetEngine(MenuSeason3), first
+script MenuBoot.lua, then Menu_Main.lua). Episodes are GarciaDominguezHouse.lua, VirginiaRoad.lua,
+Junkyard.lua, JunkyardHill.lua, ... (scene changes by LoadScript, carried over as before). Saves are
+wd3_saveslotN (Save 1 to 4 in Settings > Save Files; Enter on one makes it the active file, "checked").
+Starting: Episodes > "Choose how to begin your story": Start New Story or Continue Your Story >
+Import Save N (from Season 2's same-numbered file) or Recreate; a summary of the imported story;
+Start Story; then the Episodes carousel (Start/Continue/Restart Episode N).
+
+Framework (projectseason3 scripts; globals listed in <game>\TWDAccess\globals_s3gas.txt):
+- Menus are the hub's widget framework (Menu_Create/Menu_Show, Button, Carousel, Legend_Add), so
+  menus.lua works with the fixes above. The pause menu (Escape) has Resume Game, Settings, Main
+  Menu (popup: Cancel/OK), Exit Game; there is no "restart checkpoint": Main Menu, Episodes,
+  Continue reloads the last checkpoint.
+- The PC version has keyboard bindings for nearly everything (dump with a script like the one in
+  "Engine facts", InputMapperGetInput): QuickTimeEvent.imap (arrows/WASD QTE_KeyLeft..., Q, E,
+  Enter QTE_EnterKey, mouse), MultiQTE.imap (arrows, Shift, Q, E, Enter), Struggle.imap (Q mash, E
+  finish, arrows, Enter), Drag.imap (Enter hold, arrows), Peek.imap, Navigate.imap (Shift runs),
+  Dialog.imap (Enter, arrows; choices2's 1-4 still work), Death.imap (Enter), Station.imap (right
+  click, "5"), Reticle.imap (Enter does nothing on PC: Reticle_OnEnterKey only works on Xfinity).
+  Input-map callbacks are held by reference: wrapping the global (WidgetInputHandler_OnKeyRight,
+  Drag_OnButtonDown) catches nothing; functions called by name from Lua (QTE_UI_ShowPrompt,
+  Drag_OnHoldPress) can be hooked.
+- QTEs (quicktimeevent.lua): QTE_SetActivated(true/false) around a prompt (not always), then
+  QTE_UI_ShowPrompt(qteAgent, action) with action "a"/"b"/"x"/"y"/"left"/.../"q"/"e"/"holda"...,
+  QTE_UI_ShowSuccess/ShowFailure. The local ExecuteAction(action, bForceSuccess, bAltKeyboardKey)
+  (upvalue of QTE_KeyE) matches the action against each QTE agent's promptsCurrent (upvalue
+  mQuickTimeEventAgents); with "QTE - UI Enable Alt Keyboard Keys", "a"/"b" need E and "x"/"y" Q.
+  A prompt can be an agent name: a thing to click with the reticle in combat mode.
+  Windows are short: 1.1 to 2.6 s.
+- MultiQTE_Enable(agent, true/false): prompts from "QTE Prompt - 1".., upvalues mMultiQTE_Table and
+  mCurrentMultiQTEIndex of MultiQTE_OnE, local OnInput(prompt); "QTE - Type" Rapid or
+  Simultaneous.
+- StruggleQTE_Enter(agent): "Struggle - Type" (Button, Waggle Horizontal/Vertical, Circle
+  Clockwise/Counter Clockwise), "Struggle - Current Percentage" 0 to 1 (at 0.9 it jumps to 1.01 and
+  mDeathBlowReadyStart is set: E), "Struggle - Enabled" false at the end; StruggleQTE_Exit.
+  DoTheMash adds about Rate of Increase (3) x a frame-time factor per press.
+- Drags (drag.lua): Drag_GetActiveAgent(); upvalues mActiveAgent (its mProps[kDirUpEnabled] etc.,
+  "Drag - Direction Up Enabled"...), mbHoldingButton, mPressedCode; Drag_OnHoldPress({code=13,
+  type=0}, true) then Drag_OnButtonDown({type=0}) repeatedly completes a pull.
+- Stations (station.lua): Game mode "Station" (close-ups of doors, drawers, panels);
+  Station_AllowExit() is a query; Station_OnButtonExit(event) backs out.
+- Death: Death_ShowUI, Death_OnButtonPress (Enter is bound by the game).
+- Guided paths: ChoredMovement_GetController() returns the path's controller (ControllerGetTime /
+  ControllerGetLength give progress); ChoredMovement_IsActive.
+- Reticle hotspots as Season 2 but ReticleSelection_GetUseables; Navigate_PathToAndUseAgent(agent)
+  has one parameter.
+- The episode statistics: menu agent ui_stats_reference, upvalues of Menu_Stats_TransitionToPage:
+  mVisibleWidget, mCurrentPageIndex, mStatPages[mCurrentEpisode]. They load under the credits, so
+  page 1 is read just before "Credits. F6 reads them, Escape goes back"; Escape skips the credits.
+
+Walkthrough notes (one path, mostly answer 1; what the game wants):
+- Episode 1 (Ties That Bind, Part One): the family house talk; the drive; the gas station
+  (Junkyard.lua): walker attacks (Enter prompts), siphon cars (Car 2, Truck: Siphon; Enter pumps),
+  Ladder: Climb (choose Climb), gas cap: Open, Pry (drag Down), gas tank: Siphon (E pumps, alt
+  keys), Scrap Heap, walk on (the story spot was named "Zombie attack": a QTE), trailer: plank:
+  Move, Hole: Enter (guided W), Hatch: Open, inside: Drawer, then Max at the door: open the
+  Trailer Door within about 15 s or he shoots (picking up batteries first gets stuck); Lonnie:
+  [Grab Crowbar], Left arrow, struggle (fast); Clementine; the gate fight (targets); the Prescott
+  bar (look at everything, Card Players: Talk To); Eli struggle (can be lost, the story goes on);
+  flashback with AJ: two walker targets, "Rock: Enter!", E prompts; the gate: Pick Hammer, Muerto:
+  Kill, Cassette Player; the end ([Leave With Family]).
+- Episode 2 (Part Two): the airport (Prescott): look at things, Conrad, Tripp, Front Gate: Exit;
+  New Frontier at the gate: E, Muerto targets, Q, Right, "Raider male" target; Kate: Give Water
+  to; the street: talk to everyone, Garage Door: Open (Right, then E), Wrecked Car: Push, Wrench,
+  Winch (close-up: Winch Release: Use Wrench On, Winch Motor: Connect, Winch Hook: Connect); the
+  underpass: Left, Muerto, Q, "E, 3 times, fast!", Up; Conrad's hand target, struggle; guided W
+  over the wall and a Right prompt; Jesus; flashback (Ava, AJ): struggle at the door; Max's
+  checkpoint ([Keep your guns]); the end.
+- Episode 3 (Above the Law): opening struggle and E/Q prompts; Richmond talks; dinner (cake); the
+  lookout: New Richmond, Colony, Building, constellations (Constellation 1 is the Big Dipper;
+  answering on was enough); flashback: Vial (Vancomycin: Take), Syringe: Take, hold Enter to fill;
+  the factory: Roll-Up Door: Lift (struggle), Car Door: Open (Left, then E three times), a Down
+  arrow crawl under the door within about 2 s after "Javi, go!"; crates; transformer: Throw Rock
+  At; the end.
+- Episode 4 (Thicker than Water): quarantine room: Pipe: Grab (struggle), Stool: Grab (struggle),
+  door; the medical room (Lingard: Talk To); AJ's things; the guided drag of the body needs S, not
+  W; the construction site: look at things, Garage Door: Open, Wire Cutters: Grab, a walker
+  (Enter), the dark close-up "Ear"/"Panel" (Enter on Panel), then hot-wiring: Battery, Ignition,
+  Starter Wire: Cut (Down arrow each), Power Ignition: Use; the execution ([Save Tripp]); the end.
+- Episode 5 (From the Gallows): dominoes (Deuce-Five: Play); talks; the helicopter: look at
+  things, Chopper Blade: Grab; the warehouse: zombie head and tummy targets, Left, Guts: Use; the
+  herd: walk to "Reach generator" (9 to 15 m) keeping clear of walkers, a few E prompts; the gate
+  panel: Button 1 opens it; the bulldozer: "E, 3 times", Q, Q, E, "Q, 5 times", "Shift and E
+  together"; Kate's path; the end and the season summary (14 pages).
+
 ### 400 Days replayed (sixth session, 2026-10-10 about 03:15 to 05:20)
 
 After the River Street retest, 400 Days was replayed in slot 2 to test the open items (from
@@ -1878,9 +2041,12 @@ Project root: C:\Users\dengs\Downloads\TWD
 - `mod/lua/`: the mod, plain Lua, installed to <game>\TWDAccess\.
   - main.lua: loads the modules in order: core, settings, text, hooks, carryover, uitext, menus,
     panes, messagebox, prompts, prompts2, choices, choices2, lookaround, lookaround2, actions,
-    action2, aiming, sniper, struggle, turnchoice, inventory, peek, guided, runto, cornfield, drag,
-    drag2, fastslow, cover, readables, panels, subtitles, hotkeys, then discovery and devconsole if
-    enabled.
+    action2, qte3, aiming, sniper, struggle, turnchoice, inventory, peek, guided, runto, cornfield,
+    drag, drag2, drag3, fastslow, cover, readables, panels, subtitles, hotkeys, then discovery and
+    devconsole if enabled.
+  - A New Frontier modules (tenth session; see "A New Frontier"): qte3.lua (QTE prompts, things to
+    pick, multi-prompt QTEs, TWDA.qteBusy) and drag3.lua (drags). A New Frontier also uses
+    choices2, lookaround2, prompts2, struggle, guided and menus.
   - Season 2 modules (seventh session; see "Season 2 during play"): choices2.lua (dialog choices),
     lookaround2.lua (hotspots, places to walk to, steering), drag2.lua (drags), action2.lua
     (dodges and blows), prompts2.lua (death screen, inventory). Each checks for Season 2's own
@@ -2002,6 +2168,9 @@ Project root: C:\Users\dengs\Downloads\TWD
   saves.txt line "wd2_saveslot2.bundle<TAB>CabinInterior.lua" for Continue), s2_ep2done\,
   s2_ep3done\, s2_ep4done\ (each ready for Chapter Select's "Start Episode N"), s2_ep5done\ (Season
   2 finished; saves.txt then said FinaleOpenField.lua).
+  A New Frontier copies (all *wd3_saveslot2* files of its Save 2; tenth session): s3_ep1done\ ..
+  s3_ep4done\ (each ready for "Start Episode N" on the Episodes screen) and s3_ep5done\ (season
+  finished; saves.txt said RichmondGateFinale.lua).
 
 In the game folder (G:\Steam\steamapps\common\The Walking Dead The Telltale Definitive Series):
 Archives\DebugLoader.lua, plus the TWDAccess folder (the mod's Lua, settings.txt, twda.log,

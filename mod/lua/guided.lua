@@ -21,9 +21,25 @@ local function controller()
   return ok and ctrl or nil
 end
 
+-- How far along, 0 to 1. (A New Frontier has no ChoredMovement_GetTimePercent: its path is the
+-- controller ChoredMovement_GetController returns.)
+local function fraction()
+  local fn = rawget(_G, "ChoredMovement_GetTimePercent")
+  if type(fn) == "function" then
+    local ok, pct = pcall(fn)
+    return ok and type(pct) == "number" and pct or nil
+  end
+  local okC, ctrl = pcall(ChoredMovement_GetController)
+  if not okC or not ctrl then return nil end
+  local okT, t = pcall(ControllerGetTime, ctrl)
+  local okL, len = pcall(ControllerGetLength, ctrl)
+  if okT and okL and type(t) == "number" and type(len) == "number" and len > 0 then return t / len end
+  return nil
+end
+
 local function percent()
-  local ok, pct = pcall(ChoredMovement_GetTimePercent)
-  if ok and type(pct) == "number" then return math.floor(pct * 100 + 0.5) end
+  local pct = fraction()
+  if pct then return math.floor(pct * 100 + 0.5) end
   return nil
 end
 
@@ -116,10 +132,10 @@ local DIRECTION_OF = { W = { 0, 1 }, ["Up arrow"] = { 0, 1 }, S = { 0, -1 }, ["D
   A = { -1, 0 }, ["Left arrow"] = { -1, 0 }, D = { 1, 0 }, ["Right arrow"] = { 1, 0 } }
 local pushed = nil -- the key name the mod passed on
 local function pushHeldKey(key)
-  if type(rawget(_G, "ChoredMovement_GetController")) == "function" then return end -- (Season 1)
   local set = rawget(_G, "ChoredMovement_SetJoystickDirection")
-  if type(set) ~= "function" then return end
+  if type(set) ~= "function" then return end -- (Season 1)
   local move = TWDA.upvalue(set, "mMove")
+  if move == nil then return end -- (not Season 2's script)
   if key and (move == 0 or move == nil) then
     local d = DIRECTION_OF[key[2]]
     if d and pcall(set, Vector(d[1], d[2], 0)) then
@@ -175,8 +191,7 @@ TWDA.onFrame("guided", function()
   if not active then return end
   -- (400 Days' cornfield runs on a path too; cornfield.lua says what the keys do there.)
   if TWDA.cornfieldRunning and TWDA.cornfieldRunning() then return end
-  local okPct, pct = pcall(ChoredMovement_GetTimePercent)
-  pct = okPct and type(pct) == "number" and pct or nil
+  local pct = fraction()
   if toldHalf == nil and pct then toldHalf = pct >= 0.5 end
   local key = heldKey()
   pushHeldKey(key)

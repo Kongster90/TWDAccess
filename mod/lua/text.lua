@@ -45,6 +45,8 @@ local function glyph(name)
   if glyphNames[key] then return glyphNames[key] end
   local language = key:match("[Ll]anguage(%u[%w_]*)$")
   if language then return languageNames[language] or words(language) end
+  -- Pictures beside a label that says the same (A New Frontier's legend: "iconCopy" before "Copy").
+  if key:find("^icon%u") or key:find("%lIcon$") then return "" end
   -- Otherwise the last part of the texture name, made readable.
   local last = key:match("_(%a[%w]*)$") or key
   return words(last)

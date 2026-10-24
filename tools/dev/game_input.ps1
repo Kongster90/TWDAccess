@@ -112,7 +112,7 @@ if ($Click -or $Keys -or $Focus) {
         # "Shift+Tab": modifiers are held while the last key is pressed.
         $parts = $combo -split '\+'
         $k = $parts[-1]
-        $mods = @($parts | Select-Object -SkipLast 1 | ForEach-Object { @{ Shift = 0x10; Ctrl = 0x11; Alt = 0x12 }[$_] })
+        $mods = @($parts | Select-Object -SkipLast 1 | ForEach-Object { @{ Shift = 0x10; Ctrl = 0x11; Alt = 0x12; Enter = 0x0D }[$_] })
         if ($vk.ContainsKey($k)) { $code = $vk[$k] }
         elseif ($k.Length -eq 1) { $code = [int][char]$k.ToUpper() }
         else { Write-Error "Unknown key $k"; continue }

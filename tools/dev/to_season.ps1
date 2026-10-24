@@ -4,8 +4,10 @@
   (Definitive Menu, then Accept) and waits for the hub.
     .\to_season.ps1 -Season 2
     .\to_season.ps1 -Season 2 -FromSeason2     # reload Season 2's menu (new mod files)
+    .\to_season.ps1 -Season 3 -FromSeason3     # the same from A New Frontier's main menu
+  The carousel order is Season 1, Season 2, A New Frontier (3), The Final Season (4), Michonne (5).
 #>
-param([int]$Season = 2, [switch]$FromSeason2)
+param([int]$Season = 2, [switch]$FromSeason2, [switch]$FromSeason3)
 
 $dev = $PSScriptRoot
 $log = "G:\Steam\steamapps\common\The Walking Dead The Telltale Definitive Series\TWDAccess\twda.log"
@@ -24,6 +26,14 @@ if ($FromSeason2) {
     & "$dev\goto.ps1" -Target "Definitive Menu" | Out-Null
     & "$dev\step.ps1" -Keys Enter -SettleMs 2500 | Out-Null
     & "$dev\goto.ps1" -Target "Accept" -Key Up | Out-Null
+    & "$dev\step.ps1" -Keys Enter -SettleMs 1500 | Out-Null
+    if (-not (WaitFor "say! Main menu" 60)) { "hub not reached"; exit 1 }
+    Start-Sleep 3
+}
+if ($FromSeason3) {
+    & "$dev\goto.ps1" -Target "Definitive Menu" | Out-Null
+    & "$dev\step.ps1" -Keys Enter -SettleMs 2500 | Out-Null
+    & "$dev\goto.ps1" -Target "OK" | Out-Null
     & "$dev\step.ps1" -Keys Enter -SettleMs 1500 | Out-Null
     if (-not (WaitFor "say! Main menu" 60)) { "hub not reached"; exit 1 }
     Start-Sleep 3

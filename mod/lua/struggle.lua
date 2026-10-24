@@ -27,6 +27,18 @@ local HOLD_DELAY = 0.25    -- a Q held this long starts repeating (slow mode)
 -- Enter for Struggle_OnMash and E for Struggle_OnDeathBlowB (which, with the mouse and keyboard,
 -- finishes whatever button the struggle asks for), and the properties "Struggle - Complete",
 -- "Struggle - Won" and "Struggle - Paused" (the update's kPaused).
+-- A New Frontier (projectseason3's struggleqte.lua): StruggleQTE_Enter(agent) (upvalues
+-- mStruggleAgent and mDeathBlowReadyStart), Struggle.imap with Q for StruggleQTE_OnMash and E for
+-- StruggleQTE_OnDeathBlow, and the agent's "Struggle - Type": "Button" is mashing; "Waggle
+-- Horizontal" and "Waggle Vertical" go back and forth on the arrows, "Circle Clockwise" and
+-- "Circle Counter Clockwise" round them. "Struggle - Enabled" goes false when it is over.
+local KIND_TEXT = {
+  ["Waggle Horizontal"] = "press Left and Right arrows in turn, over and over",
+  ["Waggle Vertical"] = "press Up and Down arrows in turn, over and over",
+  ["Circle Clockwise"] = "press the arrows round in a circle, Up, Right, Down, Left, over and over",
+  ["Circle Counter Clockwise"] = "press the arrows round in a circle, Up, Left, Down, Right, over and over",
+}
+
 local cache = {}
 local function internals()
   local start = rawget(G, "Struggle_Start")
@@ -43,6 +55,23 @@ local function internals()
       }
     end
     if type(cache.mode) ~= "table" or type(cache.update) ~= "function" then return nil end
+    return cache
+  end
+  local enter3 = rawget(G, "StruggleQTE_Enter")
+  if type(enter3) == "function" then
+    enter3 = TWDA.unwrap(enter3)
+    if cache.start ~= enter3 then
+      local monitor = TWDA.upvalue(enter3, "MonitorStruggle")
+      local update = type(monitor) == "function" and TWDA.upvalue(monitor, "Update") or nil
+      cache = {
+        start = enter3, season2 = true, season3 = true, update = enter3,
+        enabledKey = TWDA.upvalue(enter3, "kEnabled") or "Struggle - Enabled",
+        wonKey = TWDA.upvalue(enter3, "kWon") or "Struggle - Won",
+        pausedKey = update and TWDA.upvalue(update, "kPaused") or "Struggle - Paused",
+        typeKey = TWDA.upvalue(enter3, "kType") or "Struggle - Type",
+        mashKeys = "Q",
+      }
+    end
     return cache
   end
   local enter = rawget(G, "Struggle_Enter")
@@ -76,7 +105,9 @@ end
 
 local function pressQ(game)
   local ok, err
-  if game.season2 then
+  if game.season3 then
+    ok, err = pcall(StruggleQTE_OnMash, { code = VK_Q, type = 0, controller = -1 })
+  elseif game.season2 then
     ok, err = pcall(Struggle_OnMash, {})
   else
     ok, err = pcall(game.mode.Struggle_Mash, game.mode)
@@ -85,6 +116,11 @@ local function pressQ(game)
 end
 
 local function pressE(game)
+  if game.season3 then
+    local ok, err = pcall(StruggleQTE_OnDeathBlow, { code = 0x45, type = 0, controller = -1 })
+    if not ok then TWDA.log("struggle: finish failed: " .. tostring(err)) end
+    return
+  end
   if game.season2 then
     local ok, err = pcall(Struggle_OnDeathBlowB, {})
     if not ok then TWDA.log("struggle: finish failed: " .. tostring(err)) end
@@ -101,8 +137,9 @@ end
 
 local state = nil -- while a struggle lasts: { agent, ready, finished, lastMash, qSince, half, low }
 
-local function startText(mode, keys)
+local function startText(mode, keys, kind)
   if mode == "auto" then return "Struggle! Fighting back for you." end
+  if KIND_TEXT[kind] then return "Struggle! " .. KIND_TEXT[kind]:gsub("^%l", string.upper) .. "." end
   if mode == "slow" then return "Struggle! Press Q over and over, or hold it down. Then E when told." end
   return ("Struggle! Press %s over and over. Then E when told."):format(keys or "Q")
 end
@@ -111,8 +148,21 @@ TWDA.struggleActive = function() return state ~= nil and not state.finished end
 TWDA.describeStruggle = function()
   if not (state and not state.finished) then return nil end
   if state.ready then return "Struggle. Press E now!" end
-  local pct = math.floor((prop(state.agent, "Chore Scrubber - Percentage Current") or 0) * 100 + 0.5)
+  local pct = math.floor((state.percent and state.percent() or prop(state.agent, "Chore Scrubber - Percentage Current") or 0) * 100 + 0.5)
+  if KIND_TEXT[state.kind] then return ("Struggle, %d percent. %s."):format(pct, KIND_TEXT[state.kind]:gsub("^%l", string.upper)) end
   return ("Struggle, %d percent. Press Q over and over."):format(pct)
+end
+
+-- How far the meter is, 0 to 1. (A New Frontier's "Struggle - Current Percentage" goes from 0 to
+-- 1, or to its "Struggle - Max Percentage" when that is set.)
+local function percentOf(agent, game)
+  if game.season3 then
+    local current = prop(agent, "Struggle - Current Percentage") or 0
+    local max = prop(agent, "Struggle - Max Percentage")
+    if type(max) ~= "number" or max <= 0 then max = 1 end
+    return current / max
+  end
+  return prop(agent, "Chore Scrubber - Percentage Current") or 0
 end
 
 TWDA.onFrame("struggle", function()
@@ -132,14 +182,17 @@ TWDA.onFrame("struggle", function()
   if not state or state.agent ~= agent then
     -- (A struggle that starts with the meter already half up, struggle_clementine in the RV in
     -- Episode 3, is not "Halfway" yet.)
-    state = { agent = agent, ready = false, finished = false, lastMash = 0,
-      half = (prop(agent, "Chore Scrubber - Percentage Current") or 0) >= 0.5 }
-    TWDA.log("struggle: started (" .. TWDA.agentName(agent) .. ")")
-    TWDA.lastHint = startText(mode, game.mashKeys)
+    local kind = game.typeKey and prop(agent, game.typeKey) or nil
+    state = { agent = agent, ready = false, finished = false, lastMash = 0, kind = kind,
+      percent = function() return percentOf(agent, game) end,
+      half = percentOf(agent, game) >= 0.5 }
+    TWDA.log("struggle: started (" .. TWDA.agentName(agent) .. ", " .. tostring(kind) .. ")")
+    TWDA.lastHint = startText(mode, game.mashKeys, kind)
     TWDA.say(TWDA.lastHint, { interrupt = true })
   end
   if state.finished then return end
-  if prop(agent, game.finishedKey) == true then
+  if (game.finishedKey and prop(agent, game.finishedKey) == true)
+      or (game.enabledKey and prop(agent, game.enabledKey) == false) then
     state.finished = true
     TWDA.log("struggle: finished, won " .. tostring(prop(agent, game.wonKey)))
     return
@@ -158,7 +211,7 @@ TWDA.onFrame("struggle", function()
   end
   state.ready = ready
 
-  if mode == "auto" then
+  if mode == "auto" and not KIND_TEXT[state.kind] then
     if ready then
       pressE(game)
     elseif now - state.lastMash >= MASH_INTERVAL then
@@ -169,7 +222,7 @@ TWDA.onFrame("struggle", function()
   end
 
   -- Progress, said once each way: halfway up, and slipping back down after that.
-  local pct = prop(agent, "Chore Scrubber - Percentage Current") or 0
+  local pct = percentOf(agent, game)
   if not ready then
     if pct >= 0.5 and not state.half then
       state.half = true
@@ -180,7 +233,7 @@ TWDA.onFrame("struggle", function()
     end
   end
 
-  if mode == "slow" and not ready then
+  if mode == "slow" and not ready and not KIND_TEXT[state.kind] then
     local ok, down = pcall(InputPCIsVKeyPressed, VK_Q)
     if ok and down == true then
       state.qSince = state.qSince or now

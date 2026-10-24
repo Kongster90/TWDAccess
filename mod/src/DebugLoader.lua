@@ -38,8 +38,11 @@ local function loadedByRequire()
 end
 local viaRequire = loadedByRequire()
 
--- The real first script of this state, if an engine reset left us a fresh note. The note is always
--- removed, so a stale one (say, after a crash) can never run somewhere it does not belong.
+-- The real first script of this state, if an engine reset left us a fresh note. The note is
+-- removed once read, so a stale one (say, after a crash) can never run somewhere it does not
+-- belong; except on the require path, which never uses it: A New Frontier's engine boot script
+-- (_boot.lua) requires us before the engine runs us as the state's first script, and that second
+-- run needs the note.
 -- The note's time is the time of day in seconds: os.time() itself is useless here, as this Lua's
 -- numbers are 4-byte floats and it only changes in steps of 128 seconds.
 local function secondsOfDay()
@@ -54,7 +57,7 @@ pcall(function()
   if not file then return end
   local content = file:read("*a")
   file:close()
-  os.remove(path)
+  if not viaRequire then os.remove(path) end
   local stamp, script = content:match("^(%d+)\t([^\r\n]+)")
   local age = stamp and (secondsOfDay() - tonumber(stamp)) % 86400
   if not stamp then
@@ -62,7 +65,7 @@ pcall(function()
   elseif age > 120 then
     noteProblem = "note " .. tostring(age) .. " s old"
   elseif viaRequire then
-    noteProblem = "note ignored on the require path"
+    noteProblem = "note left for the first script"
   else
     nextScript = script
   end

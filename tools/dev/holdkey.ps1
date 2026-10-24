@@ -1,4 +1,4 @@
-<#
+﻿<#
   Development helper: hold a key in the game, re-focusing the game and repeating key-down (like
   auto-repeat) so a focus steal does not end the hold (game_input.ps1 -HoldMs can lose it).
   With -Until, stop early once that text appears in twda.log.
@@ -10,7 +10,7 @@ $log = "G:\Steam\steamapps\common\The Walking Dead The Telltale Definitive Serie
 $from = (Get-Item $log).Length
 $proc = Get-Process WDC | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
 $h = $proc.MainWindowHandle
-$names = @{ Up = 0x26; Down = 0x28; Left = 0x25; Right = 0x27; Shift = 0x10 }
+$names = @{ Up = 0x26; Down = 0x28; Left = 0x25; Right = 0x27; Shift = 0x10; Enter = 0x0D }
 $code = if ($names.ContainsKey($Key)) { [uint16]$names[$Key] } else { [uint16][int][char]$Key.ToUpper() }
 $end = (Get-Date).AddMilliseconds($Ms)
 $n = 0

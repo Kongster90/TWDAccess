@@ -23,9 +23,16 @@ local function call(name, ...)
   return nil
 end
 
--- Season 2's reticle: ReticleSelection_GetUsables and ReticleVerbs_BuildVerbData exist only there.
+-- The usables; A New Frontier spells it ReticleSelection_GetUseables.
+local function getUsables()
+  return call("ReticleSelection_GetUsables") or call("ReticleSelection_GetUseables")
+end
+
+-- Season 2's reticle (also A New Frontier's): ReticleSelection_GetUsables and
+-- ReticleVerbs_BuildVerbData exist only there.
 local function isSeason2()
-  return type(rawget(G, "ReticleSelection_GetUsables")) == "function"
+  return (type(rawget(G, "ReticleSelection_GetUsables")) == "function"
+    or type(rawget(G, "ReticleSelection_GetUseables")) == "function")
     and type(rawget(G, "ReticleVerbs_BuildVerbData")) == "function"
 end
 
@@ -59,7 +66,7 @@ end
 -- Whether anything at all can be used now (cheaper than the full list, which builds every
 -- thing's verbs).
 local function anyUsable()
-  for _, agent in pairs(call("ReticleSelection_GetUsables") or {}) do
+  for _, agent in pairs(getUsables() or {}) do
     if type(agent) == "table" and usableNow(agent) then return true end
   end
   return false
@@ -149,7 +156,7 @@ local function hotspots()
   local list = {}
   local from = playerPos()
   local guided = onGuidedPath()
-  for _, agent in pairs(call("ReticleSelection_GetUsables") or {}) do
+  for _, agent in pairs(getUsables() or {}) do
     if type(agent) == "table" and usableNow(agent) and not (guided and sideOf(agent) ~= nil) then
       local verbs = verbsOf(agent)
       if #verbs > 0 then
@@ -226,6 +233,12 @@ local function places()
       -- the snowstorm, Episode 5, "trigger_cam_nav_restStopEntrance" is the only sign of the way,
       -- 115 m off, and W leads away from it.)
       if lower:find("^trigger_cam_nav_") and not lower:find("death", 1, true) then skip = false end
+      -- (A New Frontier: over-the-shoulder camera zones, "trigger_cam_nav_OTS", focus pulls and
+      -- walking-speed switches, "trigger_dialog_fastWalk", are not places either.)
+      if lower:find("_ots", 1, true) or lower:find("walk$") or lower:find("rackfocus", 1, true) then skip = true end
+      -- (Nor the walkers' own triggers, "trigger_zombie3" in A New Frontier's herd, Episode 5; nor
+      -- story spots named after what happens there, "trigger_dialog_zombieAttack".)
+      if lower:find("zombie", 1, true) or lower:find("walker", 1, true) then skip = true end
       local okP, pos = pcall(AgentGetWorldPos, agent)
       if not skip and okP and pos and okWB then
         local okG, ground = pcall(WalkBoxesPosOnWalkBoxes, pos, walkBoxes)
@@ -244,7 +257,27 @@ local function places()
 end
 
 local walk = nil -- { agent, label, target, best, bestAt, start }
+local cutShort = nil -- a walk the game interrupted, to go on with: { agent, label, target, first, at }
 local MOVE_KEYS = { 0x57, 0x41, 0x53, 0x44, 0x25, 0x26, 0x27, 0x28 }
+
+-- Walkers that a walk should keep clear of: the triggers that go about with them ("trigger_zombie3"
+-- on Zombie3 in A New Frontier's herd), looked up again five times a second.
+local AVOID_METERS = 1.3
+local spots, spotsAt = {}, -10
+local function walkerSpots()
+  local now = TWDA.now()
+  if now - spotsAt < 0.2 then return spots end
+  spotsAt, spots = now, {}
+  local okS, agents = pcall(SceneGetAgents, TWDA.playerScene and TWDA.playerScene() or call("Game_GetScene"))
+  for _, agent in ipairs(okS and type(agents) == "table" and agents or {}) do
+    local lower = TWDA.agentName(agent):lower()
+    if lower:find("^trigger_zombie%d") or lower:find("^trigger_zombielow") or lower:find("^trigger_walker%d") then
+      local okP, pos = pcall(AgentGetWorldPos, agent)
+      if okP and pos then spots[#spots + 1] = pos end
+    end
+  end
+  return spots
+end
 
 local function stopWalk(text)
   pcall(DirectControl_SetJoystickDirection, Vector(0, 0, 0))
@@ -263,6 +296,12 @@ local function startWalk(h)
   TWDA.log("lookaround2: walking to " .. h.label)
   TWDA.say(("Walking to %s, %d meters. A movement key stops."):format(h.label, math.floor(h.distance + 0.5)),
     { interrupt = true })
+  -- (Among walkers the mod steers from the start: the path-finding goes straight through them.)
+  if #walkerSpots() > 0 then
+    w.pathing = false
+    w.best, w.bestAt = math.huge, TWDA.now()
+    return
+  end
   local ok = pcall(ThreadStart, function()
     -- (The trigger's own place first: on another floor, the point put on the walk boxes can be on
     -- the wrong floor; then that point.)
@@ -290,8 +329,11 @@ local function steer()
   if not playMode() or not canWalk() then
     -- (Shooting the target the walk waited for leaves play mode for a moment: walk on after it.)
     if walk.paused and now - walk.paused < 15 then return end
-    -- (Something has started: a scene, a talk. It speaks for itself.)
+    -- (Something has started: a scene, a talk. It speaks for itself. The walk goes on after it,
+    -- below: through the herd to the generator, Episode 5 of A New Frontier, a walker turns to look
+    -- for a few seconds, and then there are only about fifteen to get there.)
     TWDA.log("lookaround2: walk interrupted (play " .. tostring(playMode()) .. ", walking " .. tostring(canWalk()) .. ")")
+    cutShort = { agent = walk.agent, label = walk.label, target = walk.target, first = walk.first, at = now }
     stopWalk(nil)
     return
   end
@@ -360,6 +402,8 @@ local function steer()
   if detour and now > detour.untilTime then walk.detour, detour = nil, nil end
   if not detour and now - walk.bestAt > 1.2 then
     walk.detours = (walk.detours or 0) + 1
+    -- (Among walkers the way opens as they move: keep trying.)
+    if walk.detours > 4 and #walkerSpots() > 0 then walk.detours = 1 end
     if walk.detours > 4 then
       return stopWalk(("Blocked, %d meters from %s. Try another way."):format(math.floor(d + 0.5), walk.label))
     end
@@ -371,6 +415,23 @@ local function steer()
   local okCam, camera = pcall(function() return SceneGetCamera(TWDA.playerScene and TWDA.playerScene() or Game_GetScene()) end)
   if not okCam or camera == nil then return end
   local ux, uz = (walk.target.x - here.x) / d, (walk.target.z - here.z) / d
+  -- Keeping clear of walkers on the way (through the herd in Episode 5 of A New Frontier, where
+  -- brushing against them gives Javier away): each pushes the way aside, harder the closer.
+  local px, pz = 0, 0
+  for _, pos in ipairs(walkerSpots()) do
+    local ax, az = here.x - pos.x, here.z - pos.z
+    local dist = math.sqrt(ax * ax + az * az)
+    if dist > 0.01 and dist < AVOID_METERS then
+      local push = (AVOID_METERS - dist) / AVOID_METERS * 2
+      px, pz = px + ax / dist * push, pz + az / dist * push
+    end
+  end
+  if px ~= 0 or pz ~= 0 then
+    ux, uz = ux + px, uz + pz
+    local n = math.sqrt(ux * ux + uz * uz)
+    if n < 0.0001 then return end
+    ux, uz = ux / n, uz / n
+  end
   local okA, a = pcall(CameraGetScreenPosFromWorldPos, camera, here)
   local okB, b = pcall(CameraGetScreenPosFromWorldPos, camera, Vector(here.x + ux, here.y, here.z + uz))
   if not (okA and a and okB and b) then return end
@@ -384,6 +445,35 @@ local function steer()
   pcall(DirectControl_SetJoystickDirection, Vector(dx / length, dy / length, 0))
 end
 TWDA.onFrame("lookaround2.walk", steer)
+
+-- A walk the game cut short goes on once the player can walk again (within 20 seconds, if the
+-- place is still there and no movement key is held).
+TWDA.onFrame("lookaround2.resume", function()
+  if not cutShort or walk then return end
+  local now = TWDA.now()
+  if now - cutShort.at > 20 or prop(cutShort.agent, "Trigger Enabled") == false then
+    cutShort = nil
+    return
+  end
+  for _, vk in ipairs(MOVE_KEYS) do
+    local ok, down = pcall(InputPCIsVKeyPressed, vk)
+    if ok and down then cutShort = nil return end
+  end
+  if not (playMode() and canWalk()) or (TWDA.qteBusy and TWDA.qteBusy()) then
+    cutShort.playSince = nil
+    return
+  end
+  cutShort.playSince = cutShort.playSince or now
+  if now - cutShort.playSince < 0.5 then return end
+  local here = playerPos()
+  local d = here and horizontalDistance(here, cutShort.target)
+  local c = cutShort
+  cutShort = nil
+  if not d or d < 0.5 then return end
+  TWDA.log("lookaround2: walking on to " .. c.label)
+  startWalk({ agent = c.agent, label = c.label, target = c.target, distance = d })
+  if walk then walk.first = c.first or d end
+end)
 
 -- The item a verb's icon shows ("ui_icon_hammer.d3dtx" -> "hammer"), to tell apart two verbs with
 -- the same words (Board: "Pry" with the hammer, "Pry" with the knife).
@@ -615,7 +705,7 @@ local wasPlay, settleFrom, checkPending = false, 0, false
 local lastNames, namesCheckedAt, lastSignature, fromNothing = nil, 0, nil, false
 local function usableNames()
   local names = {}
-  for _, agent in pairs(call("ReticleSelection_GetUsables") or {}) do
+  for _, agent in pairs(getUsables() or {}) do
     if type(agent) == "table" and usableNow(agent) then names[#names + 1] = TWDA.agentName(agent) end
   end
   table.sort(names)
@@ -655,6 +745,9 @@ local function announceControl()
     end
   end
   if not checkPending or now - settleFrom < ((fight or fromNothing) and 0.3 or 1) then return end
+  -- (A New Frontier: a moment between two prompts of one QTE is no time to explore; fight targets
+  -- are still said.)
+  if not fight and TWDA.qteBusy and TWDA.qteBusy() then return end
   checkPending = false
   local list = hotspots()
   local parts = {}
@@ -692,6 +785,12 @@ local function announceControl()
   local previousSignature = lastSignature
   lastSignature = signature
   if #list == 0 then
+    -- (Not between the prompts of a QTE, even in a fight: the last walker down, Episode 2's
+    -- underpass, and then "Up arrow!".)
+    if TWDA.qteBusy and TWDA.qteBusy() then
+      lastSignature, checkPending = previousSignature, true
+      return
+    end
     -- (Everything used up: say where the way on is, if there are places to walk to.)
     local walkTo = (canWalk() and not walk) and places() or {}
     if #walkTo > 0 then
@@ -787,20 +886,29 @@ end)
 -- Close-ups (Game mode "CloseUp", inside the truck at the overlook in Episode 4): the game steps back
 -- on S, Down arrow or a right click (CloseUp.imap: CloseUp_OnButtonExit), not on Backspace as in
 -- Season 1. The mod says so on the way in, and Backspace steps back too.
+-- A New Frontier's close-ups are "stations" (Game mode "Station", station.lua: a door or a car up
+-- close, "Right click to back out"; Station.imap has no key for it but 5). Backspace steps back
+-- there (Station_OnButtonExit) when the station allows it (Station_AllowExit).
 local inCloseUp, backHeld = false, false
 TWDA.onFrame("lookaround2.closeup", function()
   if not isSeason2() then return end
   local okMode, mode = pcall(Game_GetMode)
-  local now = okMode and type(mode) == "table" and rawget(mode, "name") == "CloseUp"
+  local name = okMode and type(mode) == "table" and rawget(mode, "name") or nil
+  local station = name == "Station"
+  local now = name == "CloseUp" or station
   if now and not inCloseUp then
-    TWDA.say("Close-up. S steps back.")
+    if not station then
+      TWDA.say("Close-up. S steps back.")
+    elseif call("Station_AllowExit") ~= false then
+      TWDA.say("Close-up. Backspace steps back.")
+    end
   end
   inCloseUp = now
   local ok, down = pcall(InputPCIsVKeyPressed, 0x08)
   down = ok and down == true
   if down and not backHeld and now then
     pcall(ThreadStart, function()
-      local okExit, err = pcall(CloseUp_OnButtonExit, {})
+      local okExit, err = pcall(station and Station_OnButtonExit or CloseUp_OnButtonExit, {})
       if not okExit then TWDA.log("lookaround2: close-up exit: " .. tostring(err)) end
     end)
   end

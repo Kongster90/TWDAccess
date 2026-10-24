@@ -38,6 +38,8 @@ local function visibleTexts(agent, out, seen, depth)
   if agent == nil or depth > 4 or isHidden(agent) then return end
   local name = TWDA.agentName(agent):lower()
   if name:find("infobutton", 1, true) or name:find("tooltip", 1, true) then return end
+  -- A shown check mark (A New Frontier's save file in use) has no text of its own; said last.
+  if name:find("checkmark$") then seen[""] = true end
   local text = TWDA.normalCaps(TWDA.agentText(agent))
   if text and not seen[text] then
     seen[text] = true
@@ -47,6 +49,7 @@ local function visibleTexts(agent, out, seen, depth)
   if ok and type(children) == "table" then
     for _, child in pairs(children) do visibleTexts(child, out, seen, depth + 1) end
   end
+  if depth == 0 and seen[""] and #out > 0 then out[#out + 1] = "checked" end
 end
 
 -- All visible text of an agent and its children, joined (used by other menu modules too).
@@ -84,7 +87,19 @@ local function describeWidget(widget)
   for _, method in ipairs({ "GetDisplayTitle", "GetDisplaySubtitle", "GetDisplayStatus", "GetDisplayAction",
     "GetDisplayDescription" }) do
     local text = TWDA.normalCaps(TWDA.keyOrText(call(widget, method)))
-    if text then parts[#parts + 1] = text end
+    if text then
+      -- "Episode 1 Ties That Bind PART ONE" (A New Frontier): a run of capitals words reads as
+      -- words (a lone "AJ" stays).
+      text = text:gsub("%u%u+ [%u ]*%u%u", function(run)
+        return (run:gsub("(%u)(%u+)", function(first, rest) return first .. rest:lower() end))
+      end)
+      -- Its subtitle repeats "Episode 1" from the title.
+      local repeated = false
+      for _, part in ipairs(parts) do
+        if part:find(text, 1, true) then repeated = true end
+      end
+      if not repeated then parts[#parts + 1] = text end
+    end
   end
   if #parts == 0 then visibleTexts(rawget(widget, "agent"), parts, {}, 0) end
   if #parts == 0 then
@@ -114,6 +129,8 @@ end
 
 local current = nil  -- { button, widget, text, time }
 local menuTitle = nil
+-- (A New Frontier's Episodes screen, near the end: the one that has settled.)
+local episodesMenu, episodesSeenAt, episodesKeys = nil, nil, {}
 
 -- The widget a button belongs to: settings rows select a child "_button" agent, so walk up.
 local function widgetOf(button)
@@ -472,18 +489,20 @@ end
 local function describeButton(button)
   local widget = widgetOf(button)
   local base = describeWidget(widget) or TWDA.agentText(button) or siblingText(button)
+  if not base and TWDA.agentName(button):find("[Cc]loseButton$") then base = "Close" end
   if base and type(rawget(G, "UIZ_GetActiveMenu")) == "function" then
     base = TWDA.normalCaps(base)
     local value = season2RowValue(button)
     if value then base = base .. ", " .. value end
   end
+  local raw = base
   if base and TWDA.agentName(button):find("legendButton", 1, true) then base = legendButtonText(base) end
   local text = base
   if text and TWDA.settings.tooltips ~= false then
     local tip = tooltipOf(widget)
-    if tip and tip ~= text then text = text .. ". " .. tip end
+    if tip and tip ~= text and tip ~= raw then text = text .. ". " .. tip end
   end
-  return text, widget, base
+  return text, widget, base, raw
 end
 
 -- Widgets that are part of the menu's frame rather than things to choose.
@@ -615,7 +634,19 @@ local function onSelect(button)
     TWDA.log("menus: " .. TWDA.agentName(button) .. " selected under the resting mouse; not read")
     return
   end
-  local text, widget, base = describeButton(button)
+  -- (Nor a legend button there, as a menu opens: A New Frontier's "Copy" under the Save Files list.)
+  if TWDA.agentName(button):find("legendButton", 1, true) and now - navKeyAt > 0.5 and now - mouseMovedAt > 1 then
+    TWDA.log("menus: " .. TWDA.agentName(button) .. " (legend) selected under the resting mouse; not read")
+    return
+  end
+  -- (A New Frontier's Episodes screen selects each episode in turn as it fills in; it is read once
+  -- it has settled, below.)
+  local okMenu, menuNow = pcall(Menu_GetCurrentMenu)
+  if okMenu and type(menuNow) == "table" and TWDA.agentName(rawget(menuNow, "agent")) == "ui_menuEpisodes"
+      and episodesMenu ~= menuNow then
+    return
+  end
+  local text, widget, base, raw = describeButton(button)
   local s2title = season2Title(button)
   if s2title then
     menuTitle = s2title
@@ -623,12 +654,12 @@ local function onSelect(button)
   end
   if quietButton == button then
     quietButton = nil
-    current = { button = button, widget = widget, text = base, time = now }
+    current = { button = button, widget = widget, text = base, raw = raw, time = now }
     if text then TWDA.lastMenuItem = text end
     return
   end
   if current and current.button == button and not pending.title and now - current.time < 0.5 then return end
-  current = { button = button, widget = widget, text = base, time = now }
+  current = { button = button, widget = widget, text = base, raw = raw, time = now }
   if not text then
     TWDA.log("menus: no text for " .. TWDA.agentName(button))
     return
@@ -684,9 +715,11 @@ TWDA.onFrame("menus.value", function()
   local okSel, selected = pcall(function() return rawget(current.button, "mbSelected") end)
   if not okSel or selected ~= true then return end
   local text = describeWidget(current.widget)
-  if text and text ~= current.text then
-    local changed = changedPart(current.text, text)
-    current.text = text
+  -- (raw: before a legend button's label was put first.)
+  local old = current.raw or current.text
+  if text and text ~= old then
+    local changed = changedPart(old, text)
+    current.text, current.raw = text, text
     TWDA.lastMenuItem = text
     queue("value", changed)
   end
@@ -736,12 +769,13 @@ local function sceneNotes(menu)
   return notes
 end
 
--- Keys in the legend other than the usual Select and Previous menu, which every menu has.
-local function unusualKeys()
+-- Keys in the legend other than the usual Select, Previous menu and Close, which every menu has.
+local function unusualKeys(menu)
   local keys = {}
-  for _, entry in ipairs(TWDA.menuLegend and TWDA.menuLegend() or {}) do
+  for _, entry in ipairs(TWDA.menuLegendFor and TWDA.menuLegendFor(menu) or {}) do
     local label = entry:match(":%s*(.*)$") or ""
-    if label ~= "Select" and label ~= "Previous menu" then keys[#keys + 1] = entry end
+    local l = label:lower()
+    if l ~= "select" and l ~= "previous menu" and l ~= "close" then keys[#keys + 1] = entry end
   end
   return keys
 end
@@ -753,11 +787,30 @@ local function titleOf(menu)
     local agent = rawget(widget, "agent")
     local name = TWDA.agentName(agent)
     if name:find("_header$") or name:find("_title$") then
-      local text = TWDA.agentText(agent)
+      -- (A New Frontier keeps the text one level down: ui_menuSettings_header_header.)
+      local text = TWDA.agentText(agent) or TWDA.visibleText(agent)
       if text then return text end
     end
   end
-  return MENU_NAMES[agentName]
+  -- A header that is not a widget (A New Frontier's Save Files popup: ui_popupSave_header; its
+  -- story setup moves its header into a group, ui_saveFileConfig_leftGroup).
+  local function find(agent, depth)
+    local ok, children = pcall(AgentGetChildren, agent)
+    for _, child in ipairs(ok and type(children) == "table" and children or {}) do
+      local name = TWDA.agentName(child)
+      if not isHidden(child) then
+        if name:find("_header$") or name:find("_title$") then
+          local text = TWDA.agentText(child) or TWDA.visibleText(child)
+          if text then return text end
+        elseif depth < 2 then
+          local text = find(child, depth + 1)
+          if text then return text end
+        end
+      end
+    end
+    return nil
+  end
+  return find(rawget(menu, "agent"), 1) or MENU_NAMES[agentName]
 end
 
 
@@ -766,12 +819,25 @@ local function buttonCount(widget)
   return type(names) == "table" and #names or 0
 end
 
+-- Shown buttons of a widget that are not mouse arrows: a group of choices (A New Frontier's
+-- "Start New Story" and "Continue Your Story" are one widget) counts each.
+local function shownChoices(widget)
+  local count = 0
+  for _, name in ipairs(rawget(widget, "buttonNames") or {}) do
+    local ok, agent = pcall(AgentFind, name)
+    if ok and agent and not isHidden(agent) and not tostring(name):lower():find("arrow", 1, true) then
+      count = count + 1
+    end
+  end
+  return count
+end
+
 -- Things to choose: widgets with at least one button, apart from the header and legend.
 local function itemCount(menu)
   local count = 0
   for _, widget in ipairs(rawget(menu, "widgets") or {}) do
     local name = TWDA.agentName(rawget(widget, "agent"))
-    if not isChrome(name) and buttonCount(widget) > 0 then count = count + 1 end
+    if not isChrome(name) and buttonCount(widget) > 0 then count = count + math.max(1, shownChoices(widget)) end
   end
   return count
 end
@@ -801,10 +867,18 @@ end)
 
 -- Menus add their widgets over several frames; wait until the count has held still for a few.
 local lastCount, steadyFrames = -1, 0
+local announcedMenu, announcedTitle = nil, nil -- the menu whose title was read last, and that title
 TWDA.onFrame("menus.title", function()
   if not shownMenu then return end
   local menu = shownMenu
-  local title = TWDA.normalCaps(titleOf(menu))
+  local title = titleOf(menu)
+  local rawTitle = title
+  -- A capitals heading run together with a sentence under it (A New Frontier's "CHOOSE HOW TO
+  -- BEGIN YOUR STORY The Walking Dead: A New Frontier can be started ...").
+  local heading, description = (title or ""):match("^([%u%d][%u%d%p ]+) (%u%l.*)$")
+  if heading then title = heading end
+  title = TWDA.normalCaps(title)
+  if title == "Paused" then title = "Pause menu" end -- (A New Frontier's pause menu header)
   local count = itemCount(menu)
   if count == lastCount then
     steadyFrames = steadyFrames + 1
@@ -815,13 +889,18 @@ TWDA.onFrame("menus.title", function()
   if waited < 0.9 and (count == 0 or steadyFrames < 4) then return end -- still being built
   shownMenu, lastCount, steadyFrames = nil, -1, 0
   menuTitle = title
+  announcedMenu, announcedTitle = menu, rawTitle
   if not title then return end
-  local text = title .. (title:lower():find("menu$") and "" or " menu")
-  if count > 0 then text = text .. ", " .. count .. (count == 1 and " item" or " items") end
-  local sentences = { text }
+  local short = select(2, title:gsub("%S+", "")) <= 3
+  local text = title .. ((title:lower():find("menu$") or not short) and "" or " menu")
+  local items = count > 0 and (count .. (count == 1 and " item" or " items")) or nil
+  -- (A sentence for a heading, such as the imported story's summary, keeps its count apart.)
+  if items and not title:find("[%.%?!]$") then text, items = text .. ", " .. items, nil end
+  local sentences = { text, items }
+  if description then sentences[#sentences + 1] = description end
   for _, note in ipairs(contentTexts(menu)) do sentences[#sentences + 1] = note end
   for _, note in ipairs(sceneNotes(menu)) do sentences[#sentences + 1] = note end
-  for _, key in ipairs(unusualKeys()) do sentences[#sentences + 1] = key end
+  for _, key in ipairs(unusualKeys(menu)) do sentences[#sentences + 1] = key end
   queue("title", TWDA.joinSentences(sentences))
 end)
 
@@ -851,9 +930,62 @@ local function legendFor(menu)
 end
 
 TWDA.menuLegend = function() return legendFor(currentMenu()) end
+TWDA.menuLegendFor = function(menu) return legendFor(menu) end
+
+-- A screen that changes its heading in place is read again as a new menu (A New Frontier's story
+-- setup goes from "Choose how to begin your story" to "Your story so far" on the same menu).
+local retitleAt = 0
+TWDA.onFrame("menus.retitle", function()
+  local now = TWDA.now()
+  if shownMenu or now - retitleAt < 0.25 then return end
+  retitleAt = now
+  local menu = currentMenu()
+  if not menu or menu ~= announcedMenu then return end
+  local title = titleOf(menu)
+  if title and title ~= announcedTitle then
+    announcedTitle = title
+    shownMenu, shownAt = menu, now
+  end
+end)
+
+-- Help text that a screen shows for its selected item in an agent of its own (A New Frontier:
+-- ui_saveFileconfig_tooltip, "Continue this story: Clem is on the road with AJ."), said after the
+-- item.
+local lastTip, tipAt = nil, 0
+local function tooltipAgent(menu)
+  local ok, children = pcall(AgentGetChildren, rawget(menu, "agent"))
+  for _, child in ipairs(ok and type(children) == "table" and children or {}) do
+    if TWDA.agentName(child):lower():find("tooltip$") and not isHidden(child) then return child end
+  end
+  return nil
+end
+TWDA.onFrame("menus.tooltip", function()
+  local now = TWDA.now()
+  if now - tipAt < 0.15 then return end
+  tipAt = now
+  local menu = currentMenu()
+  local agent = menu and tooltipAgent(menu)
+  local tip = agent and TWDA.agentText(agent) -- (visibleText leaves tooltips out)
+  if tip == lastTip then return end
+  lastTip = tip
+  if not tip or TWDA.settings.tooltips == false then return end
+  if TWDA.lastMenuItem and TWDA.lastMenuItem:find(tip, 1, true) then return end
+  if pending.item then
+    pending.item = pending.item .. ". " .. tip
+  else
+    TWDA.say(tip)
+  end
+end)
+
+-- The menu a legend belongs to: the one just shown, if any (a popup builds its legend before it
+-- becomes the current menu: A New Frontier's Save Files popup over Settings), else the current one.
+local function legendMenu()
+  if shownMenu and TWDA.now() - shownAt < 1 then return shownMenu end
+  return currentMenu()
+end
 
 TWDA.hookBefore("Legend_Clear", function()
-  local menu = currentMenu()
+  local menu = legendMenu()
   if menu then
     legends[menu] = {}
     legendCommands[menu] = {}
@@ -888,7 +1020,7 @@ function TWDA.runLegendCommand(buttonNames)
 end
 
 TWDA.hookBefore("Legend_Add", function(buttonName, text, command)
-  local menu = currentMenu()
+  local menu = legendMenu()
   if menu and type(buttonName) == "string" and command ~= nil then
     legendCommands[menu] = legendCommands[menu] or {}
     legendCommands[menu][buttonName] = command
@@ -902,7 +1034,7 @@ TWDA.hookBefore("Legend_Add", function(buttonName, text, command)
   local key = TWDA.glyphNames[buttonName] or buttonName
   -- Controller-only legend entries that have keyboard keys on their own screen.
   key = KEYBOARD_FOR_LABEL[buttonName .. "|" .. label] or key
-  local list = legendFor(currentMenu())
+  local list = legendFor(menu)
   for _, entry in ipairs(list) do
     if entry == key .. ": " .. label then return end
   end
@@ -985,8 +1117,13 @@ local function attachCarousel()
   rawset(carousel, "TWDA_attached", true)
   TWDA.hookMethod(carousel, "SelectElement", "Carousel.SelectElement", nil, function(args)
     local self = args[1]
+    -- (While A New Frontier's Episodes screen fills in, each episode is selected in turn.)
+    if TWDA.agentName(rawget(self, "agent")) == "ui_menuEpisodes" and episodesMenu ~= self then return end
     local widget = call(self, "GetSelectedElementWidget")
     local text = describeWidget(widget)
+    -- (Already read when SelectElement selected the element's own button, as A New Frontier's
+    -- does before its move animation ends.)
+    if text and current and current.text == text and TWDA.now() - current.time < 2 then return end
     if text then
       current = { button = nil, widget = widget, text = text, time = TWDA.now() }
       TWDA.lastMenuItem = text
@@ -995,6 +1132,110 @@ local function attachCarousel()
   end)
 end
 TWDA.onFrame("menus.carousel", attachCarousel)
+
+-- A New Frontier's choice statistics after an episode (menu_stats.lua, ui_stats_reference): one
+-- page per choice, the one showing in upvalue mVisibleWidget (mCurrentPageIndex of mStatPages);
+-- a page says "Did you stay the night at the junkyard?" (its _question) and "You and 45.4% of
+-- players chose to ..." (its _label), with the bars' percentages beside. Read as each page shows.
+local statsWidget = nil
+TWDA.onFrame("menus.stats", function()
+  local menu = currentMenu()
+  if not menu or TWDA.agentName(rawget(menu, "agent")) ~= "ui_stats_reference" then
+    statsWidget = nil
+    return
+  end
+  local transition = rawget(G, "Menu_Stats_TransitionToPage")
+  local widget = TWDA.upvalue(transition, "mVisibleWidget")
+  if type(widget) ~= "table" or widget == statsWidget then return end
+  statsWidget = widget
+  local agent = rawget(widget, "agent")
+  local name = TWDA.agentName(agent)
+  local parts = {}
+  for _, suffix in ipairs({ "_question", "_label" }) do
+    local okF, part = pcall(AgentFind, name .. suffix)
+    local text = okF and part and not isHidden(part) and TWDA.agentText(part) or nil
+    if text then parts[#parts + 1] = text end
+  end
+  if #parts == 0 then
+    local text = TWDA.visibleText(agent)
+    if text then parts[#parts + 1] = text end
+  end
+  local pages = TWDA.upvalue(transition, "mStatPages") -- (per episode)
+  pages = type(pages) == "table" and pages[TWDA.upvalue(transition, "mCurrentEpisode") or 1] or nil
+  local index = TWDA.upvalue(transition, "mCurrentPageIndex")
+  if type(pages) == "table" and type(index) == "number" and #pages > 1 then
+    if index == #pages then
+      -- (The last page lists every choice again, with "Enter Continue" under it.)
+      if #parts == 0 then parts[#parts + 1] = "All the choices again" end
+      parts[#parts + 1] = "Enter continues. Left arrow goes back"
+    else
+      parts[#parts + 1] = ("Choice %d of %d. Left and right arrows for the others"):format(index, #pages)
+    end
+  end
+  -- ("Your experience with David was:, Dysfunctional, ..." from the season summary's texts.)
+  local text = TWDA.joinSentences(parts):gsub(":, ", ": ")
+  current = { button = nil, widget = widget, text = text, time = TWDA.now() }
+  TWDA.lastMenuItem = text
+  queue("item", text)
+end)
+
+-- A New Frontier's Episodes screen (ui_menuEpisodes, a Carousel). On PC its arrow keys move focus
+-- to an episode thumbnail without changing the episode shown, and Enter there does nothing; only
+-- the mouse arrows switch episodes. So here Left and Right switch episodes with the carousel's own
+-- SelectElement and focus stays on the action button ("Start Episode 2"): Enter plays the episode
+-- just read. The thumbnails are taken out of keyboard navigation.
+TWDA.onFrame("menus.episodes", function()
+  local menu = currentMenu()
+  if not menu or TWDA.agentName(rawget(menu, "agent")) ~= "ui_menuEpisodes" or rawget(menu, "shown") ~= true then
+    episodesMenu, episodesSeenAt = nil, nil
+    return
+  end
+  local list = rawget(menu, "elementList")
+  local elements = type(list) == "table" and list[rawget(menu, "currentTab")] or nil
+  if type(elements) ~= "table" or #elements == 0 then return end
+  local function actionButton()
+    local ok, button = pcall(Clone_Find, rawget(menu, "agent"), "_actionButton")
+    return ok and type(button) == "table" and button or nil
+  end
+  local function focusAction()
+    local button = actionButton()
+    if button then
+      quietButton = button
+      pcall(button.Select, button, true)
+    end
+  end
+  if episodesMenu ~= menu then
+    -- (Once it has settled: while it fills in, the episodes are read one after another, the last
+    -- one heard not being the one chosen.)
+    episodesSeenAt = episodesSeenAt or TWDA.now()
+    if TWDA.now() - episodesSeenAt < 0.6 or rawget(menu, "bTransitioning") == true then return end
+    episodesMenu, episodesSeenAt = menu, nil
+    for _, element in ipairs(elements) do
+      pcall(function() AgentSetProperty(element:GetButtonAgent(), "Game Selectable", false) end)
+    end
+    pcall(ThreadStart, focusAction)
+    local widget = call(menu, "GetSelectedElementWidget")
+    local text = describeWidget(widget)
+    if text then
+      current = { button = nil, widget = widget, text = text, time = TWDA.now() }
+      TWDA.lastMenuItem = text
+      queue("item", text)
+    end
+    queue("value", "Left and right arrows choose an episode, Enter plays it")
+  end
+  for vk, step in pairs({ [0x25] = -1, [0x27] = 1 }) do
+    local ok, down = pcall(InputPCIsVKeyPressed, vk)
+    down = ok and down == true
+    if down and not episodesKeys[vk] and rawget(menu, "bTransitioning") ~= true then
+      local index = ((rawget(menu, "currentElementIndex") or 1) - 1 + step) % #elements + 1
+      pcall(ThreadStart, function()
+        pcall(menu.SelectElement, menu, index)
+        focusAction()
+      end)
+    end
+    episodesKeys[vk] = down
+  end
+end)
 
 -- When a popup closes, say where focus went back to.
 local function attachModal()

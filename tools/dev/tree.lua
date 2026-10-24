@@ -1,6 +1,9 @@
 -- Dev console: print the active UIZ menu's agent tree (name, hidden, text, screen position).
--- Set TREE_ROOT to an agent name first to dump another agent.
-local root = rawget(_G, "TREE_ROOT") and AgentFind(TREE_ROOT) or UIZ_GetActiveMenu()
+-- Set TREE_ROOT to an agent name first to dump another agent. Widget menus (the hub, A New
+-- Frontier) dump the current menu's agent.
+local root = rawget(_G, "TREE_ROOT") and AgentFind(TREE_ROOT)
+  or (rawget(_G, "UIZ_GetActiveMenu") and UIZ_GetActiveMenu())
+  or rawget(Menu_GetCurrentMenu(), "agent")
 local lines = {}
 local function walk(agent, depth)
   if depth > 6 then return end

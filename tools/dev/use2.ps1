@@ -3,7 +3,7 @@
   and Enter, then follow until something else needs the player.
     .\use2.ps1 -Name "Trash Barrel" -Action 2
 #>
-param([string]$Name, [int]$Action = 0, [int]$MaxTabs = 20, [int]$Seconds = 60)
+param([string]$Name, [int]$Action = 0, [int]$MaxTabs = 20, [int]$Seconds = 60, [switch]$NoFollow)
 
 $dev = $PSScriptRoot
 $speech = Join-Path $dev "..\..\dist\TWDAccess\logs\speech.log"
@@ -20,4 +20,5 @@ for ($i = 0; $i -lt $MaxTabs; $i++) {
 if (-not $found) { "never found $Name"; exit 1 }
 if ($Action -gt 0) { & "$dev\game_input.ps1" -Keys "$Action" | Out-Null; Start-Sleep -Milliseconds 300 }
 & "$dev\game_input.ps1" -Keys Enter | Out-Null
+if ($NoFollow) { exit 0 }
 & "$dev\follow.ps1" -Seconds $Seconds -Quiet 15 -Stop "say! Choices|can move|Enter to do it|Enter!|Struggle|You are dead|arrow!"

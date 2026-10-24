@@ -1,13 +1,17 @@
 -- Screens that need a key press in Season 2 (projectseason2): the death screen. Death_ShowUI
 -- shows "You are dead" and "Click to continue" (Death.imap: a click or the controller's A, both
 -- going to the local OnPressButton, which reloads the last checkpoint). Enter does it here.
+-- A New Frontier has the same screen; its button handler is Death_OnButtonPress.
 local TWDA = ...
 local G = _G
 
 local deathShown = false
+local function deathButton()
+  return rawget(G, "Death_OnButtonA") or rawget(G, "Death_OnButtonPress")
+end
 
 TWDA.hookAfter("Death_ShowUI", function()
-  if type(rawget(G, "Death_OnButtonA")) ~= "function" then return end
+  if type(deathButton()) ~= "function" then return end
   deathShown = true
   TWDA.say("You are dead. Press Enter to try again from the last checkpoint.", { interrupt = true })
 end)
@@ -25,8 +29,10 @@ TWDA.onFrame("prompts2", function()
   if down and not enterHeld then
     deathShown = false
     TWDA.say("Trying again.", { interrupt = true })
+    -- (A New Frontier's Death.imap takes Enter itself.)
+    if rawget(G, "Death_OnButtonA") == nil then return end
     pcall(ThreadStart, function()
-      local okPress, err = pcall(Death_OnButtonA, {})
+      local okPress, err = pcall(deathButton(), {})
       if not okPress then TWDA.log("prompts2: death screen: " .. tostring(err)) end
     end)
   end
