@@ -144,9 +144,9 @@ local function startText(mode, keys, kind)
   return ("Struggle! Press %s over and over. Then E when told."):format(keys or "Q")
 end
 
-TWDA.struggleActive = function() return state ~= nil and not state.finished end
+TWDA.struggleActive = function() return state ~= nil and state.started == true and not state.finished end
 TWDA.describeStruggle = function()
-  if not (state and not state.finished) then return nil end
+  if not (state and state.started and not state.finished) then return nil end
   if state.ready then return "Struggle. Press E now!" end
   local pct = math.floor((state.percent and state.percent() or prop(state.agent, "Chore Scrubber - Percentage Current") or 0) * 100 + 0.5)
   if KIND_TEXT[state.kind] then return ("Struggle, %d percent. %s."):format(pct, KIND_TEXT[state.kind]:gsub("^%l", string.upper)) end
@@ -186,17 +186,24 @@ TWDA.onFrame("struggle", function()
     state = { agent = agent, ready = false, finished = false, lastMash = 0, kind = kind,
       percent = function() return percentOf(agent, game) end,
       half = percentOf(agent, game) >= 0.5 }
-    TWDA.log("struggle: started (" .. TWDA.agentName(agent) .. ", " .. tostring(kind) .. ")")
-    TWDA.lastHint = startText(mode, game.mashKeys, kind)
-    TWDA.say(TWDA.lastHint, { interrupt = true })
+    TWDA.log("struggle: set up (" .. TWDA.agentName(agent) .. ", " .. tostring(kind) .. ")")
   end
   if state.finished then return end
-  if (game.finishedKey and prop(agent, game.finishedKey) == true)
-      or (game.enabledKey and prop(agent, game.enabledKey) == false) then
+  -- (The Final Season sets a struggle up with StruggleQTE_Enter a moment before it starts: "Struggle
+  -- - Enabled" is false until then. It is said when it starts, and over once it has run.)
+  local enabled = not game.enabledKey or prop(agent, game.enabledKey) == true
+  if enabled and not state.started then
+    state.started = true
+    TWDA.log("struggle: started (" .. TWDA.agentName(agent) .. ", " .. tostring(state.kind) .. ")")
+    TWDA.lastHint = startText(mode, game.mashKeys, state.kind)
+    TWDA.say(TWDA.lastHint, { interrupt = true })
+  end
+  if (game.finishedKey and prop(agent, game.finishedKey) == true) or (state.started and not enabled) then
     state.finished = true
     TWDA.log("struggle: finished, won " .. tostring(prop(agent, game.wonKey)))
     return
   end
+  if not state.started then return end
   if prop(agent, game.pausedKey) == true then return end
 
   local ready = finishReady(game)

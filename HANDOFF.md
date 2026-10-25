@@ -3,9 +3,53 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-10-24 (eleventh session, about 16:00; see the first item).
+Last updated: 2026-10-25 (twelfth session, The Final Season begun; see the first item).
 
 ## Start here (where the last session stopped)
+
+- Twelfth session, 2026-10-25 00:40 to about 03:10 (user asleep: "start working on season 4", play
+  through to its end; questions saved). Season 4 = The Final Season. Stopped early: the usage limit
+  was reached, and the command safety check failed for the last few minutes. See "The Final Season
+  (twelfth session)" below for the framework. Where it stopped: Episode 1, BoardingSchoolInterior.lua,
+  just after the talk with Ruby (objective "FIND AJ"; places Entrance, Approach stairs, Approach door;
+  Marlon said to follow the piano music to Louis). Save 2 (wd4_saveslot2) holds the checkpoints.
+  Afterwards the user closed the game and asked for a push: the dev autorun.lua was deleted from
+  the game folder, dist\TWDAccess was rebuilt (and the Lua copied into the game folder), and
+  everything was committed and pushed. To watch every Lua state again while developing, copy
+  tools\dev\watch_s4.lua to <game>\TWDAccess\autorun.lua (delete it before the user plays: it floods
+  twda.log with WS2 lines and doubles some hooks).
+  New and changed, tested in the game unless marked:
+  - New configurator.lua (the story recap's questions; keys added, captions read).
+  - New lookaround4.lua: Tab/Shift+Tab through the useables (labels "Pick Up Canteen"), places to
+    walk to (lookaround2's places, exported as TWDA.walkPlaces/TWDA.walkTo; aims a meter past a
+    story line so it is crossed) and walkers to walk up to (combat4); Enter or F uses the Tab choice
+    (wraps Useable_OnButtonUse), else the only thing, else the game's own pick; F6; announcements
+    ("Clementine can move. ..."), forced again when control returns after 3 s out (untested);
+    Backspace leaves a station; "Nothing more here. Backspace steps back."; leaves Enter to qte3
+    while a QTE target is up (untested).
+  - New combat4.lua: walkers (AI agents with "AI Agent - AI Agent Enable"): "Walker, 6 meters,
+    ahead." and at 3.5 m; in reach (about 2 m, half a second): "Walker! Q to attack, E to shove!";
+    Q or E pressed while one comes is kept 1.5 s and done the moment it is in reach (this is how the
+    first walkers and the pinned one were killed by ear); slow mode slows while one is close; auto
+    attacks; F6. TWDA.walkerTargets for walking up to a walker that stays put (stops when in reach).
+  - lookaround2.lua: death traps ("caught", "kill", "death"...) are no places and are steered round
+    (a waypoint 2.5 m beside a trap near the straight way); walks can have stopAt/stopWhen;
+    "trigger_dialog_*zombie*" story spots count as places in The Final Season.
+  - struggle.lua: a struggle is announced when "Struggle - Enabled" turns true (TFS sets it up first)
+    and is over only after it ran. qte3.lua: QTE targets from QTE_GetQuickTimeAgents' "QTE Prompt -
+    N". prompts2.lua: TFS notices (one text agent) and the Objective/Inventory/... kinds.
+    menus.lua: recap captions under the resting mouse not read; digits count as navigation keys.
+    hotkeys.lua: F6 has TWDA.describeConfigurator, describeCombat, describeWalkers.
+    devconsole.lua: runs TWDAccess\autorun.lua a second into each Lua state if it exists (dev only).
+  - Test tools: react4.ps1 (background reactor for TFS), use4.ps1, useall4.ps1, probe_ai4.lua,
+    watch_s4.lua; dumpup.lua takes DUMPUP_DEPTH.
+  - Seen, not fixed: menus "Import Save? menu. No. Yes" and the import screen read buttons in child
+    order, not left to right, and give no "left and right arrows" hint; the Telltale account screen
+    reads only "Join" (its text is on ui_popupWindow_body); "Settings menu, 6 items. Page Down:
+    Rename" (a popup's legend stuck); "Camera Sensitivity : 0"; Gameplay Settings counts 3 items for
+    2; after an attack the walker going down is announced "in reach" again; guided.lua says "W does
+    not move Clementine here" while a station pauses the path; examine lines have no subtitles.
+  - Questions for the user: none yet beyond checking the new keys in play.
 
 - Eleventh session, 2026-10-24 15:35 to about 16:00 (user in the game: "NVDA keeps saying escape
   before each season selection"). Season Select said "Escape Previous Menu, Michonne, Haunted
@@ -536,7 +580,8 @@ E. (#14) Long walks are slow and silent (Lee limps: 35 m to Hershel took about 4
    Import Season 1 Save and the end-of-episode My Choices were done in the seventh session. All of
    Season 2 was played by ear by the ninth session (one path through the choices). A New Frontier
    (its menus, which are the hub's widget framework, and all five episodes) was done in the tenth
-   session. Michonne and The Final Season are untouched.
+   session. The Final Season was begun in the twelfth session (menus, recap, Episode 1 to the
+   school; see "Start here"); Michonne is untouched.
 6. (#6) Done in the eighth session: Escape is the game's (pause menu); Backspace lets go of the
    held hotspot and stops a walk.
 7. (#7) Done 2026-10-09, not yet run against the real game folder: --uninstall now keeps
@@ -1596,6 +1641,76 @@ Walkthrough notes (one path, mostly answer 1; what the game wants):
   panel: Button 1 opens it; the bulldozer: "E, 3 times", Q, Q, E, "Q, 5 times", "Shift and E
   together"; Kate's path; the end and the season summary (14 pages).
 
+### The Final Season (twelfth session, 2026-10-25)
+
+Reached from the hub with to_season.ps1 -Season 4 (MenuBoot.lua, then Menu_Main.lua; the hub's
+widget menus, so menus.lua mostly works). Saves are wd4_saveslotN (Settings > Save files: Save 1 to
+4; Enter makes one active, "checked"). The agent uses Save 2; the user's Save 1 is untouched.
+Starting: Episodes > "Import Save?" (Yes) > "Search for Choice Data or Local Save": two buttons side
+by side, LEFT and RIGHT arrows ("Check for Choice Data" on the left opens a Telltale account
+sign-in screen: answer "Not now"; "Import Local Save" on the right) > "Walking Dead: A New Frontier
+Local Import" list (Save 2, "5 Episodes Completed") > "Import Successful" > OK. Then the story recap
+(Configurator.lua), then Episode 1 (RoadTile.lua: the car; TrainStation.lua; BoardingSchoolDorm.lua;
+BoardingSchoolExterior.lua; BoardingSchoolInterior.lua ...).
+
+Framework (projectseason4 scripts; globals in <game>\TWDAccess\globals_state.txt, globals_s4menu.txt,
+globals_s4config.txt). New script files: ai_player.lua, ai_agent.lua, useable.lua, crosshair.lua,
+reticlewd.lua, reticleselectionwd.lua, navigatewd.lua, directcontrolwd.lua, dialogchoices.lua,
+configurator.lua, qte_util.lua, shooter.lua, orbitcam.lua, triggerwd.lua, inventorywd.lua.
+Most locals that matter are not reachable from globals; tools\dev\findsrc-style searches (walk
+_G, global tables and debug.getregistry, dump by line) found them (see "Developer tooling").
+- The story recap (configurator.lua): Configurator.imap has NO keyboard keys on PC (clicks and the
+  D-pad, and its own Left/Right handlers ignore the D-pad once the mouse was used). New
+  configurator.lua in the mod: on Configurator_ChoiceEnableInput(targetList, stringList) it says
+  "Which is right: Lee saved Doug, or Lee saved Carley? Left and right arrows to choose, Enter to
+  confirm." (captions are the texts of ui_configurator_button1..3), Left/Right call
+  Configurator_SelectButtonByIndex, 1-3 pick and confirm, Enter calls Configurator_OnA (in a thread);
+  a single target ("Click to Continue") says "Enter to continue.". menus.lua reads the caption on
+  each Select, but not one selected under the resting mouse or while no question is open.
+- Dialog choices: dialogchoices.lua has the same SetChoices/ActivateChoice upvalues as Season 2, so
+  choices2.lua works unchanged ("choices: attached to Season 2's dialog"). The layout puts "Say
+  nothing" first in reading order.
+- Things to use (useable.lua): every agent with the "useable" property set that is "Game
+  Selectable" and visible is in the local mCurrentUseables (an upvalue of Useable_GetCount; added
+  and removed by property callbacks, so it is the whole scene's set, not only what is near). The
+  game picks one each frame (UpdateUseables: in Navigate mode the closest to the screen centre
+  within "Useable - Max Distance"/the scene default and on screen; in a station the agent at the
+  screen centre) into mSelectedUseable and shows its token "Give Magazine" with F. F, Enter and a
+  left click (Useable.imap) run Useable_OnButtonUse: Navigate_PathToAndUseAgent(agent,
+  Game_GetUseNodeName(agent)), which WALKS her there from anywhere in the scene (30 m to the water
+  fountain worked) and uses it. A token's words: verb = Dialog_GetText(scene dialog, "Useable - Verb
+  Node") or Dialog_GetText("ui_text", node), or, with no verb node, "Useable - Verb Preset" ("Grab",
+  "Pick Up", "Look At"; the game shows "verb_grab"); noun = Game_GetNounText(agent).
+  Input maps hold callbacks by name, resolved when the map is ACTIVATED: wrapping
+  Useable_OnButtonUse works for maps activated after the wrap (every new state: main.lua wraps it
+  first), but a module re-included from the dev console does not get the real Enter key until the
+  map is activated again. F worked where Enter did not, once.
+- Stations (station.lua; Game mode "Station": AJ's seat, the car trunk, the scrapbook, the closet):
+  Station.imap backs out with the right mouse button only; Station_OnButtonExit({}) does it when
+  Station_AllowExit() (a query) is true. A guided path (chored movement) does not move while a
+  station is open.
+- Guided paths: ChoredMovement_SetJoystickDirection(Vector(0, 1, 0)) moves one (tested); the WASD
+  icon shows the key. W works on the chair push in the dorm once the close-up is closed.
+- Walkers (ai_player.lua): see combat4.lua below. Death traps: some story triggers kill at once
+  ("trigger_dialog_caughtByTrappedZombie", 0.9 by 0.4 m beside the walker pinned under a train car
+  at the station: Trigger_OnEnterDialog then Death()). Trigger boxes: AgentLocalToWorld(trigger,
+  AgentGetProperty(trigger, kExtentsMin/kExtentsMax)) gives the corners; many story triggers are
+  thin lines across the way ("trigger_dialog_ajWarning" is 5 m by 0.4 m) that must be crossed.
+- Struggles (struggleqte.lua, as A New Frontier: Struggle.imap Q mash, E death blow, arrows):
+  StruggleQTE_Enter(agent) sets one up WITHOUT "Struggle - Enabled"; StruggleQTE_Begin starts it a
+  moment later (both seen for the walker grab, struggle_zombie, about 6.5 s long, then Death()).
+- QTEs: QTE_UI_ShowPrompt as A New Frontier (qte3.lua works); prompts that are things to click
+  ("obj_logicalAction" at the train station, after the tutorial notice) are NOT in the agents'
+  promptsCurrent (the ExecuteAction upvalue mQuickTimeEventAgents is empty): QTE_GetQuickTimeAgents()
+  returns the QTE agents, whose "QTE Prompt - 1", "- 2"... hold them. Multi-prompt QTEs
+  (MultiQTE_Enable) as A New Frontier ("Press Shift and E together!" worked).
+- Notices (notification.lua): one text agent for every kind, "ui_notification_text" (upvalue
+  kTextAgent of ShowTextNotification, an upvalue of Notification_ShowTutorial); kinds Tutorial,
+  Choice, Objective ("FIND AJ"), Branch, Inventory ("You have: PALETTE KNIFE Sharp enough."),
+  Relationship, Gift.
+- Subtitles: examine lines in TFS often have no Subtitle_OnCreate (no "subtitle" log line), so in
+  "speaker" mode nothing is said for them; the voice is heard. (Not looked into yet.)
+
 ### 400 Days replayed (sixth session, 2026-10-10 about 03:15 to 05:20)
 
 After the River Street retest, 400 Days was replayed in slot 2 to test the open items (from
@@ -2063,10 +2178,15 @@ Project root: C:\Users\dengs\Downloads\TWD
   obsolete first probe, kept only for reference.
 - `mod/lua/`: the mod, plain Lua, installed to <game>\TWDAccess\.
   - main.lua: loads the modules in order: core, settings, text, hooks, carryover, uitext, menus,
-    panes, messagebox, prompts, prompts2, choices, choices2, lookaround, lookaround2, actions,
-    action2, qte3, aiming, sniper, struggle, turnchoice, inventory, peek, guided, runto, cornfield,
-    drag, drag2, drag3, fastslow, cover, readables, panels, subtitles, hotkeys, then discovery and
-    devconsole if enabled.
+    panes, messagebox, prompts, prompts2, choices, choices2, lookaround, lookaround2, lookaround4,
+    actions, action2, qte3, configurator, aiming, sniper, struggle, combat4, turnchoice, inventory,
+    peek, guided, runto, cornfield, drag, drag2, drag3, fastslow, cover, readables, panels,
+    subtitles, hotkeys, then discovery and devconsole if enabled.
+  - The Final Season modules (twelfth session; see "The Final Season"): configurator.lua (the story
+    recap's questions), lookaround4.lua (useables, places and walkers on Tab, Enter or F, stations,
+    announcements) and combat4.lua (walkers: warnings, keys in reach, early Q or E kept, slow and
+    auto modes; TWDA.walkerTargets). The Final Season also uses choices2, lookaround2 (places and
+    walking), qte3, struggle, prompts2 (notices) and menus.
   - A New Frontier modules (tenth session; see "A New Frontier"): qte3.lua (QTE prompts, things to
     pick, multi-prompt QTEs, TWDA.qteBusy) and drag3.lua (drags). A New Frontier also uses
     choices2, lookaround2, prompts2, struggle, guided and menus.

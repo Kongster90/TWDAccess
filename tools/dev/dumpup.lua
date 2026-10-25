@@ -1,12 +1,13 @@
 -- Dev console: save a game function's upvalue functions (and their upvalue functions, two levels)
--- as bytecode in TWDAccess\dumps\up\<global>.<upvalue>.luac. Set DUMPUP to the global's name.
+-- as bytecode in TWDAccess\dumps\up\<global>.<upvalue>.luac. Set DUMPUP to the global's name (and
+-- DUMPUP_DEPTH for more levels than two).
 local name = rawget(_G, "DUMPUP")
 local fn = DEV.unwrap(rawget(_G, name))
 local dir = TWDA.dir .. "dumps/up/"
 os.execute('mkdir "' .. dir:gsub("/", "\\") .. '" 2>nul')
 local saved, seen = {}, {}
 local function save(prefix, f, depth)
-  if seen[f] or depth > 2 then return end
+  if seen[f] or depth > (rawget(_G, "DUMPUP_DEPTH") or 2) then return end
   seen[f] = true
   for i = 1, 80 do
     local n, v = debug.getupvalue(f, i)

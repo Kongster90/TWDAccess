@@ -68,3 +68,17 @@ end)
 
 -- The console's helper functions (DEV.dump, DEV.where, ...).
 TWDA.safeInclude("devtools")
+
+-- TWDAccess\autorun.lua, when there is one, runs in every new Lua state a second after it starts
+-- (once the game's scripts have defined their globals): a watcher that should survive death reloads.
+local startedAt = TWDA.now()
+TWDA.onFrame("devconsole.autorun", function()
+  if TWDA.now() - startedAt < 1 then return end
+  TWDA.onFrame("devconsole.autorun", function() end)
+  local file = io.open(TWDA.dir .. "autorun.lua", "rb")
+  if not file then return end
+  local code = file:read("*a")
+  file:close()
+  report("autorun.lua: running")
+  run(code)
+end)

@@ -199,8 +199,11 @@ end
 -- ("warp" triggers move the player between the parts of a room or yard that have walk boxes of
 -- their own, in pairs: "Warp tables to fireplace" and back. Walks to the things on the far side
 -- cross them anyway.)
+-- (Death traps are no places either: The Final Season's "trigger_dialog_caughtByTrappedZombie" kills
+-- Clementine beside a pinned walker.)
 local NOT_PLACES = { "cam", "chore", "depth", "tracking", "death", "dies", "die_", "kill", "pursuer", "fail", "lose",
-  "warp" }
+  "warp", "caught" }
+local DEATH_TRAPS = { "death", "dies", "die_", "kill", "caught" }
 
 local function canWalk()
   if onGuidedPath() then return false end
@@ -237,8 +240,13 @@ local function places()
       -- walking-speed switches, "trigger_dialog_fastWalk", are not places either.)
       if lower:find("_ots", 1, true) or lower:find("walk$") or lower:find("rackfocus", 1, true) then skip = true end
       -- (Nor the walkers' own triggers, "trigger_zombie3" in A New Frontier's herd, Episode 5; nor
-      -- story spots named after what happens there, "trigger_dialog_zombieAttack".)
-      if lower:find("zombie", 1, true) or lower:find("walker", 1, true) then skip = true end
+      -- story spots named after what happens there, "trigger_dialog_zombieAttack". The Final Season
+      -- names most of its story spots so, "trigger_dialog_firstZombie", and they are the way on.)
+      local finalSeason = type(rawget(G, "Useable_GetCount")) == "function"
+      if (lower:find("zombie", 1, true) or lower:find("walker", 1, true))
+          and not (finalSeason and lower:find("^trigger_dialog_")) then
+        skip = true
+      end
       local okP, pos = pcall(AgentGetWorldPos, agent)
       if not skip and okP and pos and okWB then
         local okG, ground = pcall(WalkBoxesPosOnWalkBoxes, pos, walkBoxes)
@@ -264,19 +272,60 @@ local MOVE_KEYS = { 0x57, 0x41, 0x53, 0x44, 0x25, 0x26, 0x27, 0x28 }
 -- on Zombie3 in A New Frontier's herd), looked up again five times a second.
 local AVOID_METERS = 1.3
 local spots, spotsAt = {}, -10
+local traps = {} -- (the death traps among the spots)
 local function walkerSpots()
   local now = TWDA.now()
   if now - spotsAt < 0.2 then return spots end
-  spotsAt, spots = now, {}
+  spotsAt, spots, traps = now, {}, {}
   local okS, agents = pcall(SceneGetAgents, TWDA.playerScene and TWDA.playerScene() or call("Game_GetScene"))
   for _, agent in ipairs(okS and type(agents) == "table" and agents or {}) do
     local lower = TWDA.agentName(agent):lower()
-    if lower:find("^trigger_zombie%d") or lower:find("^trigger_zombielow") or lower:find("^trigger_walker%d") then
+    local avoid = lower:find("^trigger_zombie%d") or lower:find("^trigger_zombielow") or lower:find("^trigger_walker%d")
+    -- (And the death traps, while they are on.)
+    if not avoid and lower:find("^trigger_") and prop(agent, "Trigger Enabled") == true then
+      for _, word in ipairs(DEATH_TRAPS) do
+        if lower:find(word, 1, true) then avoid = true break end
+      end
+    end
+    if avoid then
       local okP, pos = pcall(AgentGetWorldPos, agent)
       if okP and pos then spots[#spots + 1] = pos end
+      if okP and pos and not lower:find("^trigger_zombie") and not lower:find("^trigger_walker") then
+        traps[#traps + 1] = pos
+      end
     end
   end
   return spots
+end
+
+-- A death trap near the straight way there (the trapped walker's at the train station, The Final
+-- Season, lies right on the way to AJ): a point 2.5 meters to one side of it, on the walk boxes,
+-- to head for first.
+local function detourAround(here, target)
+  walkerSpots()
+  local dx, dz = target.x - here.x, target.z - here.z
+  local length = math.sqrt(dx * dx + dz * dz)
+  if length < 1 then return nil end
+  local ux, uz = dx / length, dz / length
+  local okWB, walkBoxes = pcall(PathAgentGetWalkBoxes, TWDA.player())
+  for _, c in ipairs(traps) do
+    local along = (c.x - here.x) * ux + (c.z - here.z) * uz
+    local across = math.abs((c.x - here.x) * uz - (c.z - here.z) * ux)
+    if along > 0.3 and along < length - 0.3 and across < 1.2 then
+      local best, bestLength = nil, math.huge
+      for _, sign in ipairs({ 1, -1 }) do
+        local wx, wz = c.x - uz * 2.5 * sign, c.z + ux * 2.5 * sign
+        local okG, ground = false, nil
+        if okWB then okG, ground = pcall(WalkBoxesPosOnWalkBoxes, Vector(wx, c.y, wz), walkBoxes) end
+        if okG and ground and math.abs(ground.x - wx) + math.abs(ground.z - wz) < 0.6 then
+          local total = math.sqrt((wx - here.x) ^ 2 + (wz - here.z) ^ 2) + math.sqrt((target.x - wx) ^ 2 + (target.z - wz) ^ 2)
+          if total < bestLength then best, bestLength = ground, total end
+        end
+      end
+      if best then return best end
+    end
+  end
+  return nil
 end
 
 local function stopWalk(text)
@@ -291,7 +340,7 @@ end
 -- many places straight away); steering takes over from wherever it stops.
 local function startWalk(h)
   local w = { agent = h.agent, label = h.label, target = h.target, best = h.distance, first = h.distance, bestAt = TWDA.now(),
-    start = TWDA.now(), pathing = true }
+    start = TWDA.now(), pathing = true, stopAt = h.stopAt, stopWhen = h.stopWhen }
   walk = w
   TWDA.log("lookaround2: walking to " .. h.label)
   TWDA.say(("Walking to %s, %d meters. A movement key stops."):format(h.label, math.floor(h.distance + 0.5)),
@@ -362,8 +411,13 @@ local function steer()
   local here = playerPos()
   if not here then return stopWalk(nil) end
   local d = horizontalDistance(here, walk.target)
+  -- (A walk can end when something else says so: a walker in reach, combat4.lua, which says so.)
+  if walk.stopWhen then
+    local okW, done = pcall(walk.stopWhen)
+    if okW and done then return stopWalk(nil) end
+  end
   -- (Half a meter: a story trigger has to be stepped into, and many are small.)
-  if d < 0.5 then return stopWalk("At " .. walk.label .. ".") end
+  if d < (walk.stopAt or 0.5) then return stopWalk("At " .. walk.label .. ".") end
   -- Long walks say how far is left every 10 s, while it goes down.
   if now - (walk.toldAt or walk.start) >= 10 and not walk.paused then
     walk.toldAt = now
@@ -396,7 +450,21 @@ local function steer()
   if now - walk.start > 60 + 2.5 * (walk.first or 24) then
     return stopWalk("Gave up walking to " .. walk.label .. ".")
   end
-  if d < walk.best - 0.3 then walk.best, walk.bestAt, walk.detours = d, now, 0 end
+  -- (Round a death trap by way of a point beside it, looked for twice a second.)
+  if walk.waypoint and horizontalDistance(here, walk.waypoint) < 0.8 then walk.waypoint, walk.best = nil, math.huge end
+  if not walk.waypoint and now - (walk.detourCheckAt or -10) > 0.5 then
+    walk.detourCheckAt = now
+    walk.waypoint = detourAround(here, walk.target)
+    if walk.waypoint then
+      walk.best = math.huge
+      TWDA.log(("lookaround2: round a trap by %.1f, %.1f"):format(walk.waypoint.x, walk.waypoint.z))
+    end
+  end
+  local aim = walk.waypoint or walk.target
+  local ad = horizontalDistance(here, aim)
+  if ad < 0.0001 then return end
+  -- (Progress is towards the point beside a trap while there is one.)
+  if ad < walk.best - 0.3 then walk.best, walk.bestAt, walk.detours = ad, now, 0 end
   -- Stuck against something: try going round it, one side then the other, before giving up.
   local detour = walk.detour
   if detour and now > detour.untilTime then walk.detour, detour = nil, nil end
@@ -414,7 +482,7 @@ local function steer()
   end
   local okCam, camera = pcall(function() return SceneGetCamera(TWDA.playerScene and TWDA.playerScene() or Game_GetScene()) end)
   if not okCam or camera == nil then return end
-  local ux, uz = (walk.target.x - here.x) / d, (walk.target.z - here.z) / d
+  local ux, uz = (aim.x - here.x) / ad, (aim.z - here.z) / ad
   -- Keeping clear of walkers on the way (through the herd in Episode 5 of A New Frontier, where
   -- brushing against them gives Javier away): each pushes the way aside, harder the closer.
   local px, pz = 0, 0
@@ -445,6 +513,13 @@ local function steer()
   pcall(DirectControl_SetJoystickDirection, Vector(dx / length, dy / length, 0))
 end
 TWDA.onFrame("lookaround2.walk", steer)
+
+-- (The Final Season's lookaround4.lua offers the same places to walk to, through these.)
+TWDA.walkPlaces = places
+TWDA.walkTo = startWalk
+function TWDA.walkingTo()
+  return walk and walk.label or nil
+end
 
 -- A walk the game cut short goes on once the player can walk again (within 20 seconds, if the
 -- place is still there and no movement key is held).

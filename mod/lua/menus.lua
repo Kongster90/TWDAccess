@@ -608,7 +608,7 @@ end)
 local navKeyAt, mouseMovedAt, lastCursor = -10, -10, nil
 TWDA.onFrame("menus.input", function()
   local now = TWDA.now()
-  for _, vk in ipairs({ 0x09, 0x25, 0x26, 0x27, 0x28 }) do
+  for _, vk in ipairs({ 0x09, 0x25, 0x26, 0x27, 0x28, 0x31, 0x32, 0x33, 0x34 }) do
     local ok, down = pcall(InputPCIsVKeyPressed, vk)
     if ok and down == true then navKeyAt = now end
   end
@@ -640,6 +640,13 @@ local function onSelect(button)
   -- (Nor a legend button there, as a menu opens: A New Frontier's "Copy" under the Save Files list.)
   if TWDA.agentName(button):find("legendButton", 1, true) and now - navKeyAt > 0.5 and now - mouseMovedAt > 1 then
     TWDA.log("menus: " .. TWDA.agentName(button) .. " (legend) selected under the resting mouse; not read")
+    return
+  end
+  -- (Nor a caption of The Final Season's story recap there as its question comes up: it cut the
+  -- question off.)
+  if TWDA.agentName(button):find("^ui_configurator_button") and ((now - navKeyAt > 0.5 and now - mouseMovedAt > 1)
+      or not (TWDA.configuratorOpen and TWDA.configuratorOpen())) then
+    TWDA.log("menus: " .. TWDA.agentName(button) .. " (recap) selected under the resting mouse; not read")
     return
   end
   -- (A New Frontier's Episodes screen selects each episode in turn as it fills in; it is read once

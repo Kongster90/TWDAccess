@@ -24,6 +24,8 @@ end
 local function readCurrent()
   local aiming = (TWDA.describeDeath and TWDA.describeDeath())
     or (TWDA.describeAction2 and TWDA.describeAction2())
+    or (TWDA.describeConfigurator and TWDA.describeConfigurator())
+    or (TWDA.describeCombat and TWDA.describeCombat())
     or (TWDA.describeReadable and TWDA.describeReadable())
     or (TWDA.describeStruggle and TWDA.describeStruggle()) or (TWDA.describeAiming and TWDA.describeAiming())
     or (TWDA.describeSniper and TWDA.describeSniper())
@@ -62,6 +64,8 @@ local function readCurrent()
   if peek then parts[#parts + 1] = peek end
   local guided = not menu and TWDA.describeGuided and TWDA.describeGuided()
   if guided then parts[#parts + 1] = guided end
+  local walkers = not menu and TWDA.describeWalkers and TWDA.describeWalkers()
+  if walkers then parts[#parts + 1] = walkers end
   local countdown = not menu and TWDA.describeCountdown and TWDA.describeCountdown()
   if countdown then parts[#parts + 1] = countdown end
   local hotspots = not menu and TWDA.describeLookaround and TWDA.describeLookaround()

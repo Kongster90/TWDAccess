@@ -112,16 +112,28 @@ local function executeAction()
   return TWDA.upvalue(rawget(G, "QTE_KeyE"), "ExecuteAction")
 end
 
+local function isTarget(prompt)
+  if type(prompt) ~= "string" or prompt == "" or KEY_WORDS[prompt:lower()] or prompt:lower():find("^hold") then return false end
+  local okE, exists = pcall(AgentExists, prompt)
+  return okE and exists == true
+end
+
 local function targetPrompt()
   local execute = executeAction()
   local list = type(execute) == "function" and TWDA.upvalue(execute, "mQuickTimeEventAgents") or nil
   for _, qte in ipairs(type(list) == "table" and list or {}) do
     local prompts = rawget(qte, "promptsCurrent")
     for _, prompt in ipairs(type(prompts) == "table" and prompts or {}) do
-      if type(prompt) == "string" and not KEY_WORDS[prompt:lower()] and not prompt:lower():find("^hold") then
-        local okE, exists = pcall(AgentExists, prompt)
-        if okE and exists then return prompt end
-      end
+      if isTarget(prompt) then return prompt end
+    end
+  end
+  -- (The Final Season keeps that list empty: its QTE agents, QTE_GetQuickTimeAgents(), carry their
+  -- prompts in "QTE Prompt - 1", "- 2"..., "obj_logicalAction" at the train station.)
+  local okQ, agents = pcall(rawget(G, "QTE_GetQuickTimeAgents") or function() return nil end)
+  for _, qte in ipairs(okQ and type(agents) == "table" and agents or {}) do
+    for i = 1, 5 do
+      local prompt = prop(qte, "QTE Prompt - " .. i)
+      if isTarget(prompt) then return prompt end
     end
   end
   return nil
@@ -153,6 +165,12 @@ local function targetName(prompt)
 end
 
 local target, enterHeld = nil, false
+
+-- (lookaround4.lua leaves Enter alone while a thing to pick is up: the train station's
+-- "obj_logicalAction" is a usable too.)
+function TWDA.qteTargetUp()
+  return target ~= nil
+end
 TWDA.onFrame("qte3.targets", function()
   local prompt = qteOn and targetPrompt() or nil
   if prompt ~= (target and target.prompt) then

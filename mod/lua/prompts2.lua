@@ -92,9 +92,27 @@ end)
 -- nothing when the game's notifications are off. The mod reads the text agent once the node is on
 -- it.
 local pendingNotes = {} -- { node, index, at, giveUpAt, hint }
+-- The Final Season's notices share one text agent (ShowTextNotification's upvalue kTextAgent,
+-- "ui_notification_text"), whatever their kind.
+local function finalSeasonNoteAgent()
+  local showText = TWDA.upvalue(rawget(G, "Notification_ShowTutorial"), "ShowTextNotification")
+  local name = showText and TWDA.upvalue(showText, "kTextAgent")
+  if type(name) ~= "string" then return nil end
+  local ok, agent = pcall(AgentFind, name)
+  return ok and agent or nil
+end
+
 local function noteText(note)
   local show = TWDA.upvalue(rawget(G, "Notification_ShowTutorial"), "ShowNotification")
   local agents = show and TWDA.upvalue(show, "kTextAgents")
+  if agents == nil then
+    local agent = finalSeasonNoteAgent()
+    local text = agent and TWDA.agentText(agent)
+    if not text or text == "" then return nil end
+    local okN, node = pcall(AgentGetProperty, agent, "Text Dialog 2.0 Node Name")
+    if (okN and node == note.node) or text ~= note.before then return text end
+    return nil
+  end
   local agent = type(agents) == "table" and agents[note.index] or nil
   if type(agent) == "string" then
     local ok, found = pcall(AgentFind, agent)
@@ -110,11 +128,19 @@ local function queueNote(fnName, indexName, hint)
     if type(node) ~= "string" then return end
     local index = TWDA.upvalue(rawget(G, fnName), indexName)
     local at = TWDA.now() + (type(delay) == "number" and delay or 0)
-    pendingNotes[#pendingNotes + 1] = { node = node, index = index, at = at, giveUpAt = at + 2, hint = hint }
+    local tfs = finalSeasonNoteAgent()
+    pendingNotes[#pendingNotes + 1] = { node = node, index = index, at = at, giveUpAt = at + 2, hint = hint,
+      before = tfs and TWDA.agentText(tfs) or nil }
   end)
 end
 queueNote("Notification_ShowTutorial", "kNotificationTutorial", true)
 queueNote("Notification_ShowChoice", "kNotificationChoice", false)
+-- (The Final Season's other kinds.)
+queueNote("Notification_ShowObjective", "kNotificationObjective", true)
+queueNote("Notification_ShowBranch", "kNotificationBranch", false)
+queueNote("Notification_ShowInventory", "kNotificationInventory", false)
+queueNote("Notification_ShowRelationship", "kNotificationRelationship", false)
+queueNote("Notification_ShowGift", "kNotificationGift", false)
 TWDA.onFrame("prompts2.notes", function()
   if #pendingNotes == 0 then return end
   local now = TWDA.now()
