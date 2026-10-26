@@ -45,6 +45,30 @@ end
 
 local active, startedAt, told = false, 0, false
 
+-- The Final Season says which way only with an arrow on screen ("HOLD W A S D in the direction of
+-- the arrow", pulling buckshot from James's arm, Episode 2). Its choredmovement.lua moves on when
+-- the key's direction, seen from the camera, is the path's axis (GetRelativeDirection, an upvalue of
+-- OnPostUpdate under ChoredMovement_Start's Activate: 1 for on, -1 for back), so the mod asks it
+-- which key that is. It can change with the camera.
+local function relativeForward()
+  local activate = TWDA.upvalue(rawget(_G, "ChoredMovement_Start"), "Activate")
+  local update = activate and TWDA.upvalue(activate, "OnPostUpdate")
+  local relative = update and TWDA.upvalue(update, "GetRelativeDirection")
+  if type(relative) ~= "function" then return nil end
+  -- (A scene can turn the controls round at a stop on the way: dragging Omar from the gate during
+  -- the raid, Episode 2, wants D, then A, then D... The move agent's "Chored Movement - Reverse
+  -- Controls" says so, and the game's key picture lights the other key.)
+  local mover = TWDA.upvalue(rawget(_G, "ChoredMovement_Start"), "mMoveAgent") or TWDA.player()
+  local okR, reversed = pcall(AgentGetProperty, mover, "Chored Movement - Reverse Controls")
+  local want = (okR and reversed == true) and -1 or 1
+  for _, k in ipairs({ { "W", 0, 1 }, { "S", 0, -1 }, { "A", -1, 0 }, { "D", 1, 0 } }) do
+    local ok, dir = pcall(relative, Vector(k[2], k[3], 0))
+    if ok and dir == want then return k[1] end
+  end
+  return nil
+end
+local toldForward, fwdSeen, fwdSince = nil, nil, 0
+
 -- Which key moves Lee on is not always W: up the dairy farmhouse's stairs it is S. The mod learns
 -- it from the player's own key: whichever is held while the path moves forward or back.
 local KEYS = { { 0x57, "W", "S" }, { 0x53, "S", "W" }, { 0x41, "A", "D" }, { 0x44, "D", "A" },
@@ -155,7 +179,7 @@ TWDA.onFrame("guided", function()
     active, startedAt, told = on, now, false
     local held = on and heldKey()
     heldAtStart = held and held[2] or nil
-    forwardKey, toldBack, toldHalf, stuck, moveRef = nil, false, nil, false, nil
+    forwardKey, toldBack, toldHalf, stuck, moveRef, toldForward = nil, false, nil, false, nil, nil
     TWDA.log("guided: " .. (on and "path started" or "path ended"))
   end
   -- (The path can drop out for a moment when Lee is halted; the stop is kept a while.)
@@ -191,6 +215,17 @@ TWDA.onFrame("guided", function()
   if not active then return end
   -- (400 Days' cornfield runs on a path too; cornfield.lua says what the keys do there.)
   if TWDA.cornfieldRunning and TWDA.cornfieldRunning() then return end
+  -- (Said once it has held for half a second outside a cut scene: the camera cuts about while
+  -- people talk on the way, the greenhouse roof in Episode 2.)
+  local fwd = relativeForward()
+  if fwd ~= fwdSeen then fwdSeen, fwdSince = fwd, now end
+  local okM, gameMode = pcall(Game_GetMode)
+  local cutscene = okM and type(gameMode) == "table" and gameMode.name == "Cutscene"
+  if fwd and fwd ~= toldForward and now - fwdSince > 0.5 and not cutscene then
+    toldForward, told = fwd, true
+    TWDA.log("guided: forward is " .. fwd)
+    TWDA.say("Hold " .. fwd .. " to go on", { interrupt = true })
+  end
   local pct = fraction()
   if toldHalf == nil and pct then toldHalf = pct >= 0.5 end
   local key = heldKey()
@@ -211,7 +246,10 @@ TWDA.onFrame("guided", function()
     if heldAtStart == key[2] then
       TWDA.say("Let go of " .. key[2] .. ", then hold it again", { interrupt = true })
     else
-      TWDA.say(key[2] .. " does not move " .. TWDA.playerName() .. " here. Try " .. key[3], { interrupt = true })
+      -- (The Final Season knows the way: "Hold S" after a camera cut, not the opposite of the key.)
+      local way = relativeForward()
+      TWDA.say(key[2] .. " does not move " .. TWDA.playerName() .. " here. " .. (way and ("Hold " .. way) or ("Try " .. key[3])),
+        { interrupt = true })
     end
   end
   if moveRef and math.abs(moved) > 0.002 then

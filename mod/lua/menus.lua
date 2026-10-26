@@ -87,6 +87,7 @@ local function describeWidget(widget)
   for _, method in ipairs({ "GetDisplayTitle", "GetDisplaySubtitle", "GetDisplayStatus", "GetDisplayAction",
     "GetDisplayDescription" }) do
     local text = TWDA.normalCaps(TWDA.keyOrText(call(widget, method)))
+    if text and TWDA.isPlaceholder and TWDA.isPlaceholder(text) then text = nil end
     if text then
       -- "Episode 1 Ties That Bind PART ONE" (A New Frontier): a run of capitals words reads as
       -- words (a lone "AJ" stays).
@@ -172,6 +173,10 @@ local function siblingText(button)
   if TWDA.agentName(button):lower():find("arrow", 1, true) then return nil end
   local okP, parent = pcall(AgentGetParent, button)
   if not okP or parent == nil then return nil end
+  -- (Nor for a button straight under a widget menu's own agent, whose siblings are the whole
+  -- screen: The Final Season's Episodes screen has a blank "ui_menuEpisodes_buttonReference".)
+  local okM, menu = pcall(function() return Menu_GetCurrentMenu and Menu_GetCurrentMenu() end)
+  if okM and type(menu) == "table" and TWDA.agentName(rawget(menu, "agent")) == TWDA.agentName(parent) then return nil end
   local okC, kids = pcall(AgentGetChildren, parent)
   local texts, locked = {}, false
   local function add(agent, depth)
@@ -491,7 +496,17 @@ end
 
 local function describeButton(button)
   local widget = widgetOf(button)
-  local base = describeWidget(widget) or TWDA.agentText(button) or siblingText(button)
+  -- (A button whose widget is the whole menu reads its own words: The Final Season's "Start
+  -- Episode 4" on the Episodes screen, not the screen.)
+  local okM, menu = pcall(function() return Menu_GetCurrentMenu and Menu_GetCurrentMenu() end)
+  local whole = okM and type(menu) == "table" and type(widget) == "table" and rawget(widget, "agent") ~= nil
+    and TWDA.agentName(rawget(widget, "agent")) == TWDA.agentName(rawget(menu, "agent"))
+  local base
+  if whole then
+    base = TWDA.agentText(button) -- (and a blank one there is not read)
+  else
+    base = describeWidget(widget) or TWDA.agentText(button) or siblingText(button)
+  end
   if not base and TWDA.agentName(button):find("[Cc]loseButton$") then base = "Close" end
   if base and type(rawget(G, "UIZ_GetActiveMenu")) == "function" then
     base = TWDA.normalCaps(base)
@@ -501,10 +516,12 @@ local function describeButton(button)
   local raw = base
   if base and TWDA.agentName(button):find("legendButton", 1, true) then base = legendButtonText(base) end
   local text = base
-  if text and TWDA.settings.tooltips ~= false then
+  if text and TWDA.settings.tooltips ~= false and not whole then
     local tip = tooltipOf(widget)
     if tip and tip ~= text and tip ~= raw then text = text .. ". " .. tip end
   end
+  -- (Its value is not watched either: the whole screen would be read as a changed value.)
+  if whole then widget = nil end
   return text, widget, base, raw
 end
 
@@ -1130,6 +1147,9 @@ local function attachCarousel()
     -- (While A New Frontier's Episodes screen fills in, each episode is selected in turn.)
     if TWDA.agentName(rawget(self, "agent")) == "ui_menuEpisodes" and episodesMenu ~= self then return end
     local widget = call(self, "GetSelectedElementWidget")
+    -- (The Final Season's Episodes screen hands back the whole screen here; its buttons are read
+    -- as they are selected.)
+    if type(widget) == "table" and TWDA.agentName(rawget(widget, "agent")) == TWDA.agentName(rawget(self, "agent")) then return end
     local text = describeWidget(widget)
     -- (Already read when SelectElement selected the element's own button, as A New Frontier's
     -- does before its move animation ends.)
@@ -1147,13 +1167,56 @@ TWDA.onFrame("menus.carousel", attachCarousel)
 -- page per choice, the one showing in upvalue mVisibleWidget (mCurrentPageIndex of mStatPages);
 -- a page says "Did you stay the night at the junkyard?" (its _question) and "You and 45.4% of
 -- players chose to ..." (its _label), with the bars' percentages beside. Read as each page shows.
+-- The Final Season's pages are in pieces named after the page: "You and" (_headerText), "39%"
+-- (_massiveText), "of players turned to Louis for help against Marlon." (_secondaryHeaderText),
+-- then the other choices or the reasons (_bodyText01, _text01...; the season's summary page:
+-- HeaderText, Text01...). The game's own "15%left AJ feeling PRAGMATIC." is put right.
+local STAT_PIECES = { question = 1, headerText = 2, HeaderText = 2, massiveText = 3, secondaryHeaderText = 4,
+  label = 5, text = 10, Text = 10, bodyText = 10 }
+local function finalSeasonStatPage(agent, name)
+  local okS, agents = pcall(function() return SceneGetAgents(AgentGetScene(agent)) end)
+  local pieces = {}
+  for _, other in ipairs(okS and type(agents) == "table" and agents or {}) do
+    local suffix = TWDA.agentName(other):sub(#name + 1)
+    local kind, number = suffix:match("^_?(%a+)(%d*)$")
+    local rank = TWDA.agentName(other):sub(1, #name) == name and kind and STAT_PIECES[kind]
+    local text = rank and TWDA.agentText(other)
+    if text then pieces[#pieces + 1] = { rank = rank + (tonumber(number) or 0) / 100, text = text } end
+  end
+  table.sort(pieces, function(a, b) return a.rank < b.rank end)
+  local head, parts = {}, {}
+  for _, piece in ipairs(pieces) do
+    local text = piece.text:gsub("(%d%%)(%a)", "%1 %2"):gsub("%f[%a](%u)(%u%u%u+)%f[%A]", function(first, rest)
+      return first .. rest:lower()
+    end)
+    if piece.rank >= 2 and piece.rank < 5 then head[#head + 1] = text else parts[#parts + 1] = text end
+  end
+  if #head > 0 then table.insert(parts, 1, table.concat(head, " ")) end
+  return parts
+end
+
 local statsWidget = nil
+local statsEnterDown = false
 TWDA.onFrame("menus.stats", function()
   local menu = currentMenu()
   if not menu or TWDA.agentName(rawget(menu, "agent")) ~= "ui_stats_reference" then
     statsWidget = nil
     return
   end
+  -- (The Final Season's Continue under the stats, upvalue mCallToActionButton of
+  -- Menu_Stats_UpdateActionButtons, takes only the mouse: Enter presses it here.)
+  local okE, enter = pcall(InputPCIsVKeyPressed, 0x0D)
+  enter = okE and enter == true
+  if enter and not statsEnterDown then
+    local button = TWDA.upvalue(rawget(G, "Menu_Stats_UpdateActionButtons"), "mCallToActionButton")
+    local okC, cursorOnly = pcall(function() return button:IsCursorOnly() end)
+    local okH, hidden = pcall(AgentIsHidden, "ui_stats_buttonCTA")
+    if okC and cursorOnly == true and okH and hidden == false then
+      TWDA.log("menus: stats Continue")
+      pcall(ThreadStart, function() button:Execute() end)
+    end
+  end
+  statsEnterDown = enter
   local transition = rawget(G, "Menu_Stats_TransitionToPage")
   local widget = TWDA.upvalue(transition, "mVisibleWidget")
   if type(widget) ~= "table" or widget == statsWidget then return end
@@ -1166,6 +1229,7 @@ TWDA.onFrame("menus.stats", function()
     local text = okF and part and not isHidden(part) and TWDA.agentText(part) or nil
     if text then parts[#parts + 1] = text end
   end
+  if #parts == 0 then parts = finalSeasonStatPage(agent, name) end
   if #parts == 0 then
     local text = TWDA.visibleText(agent)
     if text then parts[#parts + 1] = text end
@@ -1202,7 +1266,18 @@ TWDA.onFrame("menus.episodes", function()
   end
   local list = rawget(menu, "elementList")
   local elements = type(list) == "table" and list[rawget(menu, "currentTab")] or nil
-  if type(elements) ~= "table" or #elements == 0 then return end
+  if type(elements) ~= "table" or #elements == 0 then
+    -- (The Final Season's Episodes screen is a plain list instead, Up and Down, with "Start
+    -- Episode 2" above it: read as any other menu; each episode's button reads its title and the
+    -- start button's words too.)
+    local okT, title = pcall(AgentFind, "ui_menuEpisodes_titleBacking")
+    if not okT or title == nil then return end
+    if episodesMenu ~= menu then
+      episodesMenu = menu
+      queue("title", "Episodes. Up and down arrows choose an episode, Enter on Start plays it")
+    end
+    return
+  end
   local function actionButton()
     local ok, button = pcall(Clone_Find, rawget(menu, "agent"), "_actionButton")
     return ok and type(button) == "table" and button or nil

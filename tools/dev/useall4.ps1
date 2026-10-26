@@ -22,7 +22,8 @@ for ($round = 0; $round -lt $Max; $round++) {
         $said = (Get-Content -Encoding UTF8 $speech | Select-Object -Skip $before) -join " "
         if ($said -notmatch "\] (.+?), (?:[^,]*, )*(\d+) of (\d+)") { continue }
         $name = $Matches[1]
-        if ($seen.ContainsKey($name)) { break }
+        # (The order changes as people walk about, so a name coming round again is no end.)
+        if ($seen.ContainsKey($name) -and $seen.Count -ge [int]$Matches[3]) { break }
         $seen[$name] = $true
         if ($name -like "Place:*" -or $name -like "*walk up to it*" -or $used.ContainsKey($name) -or $Skip -contains $name) { continue }
         $pick = $name
@@ -41,7 +42,7 @@ for ($round = 0; $round -lt $Max; $round++) {
     }
     "used: $pick"
     # Wait until something is said that hands control back (or needs a decision), or until the
-    # talk has been quiet for 4 seconds (a thing that stays on offer is not announced again).
+    # talk has been quiet for 12 seconds (a thing that stays on offer is not announced again).
     $start = Get-Date
     $end = $start.AddSeconds(90)
     $lastCount = -1; $quietSince = Get-Date
@@ -49,10 +50,18 @@ for ($round = 0; $round -lt $Max; $round++) {
         & "$dev\game_input.ps1" -Focus | Out-Null
         Start-Sleep -Milliseconds 800
         $new = @(Get-Content $log | Select-Object -Skip $n0)
-        if ($new -match "say! Choices|You are dead|LoadScript|Struggle!") { "stopped: something needs the player"; exit 0 }
-        if ($new -match " say .*(can move|Tab to choose|Enter to do it|Nothing more|Nothing to interact)") { break }
+        # (Choices are left to a reactor running alongside, react4.ps1.)
+        if ($new -match "You are dead|LoadScript|Struggle!") { "stopped: something needs the player"; exit 0 }
+        # (Control back: an announcement after the last line of talk; one said on the way there,
+        # before any talk, is not the end.)
+        $lastCan = -1; $lastSub = -1
+        for ($j = 0; $j -lt $new.Count; $j++) {
+            if ($new[$j] -match " say .*(can move|Tab to choose|Enter to do it|Nothing more|Nothing to interact)") { $lastCan = $j }
+            if ($new[$j] -match "subtitle") { $lastSub = $j }
+        }
+        if ($lastCan -gt $lastSub -and ($lastSub -ge 0 -or ((Get-Date) - $start).TotalSeconds -gt 8)) { break }
         $talk = @($new -match "subtitle|say").Count
         if ($talk -ne $lastCount) { $lastCount = $talk; $quietSince = Get-Date }
-        if (((Get-Date) - $start).TotalSeconds -gt 4 -and ((Get-Date) - $quietSince).TotalSeconds -gt 4) { break }
+        if (((Get-Date) - $start).TotalSeconds -gt 4 -and ((Get-Date) - $quietSince).TotalSeconds -gt 12) { break }
     }
 }

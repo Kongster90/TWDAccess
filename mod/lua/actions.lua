@@ -141,6 +141,9 @@ local function inActionScene()
   -- The reticle in combat mode: a fight, with things to hit.
   local okCombat, combat = pcall(ReticleUI_InCombatMode)
   if okCombat and combat == true then return true end
+  -- (The Final Season loads a panic meter scene, never hidden, in its sneaking at the train
+  -- station, Episode 1, and slowed Clementine to a crawl; its fights slow down in combat4.lua.)
+  if type(rawget(_G, "Useable_GetCount")) == "function" then return false end
   local ok, hidden = pcall(SceneIsHidden, "ui_panicmeter.scene")
   return ok and hidden == false
 end

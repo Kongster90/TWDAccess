@@ -340,7 +340,7 @@ end
 -- many places straight away); steering takes over from wherever it stops.
 local function startWalk(h)
   local w = { agent = h.agent, label = h.label, target = h.target, best = h.distance, first = h.distance, bestAt = TWDA.now(),
-    start = TWDA.now(), pathing = true, stopAt = h.stopAt, stopWhen = h.stopWhen }
+    start = TWDA.now(), pathing = true, stopAt = h.stopAt, stopWhen = h.stopWhen, onArrive = h.onArrive }
   walk = w
   TWDA.log("lookaround2: walking to " .. h.label)
   TWDA.say(("Walking to %s, %d meters. A movement key stops."):format(h.label, math.floor(h.distance + 0.5)),
@@ -417,7 +417,16 @@ local function steer()
     if okW and done then return stopWalk(nil) end
   end
   -- (Half a meter: a story trigger has to be stepped into, and many are small.)
-  if d < (walk.stopAt or 0.5) then return stopWalk("At " .. walk.label .. ".") end
+  if d < (walk.stopAt or 0.5) then
+    -- (A walk made to use something, lookaround4.lua, uses it on arrival, which speaks for itself.)
+    local onArrive = walk.onArrive
+    stopWalk(not onArrive and ("At " .. walk.label .. ".") or nil)
+    if onArrive then
+      local okA, errA = pcall(onArrive)
+      if not okA then TWDA.log("lookaround2: on arrival: " .. tostring(errA)) end
+    end
+    return
+  end
   -- Long walks say how far is left every 10 s, while it goes down.
   if now - (walk.toldAt or walk.start) >= 10 and not walk.paused then
     walk.toldAt = now
@@ -771,6 +780,62 @@ TWDA.describeLookaround = function()
   end
   sentences[#sentences + 1] = "Tab and Enter to use"
   return TWDA.joinSentences(sentences)
+end
+
+-- For beacons.lua: where Clementine (or Javier) walks freely, what can be used, the places to walk
+-- to (as Tab has them) and the walkers that go about with triggers of their own ("trigger_zombie3"
+-- in A New Frontier's herd, Episode 5), each with a kind ("thing", "place" or "walker") and a point
+-- in the world. Fight targets named after walkers ("obj_throwRockAtZombie1") sound as walkers.
+-- (Things are taken from the usables, with their verbs looked at only every few seconds to leave
+-- out those with none: building verbs twice a second would keep resetting the reticle's own.)
+local hasVerbs = setmetatable({}, { __mode = "k" }) -- agent -> { yes, at }
+local function offersVerbs(agent)
+  local now = TWDA.now()
+  local known = hasVerbs[agent]
+  if known and now - known.at < 3 then return known.yes end
+  local yes = #verbsOf(agent) > 0
+  hasVerbs[agent] = { yes = yes, at = now }
+  return yes
+end
+
+local function isWalkerTrigger(lower)
+  return lower:find("^trigger_zombie%d") or lower:find("^trigger_zombielow") or lower:find("^trigger_walker%d")
+end
+
+local previousBeacons = TWDA.beaconEntries
+function TWDA.beaconEntries()
+  if not isSeason2() then return previousBeacons and previousBeacons() or {} end
+  if not playMode() or not canWalk() then return {} end
+  local list = {}
+  local chosen = current and current.agent
+  local things = 0
+  for _, agent in pairs(getUsables() or {}) do
+    if type(agent) == "table" and usableNow(agent) and offersVerbs(agent) then
+      local okP, point = pcall(AgentGetWorldPos, agent)
+      if okP and point then
+        local lower = TWDA.agentName(agent):lower()
+        local walker = lower:find("zombie", 1, true) or lower:find("walker", 1, true)
+        list[#list + 1] = { agent = agent, label = TWDA.agentName(agent), kind = walker and "walker" or "thing",
+          point = point, chosen = agent == chosen }
+        things = things + 1
+      end
+    end
+  end
+  -- (As in Tab's list: in a fight, places only when there is nothing to hit.)
+  if not combatMode() or things == 0 then
+    for _, p in ipairs(places()) do
+      list[#list + 1] = { agent = p.agent, label = p.label, kind = "place", point = p.target, chosen = p.agent == chosen }
+    end
+  end
+  local okS, agents = pcall(SceneGetAgents, TWDA.playerScene and TWDA.playerScene() or call("Game_GetScene"))
+  for _, agent in ipairs(okS and type(agents) == "table" and agents or {}) do
+    local name = TWDA.agentName(agent)
+    if isWalkerTrigger(name:lower()) and prop(agent, "Trigger Enabled") == true then
+      local okP, point = pcall(AgentGetWorldPos, agent)
+      if okP and point then list[#list + 1] = { agent = agent, label = name, kind = "walker", point = point } end
+    end
+  end
+  return list
 end
 
 -- When the player is given control, or the things to interact with change while they have it,

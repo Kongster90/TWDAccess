@@ -102,16 +102,38 @@ local function finalSeasonNoteAgent()
   return ok and agent or nil
 end
 
+-- A notice's lines said as sentences, each out of capitals: "You have: ", "RULER", "Thin enough."
+-- is "You have: Ruler. Thin enough." (said as one run, the name and its description ran together).
+local function noteLines(node, file)
+  local ok, raw = pcall(function() return DlgEvaluateToNode(file, node, "text", false):GetText() end)
+  if not ok or type(raw) ~= "string" or raw == "" or raw == node then return nil end
+  local parts = {}
+  for line in (raw .. "\n"):gmatch("([^\n]*)\n") do
+    local text = TWDA.cleanText(line)
+    if text ~= "" then parts[#parts + 1] = TWDA.normalCaps(text) end
+  end
+  if #parts == 0 then return nil end
+  if #parts > 1 and parts[1]:find(":$") then
+    parts[2] = parts[1] .. " " .. parts[2]
+    table.remove(parts, 1)
+  end
+  return TWDA.joinSentences(parts)
+end
+
 local function noteText(note)
   local show = TWDA.upvalue(rawget(G, "Notification_ShowTutorial"), "ShowNotification")
   local agents = show and TWDA.upvalue(show, "kTextAgents")
   if agents == nil then
+    -- (The notice's own node, in the agent's dialog file: "obj_makeFriends" is "HELP AJ MAKE
+    -- FRIENDS". The agent's words lag behind, still the last notice's for a while.)
     local agent = finalSeasonNoteAgent()
-    local text = agent and TWDA.agentText(agent)
-    if not text or text == "" then return nil end
-    local okN, node = pcall(AgentGetProperty, agent, "Text Dialog 2.0 Node Name")
-    if (okN and node == note.node) or text ~= note.before then return text end
-    return nil
+    if not agent then return nil end
+    local okF, file = pcall(AgentGetProperty, agent, "Text Dialog 2.0 File")
+    local text = okF and file and noteLines(note.node, file) or TWDA.nodeText(note.node, okF and file or nil)
+    if text and text ~= "" then return text end
+    text = TWDA.agentText(agent)
+    if not text or text == "" or text == note.before then return nil end
+    return text
   end
   local agent = type(agents) == "table" and agents[note.index] or nil
   if type(agent) == "string" then
@@ -151,6 +173,7 @@ TWDA.onFrame("prompts2.notes", function()
       if text or now > note.giveUpAt then
         table.remove(pendingNotes, i)
         if text then
+          text = TWDA.normalCaps(text) -- (The Final Season's are in capitals: "HELP AJ MAKE FRIENDS")
           TWDA.log("prompts2: notice " .. note.node .. ": " .. text)
           if note.hint then
             TWDA.lastHint, TWDA.lastHintAt = text, now

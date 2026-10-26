@@ -7,14 +7,15 @@
 -- her (a struggle, struggle.lua).
 --
 -- The mod says when a walker comes near and from where, names the keys once one is in reach, and
--- remembers Q or E pressed while one is coming (for 1.5 seconds), doing it the moment it is in
+-- remembers Q or E pressed while one is coming (for 3.5 seconds), doing it the moment it is in
 -- reach. Slow mode slows the game while one is close; auto mode attacks by itself.
 local TWDA = ...
 local G = _G
 
 local KEYS = { a = "E", b = "E", e = "E", x = "Q", y = "Q", q = "Q", rt = "Left click", l = "Left click" }
 local NEAR_METERS, CLOSE_METERS = 6, 3.5
-local BUFFER_SECONDS = 1.5
+local GROUP_METERS = 5.5 -- (another walker this close to her when one is in reach: a group)
+local BUFFER_SECONDS = 3.5 -- (game time; a walker can take three seconds from "3 meters" to reach)
 
 local function call(name, ...)
   local fn = rawget(G, name)
@@ -46,16 +47,29 @@ end
 -- "cs_attackTarget" -> "attack", "cs_stunTarget" -> "shove".
 local WORDS = { stun = "shove", attack = "attack", kill = "kill", push = "push", shove = "shove", stab = "stab" }
 local function actionWord(node)
-  local word = tostring(node or ""):gsub("^cs_", ""):gsub("Target$", ""):gsub("([%l])(%u)", "%1 %2"):lower()
+  -- ("cs_schoolDamaged_targetAttack": the scene's name first.)
+  local base = tostring(node or ""):gsub("^cs_", ""):match("([^_]*)$") or ""
+  local word = base:gsub("^target(%u)", "%1"):gsub("Target$", ""):gsub("([%l])(%u)", "%1 %2"):lower()
   return WORDS[word] or (word ~= "" and word or "act")
 end
 
+local OVERRIDE = "AI Player - Interaction Current Target Override"
+
+local function alive(agent)
+  return agent ~= nil and prop(agent, "AI Agent - AI Agent Enable") == true
+end
+
+-- The walker Q and E would act on. (A walker put down stays the game's current target for a while:
+-- it is not one, or the next walker coming was never said.)
 local function targetOf(props)
-  local name = get(props, "AI Player - Interaction Current Target Override")
-  if not name or name == "" then name = get(props, "AI Player - Interaction Current Target") end
-  if not name or name == "" then return nil end
-  local ok, agent = pcall(AgentFind, name)
-  return ok and agent or nil
+  for _, key in ipairs({ OVERRIDE, "AI Player - Interaction Current Target" }) do
+    local name = get(props, key)
+    if type(name) == "string" and name ~= "" then
+      local ok, agent = pcall(AgentFind, name)
+      if ok and alive(agent) then return agent end
+    end
+  end
+  return nil
 end
 
 -- The prompts a walker offers: { key = "Q", letter = "y", word = "attack" }.
@@ -76,6 +90,9 @@ end
 local function nameOf(agent)
   local noun = call("Game_GetNounText", agent)
   if type(noun) == "string" and noun ~= "" then return TWDA.cleanText(noun) end
+  -- (Someone met like a walker, James in the woods in Episode 2, by name.)
+  local name = TWDA.agentName(agent)
+  if name:find("^%u%l+$") and not name:find("^Zombie") and not name:find("^Walker") then return name end
   return "Walker"
 end
 
@@ -137,8 +154,72 @@ local function press(letter)
   if not ok then TWDA.log("combat4: " .. fn .. " failed: " .. tostring(err)) end
 end
 
+-- Aiming for the player: the game only takes a walker within 45 degrees of where she faces as the
+-- target, and she turns only by moving, so one at her side or back cannot be fought by ear. And a
+-- walker shoved stays the game's target while the next one closes in (the woods in Episode 2: one
+-- stood 2 meters off for four seconds, out of reach of Q and E, and grabbed her). So Q and E go for
+-- the walker in reach that is still coming for her: ExecuteInteraction takes the target override
+-- first and does not look at the angle (the walker is brought round to her). The override is put
+-- back after a moment.
+local ASSIST_METERS = 2.5
+local overrideName, overrideAt = nil, 0
+
+local function setOverride(props, name)
+  pcall(function() props[OVERRIDE] = name end)
+end
+
+-- (One that can still be shoved has not been: it is coming for her.)
+local function canShove(agent)
+  for _, p in ipairs(promptsOf(agent)) do
+    if p.key == "E" then return true end
+  end
+  return false
+end
+
+-- The walker in reach that matters: the game's target while it can be shoved; else the nearest in
+-- reach that can be; else the game's target, or the nearest in reach.
+local function reachTarget(props)
+  local gameTarget = targetOf(props)
+  if gameTarget and canShove(gameTarget) then return gameTarget end
+  local coming, comingD, any, anyD = nil, math.huge, nil, math.huge
+  for _, agent in ipairs(aliveWalkers()) do
+    local d = distance(agent)
+    if d and d <= ASSIST_METERS then
+      if d < comingD and canShove(agent) then coming, comingD = agent, d end
+      if d < anyD then any, anyD = agent, d end
+    end
+  end
+  return coming or gameTarget or any
+end
+
+local function aimAtReachable()
+  local props = playerProps()
+  if props == nil then return end
+  local now = TWDA.now()
+  if overrideName and get(props, OVERRIDE) == overrideName then
+    local ok, agent = pcall(AgentFind, overrideName)
+    if not (ok and alive(agent)) then setOverride(props, ""); overrideName = nil end
+  end
+  local pick = reachTarget(props)
+  if pick and pick ~= targetOf(props) then
+    overrideName, overrideAt = TWDA.agentName(pick), now
+    setOverride(props, overrideName)
+    TWDA.log(("combat4: aiming at %s, %.1f m"):format(overrideName, distance(pick) or -1))
+  end
+end
+
+for _, name in ipairs({ "AI_Player_Q", "AI_Player_E" }) do
+  TWDA.hookGlobal(name, function(original)
+    return function(event, ...)
+      local ok, err = pcall(aimAtReachable)
+      if not ok then TWDA.log("combat4: " .. tostring(err)) end
+      return original(event, ...)
+    end
+  end)
+end
+
 local warned = setmetatable({}, { __mode = "k" }) -- walker -> "near" or "close"
-local target, targetAt = nil, 0
+local target, targetAt, targetKeys = nil, 0, nil
 local buffered = nil -- { key, at }
 local keyHeld = {}
 
@@ -149,18 +230,33 @@ TWDA.onFrame("combat4", function()
   local now = TWDA.now()
   local mode = TWDA.settings.actionscenes or "slow"
   local struggling = TWDA.struggleActive and TWDA.struggleActive()
-  local current = enabled and targetOf(props) or nil
   local walker, d = nil, math.huge
   if enabled and not struggling then walker, d = nearest() end
+  -- (In reach: the game's target, or the nearest walker close enough for the aiming above.)
+  local current = enabled and not struggling and reachTarget(props) or nil
+  if overrideName and now - overrideAt > 2.5 then
+    if get(props, OVERRIDE) == overrideName then setOverride(props, "") end
+    overrideName = nil
+  end
 
-  -- A walker coming near: said once at about 6 meters and again at 3.5.
-  if walker and not current then
-    local stage = d <= CLOSE_METERS and "close" or (d <= NEAR_METERS and "near" or nil)
-    if stage and warned[walker] ~= stage and not (stage == "near" and warned[walker] == "close") then
-      warned[walker] = stage
-      local side = sideOf(walker)
-      TWDA.say(("%s, %d meters%s."):format(nameOf(walker), math.floor(d + 0.5), side and (", " .. side) or ""),
-        { interrupt = stage == "close" })
+  -- A walker coming near: said once at about 6 meters and again at 3.5. (Not in a close-up: at the
+  -- train station Clementine looks over walkers she is not meant to fight.)
+  local okM, gameMode = pcall(Game_GetMode)
+  local station = okM and type(gameMode) == "table" and gameMode.name == "Station"
+  -- (Each one, not only the nearest: in the woods in Episode 2 the next two came while she dealt
+  -- with one in reach, unsaid, and grabbed her. While one is in reach the others are "another".)
+  if enabled and not struggling and not station then
+    for _, other in ipairs(aliveWalkers()) do
+      local dw = other ~= current and distance(other)
+      local stage = dw and (dw <= CLOSE_METERS and "close" or (dw <= NEAR_METERS and "near" or nil))
+      if stage and current and stage == "near" then stage = nil end
+      if stage and warned[other] ~= stage and not (stage == "near" and warned[other] == "close") then
+        warned[other] = stage
+        local side = sideOf(other)
+        local name = current and ("Another " .. nameOf(other):gsub("^%u", string.lower)) or nameOf(other)
+        TWDA.say(("%s, %d meters%s."):format(name, math.floor(dw + 0.5), side and (", " .. side) or ""),
+          { interrupt = stage == "close" })
+      end
     end
   end
   for agent, stage in pairs(warned) do
@@ -168,12 +264,26 @@ TWDA.onFrame("combat4", function()
     if not da or da > NEAR_METERS + 3 then warned[agent] = nil end
   end
 
-  -- In reach: the keys, once per walker; a key pressed while it came is done now.
-  if current ~= target then
-    target, targetAt = current, now
+  -- In reach: the keys, once per walker and again when they change (a walker shoved offers only Q);
+  -- a key pressed while it came is done now.
+  local keysNow = current and promptText(promptsOf(current)) or nil
+  if current ~= target or keysNow ~= targetKeys then
+    target, targetAt, targetKeys = current, now, keysNow
     if current then
       local list = promptsOf(current)
       TWDA.log(("combat4: %s in reach, %s"):format(TWDA.agentName(current), promptText(list)))
+      -- Others close behind it: killing one takes long enough for the next to grab her, and that is
+      -- death at once ("Walkers are dangerous in groups. Use E to break them up", the woods in
+      -- Episode 2). Then a key pressed early is not done for the player, and the keys are said.
+      local others = 0
+      for _, agent in ipairs(aliveWalkers()) do
+        local da = distance(agent)
+        if agent ~= current and da and da <= GROUP_METERS and canShove(agent) then others = others + 1 end
+      end
+      if others > 0 and buffered then
+        TWDA.log(("combat4: not doing the early %s, %d more close"):format(buffered.key, others))
+        buffered = nil
+      end
       local done = false
       if buffered and now - buffered.at <= BUFFER_SECONDS then
         for _, p in ipairs(list) do
@@ -190,6 +300,8 @@ TWDA.onFrame("combat4", function()
         for _, p in ipairs(list) do if p.word == "attack" or p.word == "kill" then pick = p end end
         TWDA.say(nameOf(current) .. ": " .. pick.word .. "!", { interrupt = true })
         press(pick.letter)
+      elseif not done and #list > 0 and others > 0 then
+        TWDA.say(("%s, and %d more close! %s!"):format(nameOf(current), others, promptText(list)), { interrupt = true })
       elseif not done and #list > 0 then
         TWDA.say(("%s! %s!"):format(nameOf(current), promptText(list)), { interrupt = true })
       end
@@ -235,6 +347,14 @@ function TWDA.walkerTargets()
     end
   end
   return list
+end
+
+-- (lookaround4.lua keeps quiet about the scenery while a walker is this close.)
+function TWDA.walkerNear(meters)
+  local props = playerProps()
+  if props == nil or get(props, "AI Player - Interaction Enable") ~= true then return false end
+  local walker, d = nearest()
+  return walker ~= nil and d <= (meters or 8)
 end
 
 -- F6: the walker in reach (first, alone), or the nearest one coming (with the rest of the screen).

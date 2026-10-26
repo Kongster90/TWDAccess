@@ -16,6 +16,9 @@ local glyphNames = {
   start = "Menu button",
   select = "View button",
   dpad = "Arrow keys",
+  -- (The Final Season's tutorial notices: "Use <ui_notification_keyboardAndMouseWasd.d3dtx> to move";
+  -- the other keys are named after "keyboardAndMouse": "Shift".)
+  Wasd = "W A S D",
   leftStick = "Arrow keys",
   rightStick = "Right stick",
   backIcon = "Escape",
@@ -49,7 +52,8 @@ local function glyph(name)
   if key:find("^icon%u") or key:find("%lIcon$") then return "" end
   -- Otherwise the last part of the texture name, made readable.
   local last = key:match("_(%a[%w]*)$") or key
-  return words(last)
+  last = last:gsub("^keyboardAndMouse(%u)", "%1")
+  return glyphNames[last] or words(last)
 end
 
 -- Removes Telltale text markup: ^style^ codes, <texture> glyphs (spoken as the key name),
@@ -107,21 +111,29 @@ function TWDA.agentText(agent)
   if okNode and type(node) == "string" and node ~= "" then
     local _, file = pcall(AgentGetProperty, agent, TEXT_FILE)
     local text = TWDA.nodeText(node, file)
-    if text then return text end
+    if text then return not TWDA.isPlaceholder(text) and text or nil end
   end
   local ok, value = pcall(AgentGetProperty, agent, "Text String")
   if ok and type(value) == "string" then
     local text = TWDA.cleanText(value)
-    if text ~= "" then return text end
+    if text ~= "" and not TWDA.isPlaceholder(text) then return text end
   end
   return nil
+end
+
+-- Layout filler left in some menus' text agents (The Final Season's Episodes screen: "Episode
+-- description text here."; its import screen: "Text text text ...").
+function TWDA.isPlaceholder(text)
+  local lower = text:lower()
+  return lower:find("description text here", 1, true) ~= nil or lower:find("^text text text") ~= nil
+    or lower:find("^[a-z]+$") ~= nil and #lower > 20 and not lower:find("[aeiou][aeiou]")
 end
 
 -- "THE WALKING DEAD: SEASON TWO" -> "The Walking Dead: Season Two". Only for text with no lower-case
 -- letters at all, which speech would otherwise often spell out.
 local KEEP_CAPS = { CEO = true, CTO = true, CFO = true, COO = true, SVP = true, VP = true, EVP = true, EMEA = true,
   QA = true, PR = true, UI = true, DLC = true, OG = true, TV = true, USA = true, UK = true, HDR = true, FPS = true,
-  CD = true, DVD = true, RV = true, OK = true }
+  CD = true, DVD = true, RV = true, OK = true, AJ = true }
 
 function TWDA.normalCaps(text)
   if type(text) ~= "string" or text:find("%l") or not text:find("%u%u") then return text end

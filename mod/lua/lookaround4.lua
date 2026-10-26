@@ -79,8 +79,21 @@ local function labelOf(agent)
   local noun = call("Game_GetNounText", agent)
   noun = (type(noun) == "string" and noun ~= "") and TWDA.cleanText(noun) or nil
   if not noun then
-    local name = TWDA.agentName(agent):gsub("^obj_", ""):gsub("([%l])(%u)", "%1 %2"):gsub("_", " "):lower()
-    noun = name
+    -- ("obj_logicalTrapBoulderA" -> "Trap boulder A")
+    local name = TWDA.agentName(agent):gsub("^obj_", ""):gsub("^logical", ""):gsub("([%l])(%u)", "%1 %2")
+    name = name:gsub("_", " "):gsub("^%s+", ""):lower():gsub(" (%a)$", function(c) return " " .. c:upper() end)
+    noun = name:gsub("^%l", string.upper)
+  end
+  -- (A "verb" that is a state, the gate traps' "No walker in range", follows the noun.)
+  local _, words = (verb or ""):gsub("%S+", "")
+  -- (One that names the thing itself is said alone: planning the school's defenses, Episode 2,
+  -- "Walls01" offers "fortify the Walls".)
+  local base = noun:gsub("%d+$", ""):gsub("%s+$", ""):lower()
+  if verb and words >= 3 and base ~= "" and verb:lower():find(base, 1, true) then
+    return TWDA.normalCaps((verb:gsub("^%l", string.upper):gsub("%.$", "")))
+  end
+  if verb and words >= 3 then
+    return TWDA.normalCaps(noun .. ", " .. verb:gsub("^%u", string.lower):gsub("%.$", ""))
   end
   local text = verb and (verb .. " " .. noun) or noun
   return TWDA.normalCaps(text)
@@ -161,7 +174,10 @@ local function speak(text)
   TWDA.say(text, { interrupt = true })
 end
 
-local chosen = nil      -- { agent, label } chosen with Tab
+-- What Tab chose ({ agent, label, place }), kept on TWDA so that a copy of this module loaded again
+-- from the dev console shares it with the copy the game's key map still calls.
+local state = TWDA.lookaround4State or {}
+TWDA.lookaround4State = state
 local lastTabSet = nil
 
 local function canWalk()
@@ -187,6 +203,24 @@ local function entries()
   return list
 end
 
+-- For beacons.lua: Tab's list with a kind ("thing", "place" or "walker") and a point in the world,
+-- in free play only. (The other seasons' lists: lookaround.lua and lookaround2.lua.)
+local previousBeacons = TWDA.beaconEntries
+function TWDA.beaconEntries()
+  if not isSeason4() then return previousBeacons and previousBeacons() or {} end
+  if not playMode() or not canWalk() or station() then return {} end
+  local list = {}
+  for _, h in ipairs(entries()) do
+    local kind = h.place and (h.stopWhen and "walker" or "place") or "thing"
+    local point = (kind == "place" and h.target) or call("AgentGetWorldPos", h.agent)
+    if point then
+      list[#list + 1] = { agent = h.agent, label = h.label or h.name, kind = kind, point = point,
+        chosen = state.chosen ~= nil and state.chosen.agent == h.agent }
+    end
+  end
+  return list
+end
+
 local function entryText(h)
   if h.place and h.stopAt then return h.label .. ", walk up to it" end
   return h.place and ("Place: " .. h.label) or h.label
@@ -202,35 +236,64 @@ local function cycle(delta)
   for _, h in ipairs(list) do names[#names + 1] = TWDA.agentName(h.agent) end
   table.sort(names)
   local set = table.concat(names, ",")
-  if set ~= lastTabSet then chosen, lastTabSet = nil, set end
+  if set ~= lastTabSet then state.chosen, lastTabSet = nil, set end
   local index = 0
   for i, h in ipairs(list) do
-    if chosen and h.agent == chosen.agent then index = i end
+    if state.chosen and h.agent == state.chosen.agent then index = i end
   end
   index = index + delta
   if index < 1 then index = #list elseif index > #list then index = 1 end
   local h = list[index]
-  chosen = { agent = h.agent, label = h.label, place = h.place }
+  state.chosen = { agent = h.agent, label = h.label, place = h.place }
   local where = whereText(h)
   speak(("%s%s, %d of %d"):format(entryText(h), where ~= "" and (", " .. where) or "", index, #list))
 end
 
 local function findChosen()
-  if not chosen then return nil end
+  if not state.chosen then return nil end
   for _, h in ipairs(entries()) do
-    if h.agent == chosen.agent then return h end
+    if h.agent == state.chosen.agent then return h end
   end
   return nil
 end
 
 local busyUntil = 0
-local function use(agent, label)
+local usedAgent = nil -- the agent Game_UseAgent was last called with
+TWDA.hookBefore("Game_UseAgent", function(agent) usedAgent = agent end)
+
+-- (Navigate_PathToAndUseAgent gives up at once, without a word, when the engine's path-finding
+-- finds no way to the thing: the spear on the shack's rack, The Final Season. Then the mod walks her
+-- up to it by steering, lookaround2.lua, and uses it from there, where the path is nothing.)
+local use
+local function walkUpAndUse(agent, label, retried)
+  local okP, pos = pcall(AgentGetWorldPos, agent)
+  local here = TWDA.player() and AgentGetWorldPos(TWDA.player())
+  if retried or not (okP and pos and here and TWDA.walkTo) then
+    speak(("Can't get to %s from here."):format(label))
+    return
+  end
+  local okWB, walkBoxes = pcall(PathAgentGetWalkBoxes, TWDA.player())
+  local okG, ground = false, nil
+  if okWB then okG, ground = pcall(WalkBoxesPosOnWalkBoxes, pos, walkBoxes) end
+  local target = (okG and ground) or Vector(pos.x, here.y, pos.z)
+  TWDA.log("lookaround4: walking up to " .. TWDA.agentName(agent))
+  TWDA.walkTo({ agent = agent, place = true, label = label, target = target, distance = VectorDistance(here, target),
+    stopAt = 0.8, onArrive = function() use(agent, label, true) end })
+end
+
+use = function(agent, label, retried)
   busyUntil = TWDA.now() + 0.8
-  chosen = nil
+  state.chosen = nil
   TWDA.log("lookaround4: using " .. TWDA.agentName(agent) .. " (" .. tostring(label) .. ")")
   local ok, err = pcall(ThreadStart, function()
+    usedAgent = nil
     local okUse, errUse = pcall(function() Navigate_PathToAndUseAgent(agent, Game_GetUseNodeName(agent)) end)
     if not okUse then TWDA.log("lookaround4: use failed: " .. tostring(errUse)) end
+    -- (No use at all, whether or not she moved a little first, while she can still play.)
+    if okUse and usedAgent == nil and playMode() and canWalk() then
+      TWDA.log("lookaround4: no way to " .. TWDA.agentName(agent))
+      walkUpAndUse(agent, label, retried)
+    end
   end)
   if not ok then TWDA.log("lookaround4: " .. tostring(err)) end
 end
@@ -240,9 +303,10 @@ end
 local function enter(fromGame)
   if TWDA.now() < busyUntil then return true end
   if TWDA.qteTargetUp and TWDA.qteTargetUp() then return true end -- (qte3.lua's Enter)
+  if TWDA.describeShooter and TWDA.describeShooter() then return true end -- (shooter4.lua's)
   local h = findChosen()
   if h and h.place then
-    chosen = nil
+    state.chosen = nil
     busyUntil = TWDA.now() + 0.8
     -- (Many story spots are thin lines across the way, "trigger_dialog_ajWarning": the walk aims
     -- a meter past the middle, so that it crosses the line; a scene starting ends it.)
@@ -268,7 +332,7 @@ local function enter(fromGame)
     use(h.agent, h.label)
     return true
   end
-  chosen = nil
+  state.chosen = nil
   local list = hotspots()
   if #list == 1 then
     use(list[1].agent, list[1].label)
@@ -294,6 +358,24 @@ TWDA.hookGlobal("Useable_OnButtonUse", function(original)
     local okE, handled = pcall(enter, true)
     if not okE then TWDA.log("lookaround4: " .. tostring(handled)) end
     if okE and handled then return end
+    return original(event, ...)
+  end
+end)
+
+-- While hiding, Enter is the peek's own (Peek_OnSelect runs the lean's "Peek - Selected Dialog").
+-- With none set and something offered, Enter uses that: leaning out from behind the tree in the
+-- woods, Episode 2, opens a close-up with "Look At Stranger" and Enter did nothing.
+TWDA.hookGlobal("Peek_OnSelect", function(original)
+  return function(event, ...)
+    local run = TWDA.upvalue(original, "RunSelectedDialog")
+    local logic, key = TWDA.upvalue(run, "kLogicAgent"), TWDA.upvalue(run, "kSelectedDialog")
+    local okS, selected = pcall(AgentGetProperty, logic, key)
+    if isSeason4() and (type(event) ~= "table" or event.agent == nil)
+        and (not okS or selected == nil or selected == "") and #hotspots() > 0 then
+      local okE, handled = pcall(enter, true)
+      if not okE then TWDA.log("lookaround4: " .. tostring(handled)) end
+      if okE and handled then return end
+    end
     return original(event, ...)
   end
 end)
@@ -334,7 +416,7 @@ local function announce()
   local now = TWDA.now()
   -- (Out of play, or unable to walk, for a few seconds (a talk, a scene): when control comes back
   -- it is said even if what is on offer is the same as before.)
-  local free = playMode() and canWalk()
+  local free = playMode() and (canWalk() or call("Navigate_IsPathing") == true) -- (walking there herself)
   if not free then
     outSince = outSince or now
   elseif outSince then
@@ -359,12 +441,21 @@ local function announce()
   end
   if not checkPending or now - settleFrom < 0.6 then return end
   if TWDA.qteBusy and TWDA.qteBusy() then return end
+  -- (Not while a walker closes in: combat4.lua speaks then. What is new is said once it has gone.)
+  if TWDA.walkerNear and TWDA.walkerNear(8) then return end
   checkPending = false
   local list = hotspots()
   local walk = canWalk()
   local parts = {}
   for _, h in ipairs(list) do parts[#parts + 1] = h.label end
-  local signature = table.concat(parts, ";") .. (walk and "|walk" or "")
+  -- (The same things in another order, as she walks, are not news.)
+  local sorted = {}
+  for i, p in ipairs(parts) do sorted[i] = p end
+  table.sort(sorted)
+  local signature = table.concat(sorted, ";") .. (walk and "|walk" or "")
+  -- (With nothing to use, the places count: at the funeral, Episode 2, a place walked to fired
+  -- its trigger and nothing more, and the one place left was never said.)
+  if #list == 0 and walk then signature = signature .. "|" .. #places() end
   if signature == lastSignature and not forceNext then return end
   lastSignature, forceNext = signature, false
   local prefix = walk and ((TWDA.playerName and TWDA.playerName() or "You") .. " can move. ") or ""
@@ -390,7 +481,8 @@ local held = {}
 TWDA.onFrame("lookaround4", function()
   if not isSeason4() then return end
   announce()
-  local active = playMode() and not (TWDA.hasChoices and TWDA.hasChoices())
+  local active = playMode() and not (TWDA.hasChoices and TWDA.hasChoices()) and not (TWDA.bowDrawn and TWDA.bowDrawn())
+    and not (TWDA.starsActive and TWDA.starsActive())
   local ok, down = pcall(InputPCIsVKeyPressed, VK_TAB)
   down = ok and down == true
   if down and not held.tab and active then

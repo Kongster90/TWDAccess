@@ -1985,6 +1985,43 @@ function TWDA.describeLookaround()
   return TWDA.joinSentences(parts)
 end
 
+-- For beacons.lua: where Lee walks freely, what Tab offers, with a kind ("thing" or "place") and a
+-- point in the world; not in close-ups. (No walkers: dead ones lie about with their heads on, and
+-- nothing tells them from the living.) Tab's choice is the latest of the reticle's target, a walk
+-- offered ("Duck, behind you, 3 meters. Enter walks there": Tab on what the reticle cannot take
+-- from here sets no target) and a walk under way; it is listed even when the list has lost it (out
+-- of view after a camera cut).
+function TWDA.beaconEntries()
+  if not reticleReady() or not canWalk() or call("WDBackButton_IsOccupied") == true then return {} end
+  local chosen, latest = nil, -math.huge
+  local picks = { target and not target.pan and { target.agent, target.since },
+    walkOffer and { walkOffer.agent, walkOffer.at }, walking and { walking.agent, walking.since } }
+  for i = 1, 3 do
+    local pick = picks[i]
+    if pick and pick[1] ~= nil and (pick[2] or 0) >= latest then chosen, latest = pick[1], pick[2] or 0 end
+  end
+  local list, listed = {}, false
+  for _, entry in ipairs(hotspots()) do
+    if not entry.pan then
+      local okPos, point = pcall(AgentGetWorldPos, entry.agent)
+      if okPos and point then
+        list[#list + 1] = { agent = entry.agent, label = entry.name, kind = entry.place and "place" or "thing",
+          point = point, chosen = chosen ~= nil and chosen == entry.agent }
+        listed = listed or list[#list].chosen
+      end
+    end
+  end
+  if chosen ~= nil and not listed and call("AgentIsHidden", chosen) ~= true then
+    local okPos, point = pcall(AgentGetWorldPos, chosen)
+    if okPos and point then
+      local name = TWDA.agentName(chosen)
+      list[#list + 1] = { agent = chosen, label = name, kind = places[name] and "place" or "thing", point = point,
+        chosen = true }
+    end
+  end
+  return list
+end
+
 ---------------------------------------------------------------------------------------------------
 -- For actions.lua (auto mode): use a hotspot the way a player would, by steering the reticle onto
 -- it (turning the camera if need be) and doing its first action that is not "Look". Calling

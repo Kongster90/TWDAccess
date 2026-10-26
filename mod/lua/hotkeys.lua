@@ -6,6 +6,8 @@
 --   F7  subtitles: off, speaker names only, or full lines
 --   F8  stop speech
 --   F11 action scenes: normal speed, slow motion or automatic
+--   F4  sound beacons: on what Tab chose, on everything near, or off (beacons.lua)
+--   F3  the beeps louder, Shift+F3 quieter (sounds.lua)
 --   In the game's menus, keys for controller buttons that have no keyboard key of their own:
 --   F9  X button     F10  Y button     Page Up  left bumper     Page Down  right bumper
 local TWDA = ...
@@ -26,6 +28,9 @@ local function readCurrent()
     or (TWDA.describeAction2 and TWDA.describeAction2())
     or (TWDA.describeConfigurator and TWDA.describeConfigurator())
     or (TWDA.describeCombat and TWDA.describeCombat())
+    or (TWDA.describeShooter and TWDA.describeShooter())
+    or (TWDA.describeBow and TWDA.describeBow())
+    or (TWDA.describeStars and TWDA.describeStars())
     or (TWDA.describeReadable and TWDA.describeReadable())
     or (TWDA.describeStruggle and TWDA.describeStruggle()) or (TWDA.describeAiming and TWDA.describeAiming())
     or (TWDA.describeSniper and TWDA.describeSniper())
@@ -120,6 +125,11 @@ local KEYS = {
   [0x76] = cycleSubtitles,  -- F7
   [0x77] = TWDA.stopSpeech, -- F8
   [0x7A] = function() if TWDA.cycleActionScenes then TWDA.cycleActionScenes() end end, -- F11
+  [0x73] = function() if TWDA.toggleBeacons then TWDA.toggleBeacons() end end,         -- F4
+  [0x72] = function()                                                                    -- F3
+    local ok, shift = pcall(InputPCIsVKeyPressed, 0x10)
+    if TWDA.changeBeepVolume then TWDA.changeBeepVolume(not (ok and shift == true)) end
+  end,
   [0x78] = menuButton("WidgetInputHandler_OnX", 514, "F9", { "faceButtonLeft" }, "OnX"),               -- F9
   [0x79] = menuButton("WidgetInputHandler_OnY", 515, "F10", { "faceButtonUp" }, "OnY"),                 -- F10
   [0x21] = menuButton("WidgetInputHandler_OnL", 516, "Page Up", { "leftShoulder", "shoulderButtonLeft" }, "OnLB"),  -- Page Up

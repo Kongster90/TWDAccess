@@ -3,9 +3,94 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-10-25 (twelfth session, The Final Season begun; see the first item).
+Last updated: 2026-10-26 evening (thirteenth session, The Final Season Episode 1 done, Episode 2 to the
+raid; then the bow by ear, beep volume and sound beacons for every season with the user; see the
+first item).
 
 ## Start here (where the last session stopped)
+
+- Thirteenth session, 2026-10-25 about 21:30 to 2026-10-26 09:00 (user away overnight: "start working
+  on season 4", play to its end, questions saved). Committed and pushed at the end of the
+  afternoon with the user (they said "go ahead and push": everything seemed to work). Since then
+  the user played The Final Season's Save 2 on through the burning-school fight themselves (its
+  checkpoint is wherever they left it: look before playing on), and tests in Season 1's slot 3. See
+  "The Final Season, Episodes 1 and 2 (thirteenth session)" below for what was found. Where it
+  stopped: Episode 2, BoardingSchoolExteriorDamaged.lua, the burning-school fight after Lilly's raid
+  (walkers, some burning: the bow is needed). Not yet won by the test reactor: several deaths; the
+  last tries killed walkers with the bow and won struggles but more keep coming. Save 2
+  (wd4_saveslot2) holds the checkpoint there. The game was left running; settings.txt actionscenes
+  put back to normal.
+  - Found and fixed, important: the carry-over made every scene's name "DebugLoader". game.lua's
+    Game_NewScene stores FileStripExtension(ScriptManagerGetCurrentScriptName()) as the logic's
+    current script (kScriptCurrent), and Game_StartScene sets "<act> - Entered <script>" from it, so no
+    "Entered" key was ever set (ForestShack looks for "2 - Entered ForestTile" and replayed its first
+    part, softlocked: the spear was gone). carryover.lua now hooks Game_NewScene and puts the real
+    name (TWDA_firstScript) back; the script name itself stays the bootstrap's (saves need it). The
+    save was repaired with LogicSet("2 - Entered ForestTile"/"ForestShack", true) and
+    Game_EndScene("ForestShack.lua") (the global Game_EndScene(nextScript, bFadeOut) loads a scene).
+    Every season whose game.lua has this runs the fix; Season 2 and A New Frontier were played before
+    it existed (not checked whether their game.lua does the same).
+  - New modules: shooter4.lua (aim for the spear fishing and rabbit stations), bow4.lua (Marlon's
+    bow), stars4.lua (stargazing). New helper endpoint /mouse (Mouse.cs). Many fixes in combat4,
+    guided, qte3, struggle, prompts2, menus, lookaround4, peek, actions, text: see the section.
+  - Test tools: react4.ps1 now also holds the key "Hold X to go on" names (let go on "can move"),
+    shoves in groups ("more close! ... E to"), draws the bow and shoots on target; onsay.ps1 takes a
+    rule with no keys (it only ends a hold or mash). New watch_walkers4.lua and watch_path4.lua
+    (walkers and guided paths, logged on change), close_playback_errors.ps1 (closes foobar2000's
+    "Playback error" boxes; the user allowed it). The helper must be restarted for /mouse after a
+    rebuild: kill TWDAccess.exe, dotnet build to dist, start it (it does not relaunch a running game).
+  - Added after the user's reply (same session, 2026-10-26 about 11:00 to 12:00; not yet tried in
+    play): sound beacons and aiming the bow by ear, at the user's request. Helper: Tones.cs, a small
+    waveOut mixer behind /tone?f=660,990&ms=45&p=-1..1&v=0..1&w=s|q|t|n&lp=1 (overlapping tones,
+    equal-power pan, lp muffles). Lua: sounds.lua (TWDA.tone; TWDA.soundDirection(point): angle from
+    where AgentGetCamera(player) faces on the ground, pan, behind, distance; checked in the game),
+    beacons.lua (was beacons4.lua; the nearest 4 of Tab's list within 25 m, plus Tab's choice, ping
+    in turn every 0.22 s: blip 1200 Hz for things, chime 660-990 for places, square 140 Hz for
+    walkers; louder nearer, muffled and lower behind; F4 and setting beacons; quiet while the bow is
+    drawn; entries from TWDA.beaconEntries, free play only), bow4.lua's bowaim = sound (default):
+    arrows turn the camera through /mouse, Navigate's arrow handlers are swallowed while drawn
+    (W A S D still walk), the height is levelled to the target, the last 0.12 of the screen is
+    closed once the arrows are let go, and a tone every 0.12 s: pan full at 30 degrees, pitch 300 to
+    1000 Hz as the aim nears it, a 1500/2000 Hz double tick on target; bowaim = auto keeps the old
+    automatic aim.
+  - Then tuned with the user playing (2026-10-26 afternoon): the game turns about a degree per 65
+    mouse pixels, so 8 px a tick (2.5 degrees a second) lost the burning-school fight (the third
+    walker came from the far left). Now setting bowturn (16 px every 0.05 s) ramps to 8 times from
+    0.2 to 0.8 s of holding (about 40 degrees a second), Shift triples, max 400 a tick. The user won
+    the fight with it. "bow4: shooting at" now logs the target's screen position (to tell misses
+    from walkers that take two arrows: ZombieCombat07 took four and lived once). Setting beepvolume
+    (10 to 150 percent, sounds.lua scales every tone): F3 louder, Shift+F3 quieter (the user's
+    choice of keys), said and then a blip. The user set it to 10.
+  - Beacons in every season (user asked, same afternoon): TWDA.beaconEntries is a chain, each
+    look-around module wrapping the one before (lookaround.lua for Season 1 and 400 Days: Tab's
+    hotspots and places where Lee walks freely, not close-ups, no walkers since dead ones look
+    alive; lookaround2.lua for Season 2 and A New Frontier: usables with verbs (checked every 3 s,
+    not twice a second, as building verbs resets the reticle's), places as Tab has them, fight
+    targets named zombie/walker and "trigger_zombieN"/"trigger_walkerN" triggers with Trigger
+    Enabled as walkers; lookaround4.lua for The Final Season). Panned from the camera, as the
+    walking keys are. Compiles in the game; NOT yet heard in Seasons 1 to 3 (the user was playing
+    The Final Season). To check there: the pan at a Season 1 camera cut, walker triggers really
+    being enabled, and the cost of Season 1's hotspots() twice a second.
+  - Heard by the user in Season 1 (motor inn): the beacons work, but all of them at once are hard
+    to tell apart. Setting beacons is now "tab" (default; true from before counts as tab): only
+    Tab's choice pings, every 0.4 s, the list looked at every 0.25 s; "all" is the old way; "off".
+    F4 goes tab, all, off. Season 1's choice is the latest of the reticle's target, the walk
+    offered (walkOffer: Tab on what the reticle cannot take sets no target, "Duck, behind you, 3
+    meters. Enter walks there", which first gave no beep) and the walk under way (walking); it is
+    added to the list even when hotspots() has lost it after a camera cut. The running motor-inn
+    state was patched live (TWDA.beaconEntries reading the "lookaround" frame function's upvalues);
+    the files load it properly from the next scene.
+  - The user copied Season 1's Save 2 to slot 3 (Save Slots menu, F10) to test the beacons there:
+    slot 3 is the user's now, like slot 1. The copy left saves.txt without a slot 3 line: the
+    menu's mCopySlot and mCurrentSlot are numbers (2, 3), saves.txt keys are file names, so
+    carryover.lua's copy and delete hooks never matched (the handoff's "copying and deleting slots
+    keep it in step" was not so). Fixed: slotKey() turns a number into the active slot's name with
+    that number. The line "wd1_saveslot3.bundle<TAB>env_manorInteriorClementineSearch.lua" was
+    added by hand (slot 3's autosave is byte for byte slot 2's).
+  - Questions for the user (asked at the end of the session): the bow's keys (R draws, Enter
+    shoots, Tab next target) and the helper moving the mouse to turn the camera; whether "AJ, shoot!"
+    at the train station (instant game over) is so in their game; whether aiming Q and E at a walker
+    beside or behind Clementine is acceptable.
 
 - Twelfth session, 2026-10-25 00:40 to about 03:10 (user asleep: "start working on season 4", play
   through to its end; questions saved). Season 4 = The Final Season. Stopped early: the usage limit
@@ -1711,6 +1796,96 @@ _G, global tables and debug.getregistry, dump by line) found them (see "Develope
 - Subtitles: examine lines in TFS often have no Subtitle_OnCreate (no "subtitle" log line), so in
   "speaker" mode nothing is said for them; the voice is heard. (Not looked into yet.)
 
+### The Final Season, Episodes 1 and 2 (thirteenth session, 2026-10-25/26)
+
+Played: Episode 1 from the school (river fishing, rabbits, ForestShack, ForestTile, the train station
+at night, the cellar and Brody, the end: stats) and Episode 2 from the funeral to the raid (vote,
+woods with AJ, Abel, James, buckshot, plans, greenhouse, dorm, dream, preparations, bow practice,
+stargazing with Violet, lookout, the raid, Abel in the hall, Lilly). Scene scripts: ForestShack,
+ForestTile, TrainStationNight, BoardingSchoolExteriorNight, BoardingSchoolDormNight,
+BoardingSchoolBasement, then BoardingSchoolDorm, BoardingSchoolExterior, ForestTile, ForestCamp,
+BoardingSchoolExteriorGate, BoardingSchoolInterior, GreenHouse, BoardingSchoolDormNight,
+BoardingSchoolExteriorDusk, BellTower, BoardingSchoolExteriorGateNight, BoardingSchoolExteriorNight,
+BoardingSchoolInteriorNight, BoardingSchoolExteriorDamaged.
+- Carry-over and the scene name: see the first item. Game_GetCurrentScript's upvalues kLogicAgent and
+  kScriptCurrent; acts in LogicGet(kAct); LogicSet of a key the logic lacks does nothing.
+- Shooter stations (shooter.lua: fishing, rabbits, and Ep 2's cam_station_saveFriend shot at Sullene):
+  shooter4.lua. The station camera's kTargetDialogMap names the targets; Enter fires at the one in
+  view nearest the middle through the hit dialog (the same dialogs the game runs); targets coming into
+  view are said ("Sullene in view. Enter!"). lookaround4 leaves Enter alone while one is up.
+- Sneaking at the train station: peek (Season 2's peek.lua again; logic agent logic_systems, "Peek -
+  Dialog Down/Center"...). Leaning out (S) is required: doing nothing gets her killed after ~40 s.
+  In Episode 2 (woods, hiding from Abel) leaning out (A, hold it) turns into a station with "Look At
+  Stranger"; Enter there goes to Peek_OnSelect (runs "Peek - Selected Dialog", empty): lookaround4
+  now hooks Peek_OnSelect and uses the offered thing. peek.lua no longer says "Back in cover" when
+  the peek ends in a station.
+- Slow motion stuck on: TrainStationNight loads ui_panicmeter.scene (no agents, never hidden), which
+  actions.lua took for Season 1's panic meter: the whole scene ran at 0.45 and walks "gave up".
+  actions.lua skips the panic meter check in TFS (Useable_GetCount exists).
+- Walks: from right beside the hiding crate the steering (DirectControl_SetJoystickDirection) did not
+  move her until a movement key was pressed once (not understood; noted). Walking to a story spot whose
+  trigger fires with nothing after it left no announcement: lookaround4 now counts the places in its
+  change check when nothing is on offer.
+- Choices: react4's "E now" rule matched "tell me now!" (case-insensitive -match): fixed with
+  (?-i)\bE now. "[Kill her]" (Lilly, raid) and "AJ, shoot!" (Abel, train station) are game overs:
+  Death() a second after the choice (the latter maybe because of missing "Entered" keys; unknown).
+- Struggles: "Too late" was said when E landed: the game ends the ready state in the same frame it
+  takes the E. struggle.lua counts E pressed within 0.6 s before the ready state ended as made.
+- QTE click targets in turn (Lilly at the end of the raid: obj_logicalAction01, then 02): the current
+  one is the prompt agent the game made kGameSelectable; qte3 picks that, and none between two. A key
+  prompt up wins over a target (zombie Brody: "Left arrow!" was talked over by "Action: Enter!").
+- Guided paths (choredmovement.lua): the key is not always W and the game shows it only as a red key
+  on its WASD picture. GetRelativeDirection (upvalue of OnPostUpdate, under ChoredMovement_Start's
+  Activate) gives 1 for the key that moves on, from the camera; the move agent's "Chored Movement -
+  Reverse Controls" turns it round (dragging Omar in the raid wants A, not D). guided.lua says "Hold
+  A to go on", again when it changes with the camera (held half a second, not in a cut scene), and
+  "D does not move her here. Hold A". Buckshot from AJ's arm: "HOLD W A S D in the direction of the
+  arrow" (A each time). A path can also stop at a stop key until the right key is pressed.
+- Walker fights (combat4.lua): a walker put down stays the player's "Interaction Current Target", so
+  every later walker went unannounced: targetOf ignores walkers whose "AI Agent - AI Agent Enable" is
+  off. Aim: ExecuteInteraction takes "AI Player - Interaction Current Target Override" first and does
+  not check the angle (the target picker wants 45 degrees), so Q and E (hooked AI_Player_Q/E) go for
+  the walker in reach (2.5 m) that can still be shoved, else the game's target, else the nearest; the
+  override is cleared after 2.5 s. Groups ("Walkers are dangerous in groups. Use E to break them
+  up"): a second walker joining a grab is death without a struggle. "Walker, and 1 more close! Q to
+  attack, E to shove!" when another walker that can still be shoved is within 5.5 m; an early key is
+  then not done for the player; the keys are said again when they change (a shoved walker offers
+  only Q); others coming while one is in reach are said ("Another walker, 3 meters, to your left.").
+  No warnings in stations. People met like walkers (James) by name. Kill takes about 4.5 s; a shove
+  stuns about 9 s. The woods fight (Episode 2) was won with shove/kill this way.
+- The bow (from Louis, Episode 2; ai_player.lua): right mouse held = AI_Player_RM_Down/Up ("AI Player -
+  Scrub Chore Desired Percent" 1/0; drawn: "Interaction Ranged Enable"), left click = AI_Player_L:
+  runs the player's node bg_rangedProjectile (GetNode), an arrow from the camera; hits run
+  bg_hitTarget (practice) or bg_projectileHit then logic_onAgentDeath/logic_targetDead. Mouse only.
+  bow4.lua: R draws and puts away; drawn, it turns the camera onto the nearest target (hit boxes
+  "ai_hitBox_*", walkers' heads at +1.55 m) through the helper's /mouse (relative moves, steps of 20
+  px every 8 ms: one large jump is mostly swallowed), says "Walker, 4 meters. Turning to it." and
+  "On target. Enter shoots." (once per target), Enter shoots (hooked Useable_OnButtonUse; a click is
+  left to the game), Tab/Shift+Tab next target; re-draws a second after the game lowers it (a grab)
+  until R; with nothing left it takes the next walker that comes. Bow practice: two hits end it
+  (logic_doneShooting); it is required (the scene waits). Burning walkers can only be shot.
+- Stargazing (constellation.lua, bell tower with Violet): stars are buttons ui_star_<name>Button<n>
+  whose command is Constellation_ActivateStar(n); kGameSelectable marks the ones that can be linked
+  next; the scene goes on when all lines are drawn (fish 6 stars, knife 11, bird 15). stars4.lua: Tab
+  picks a linkable star ("Star 2, down and to the left, 1 of 2" from the last one), Enter links it
+  (Enter is Useable_OnButtonUse here).
+- Notices: their text has lines ("You have: ", "RULER", "", "Thin enough."): prompts2 joins them as
+  sentences out of capitals ("You have: Ruler. Thin enough."). Glyphs "<ui_notification_keyboard
+  AndMouseWasd.d3dtx>" are "W A S D" (text.lua: the part after "keyboardAndMouse").
+- End of episode (menu_stats.lua, ui_stats_reference): TFS pages are pieces named after the page
+  (_headerText "You and", _massiveText "39%", _secondaryHeaderText, _bodyText01.., _text01..; the
+  summary page ui_stats_episode1: HeaderText, Text01..; relationships ui_stats_relativeStatPage_1_<Name>;
+  "The State of the School" lineup; collectibles). menus.lua reads them in that order and puts the
+  game's "15%left" and "PRAGMATIC" right. The Continue button (mCallToActionButton of
+  Menu_Stats_UpdateActionButtons) is cursor-only: Enter executes it. Then the main menu and Episodes
+  (Episode 2 "Start" needs the focus to land on Start first: wait, then Enter).
+- Labels: "Walls01, fortify the Walls" is now "Fortify the Walls" (a verb phrase naming the thing).
+- Seen, not fixed: "Candle, go to Sleep" label; "You practiced shooting with Louis" said twice;
+  lookaround4 answers a left click with "Nothing to interact with here" while aiming; "Bow in hand"
+  is said at every scene start while the bow is carried; struggle.lua's "Halfway" in non-fight
+  struggles; "Place: Jump scare zombie" and similar trigger names are spoilers; the burning-school
+  fight not yet won.
+
 ### 400 Days replayed (sixth session, 2026-10-10 about 03:15 to 05:20)
 
 After the River Street retest, 400 Days was replayed in slot 2 to test the open items (from
@@ -2167,8 +2342,10 @@ Project root: C:\Users\dengs\Downloads\TWD
   - Speech.cs: Prism on one STA thread (prism_init, prism_registry_acquire_best,
     prism_backend_output). Prism.cs has the P/Invoke declarations.
   - LocalServer.cs: the tiny HTTP server. Routes: /speak (numbered batches), /say, /sayi, /stop,
-    /log (to logs/game.log), /enqueue and /cmd (dev console). Anything else goes to
-    logs/requests.log.
+    /log (to logs/game.log), /enqueue and /cmd (dev console), /mouse?dx=&dy= (Mouse.cs: relative
+    mouse moves in steps, only while WDC.exe is in front; bow4.lua turns the camera with it),
+    /tone?f=&ms=&p=&v=&w=&lp= (Tones.cs: a small waveOut mixer for the beacons and the bow's tone).
+    Anything else goes to logs/requests.log.
   - SpeechSequencer.cs: puts numbered speech batches back in order.
   - ModInstaller.cs: copies dist/TWDAccess/mod/** into the game folder, keeps a SHA-256 manifest in
     TWDAccess/installed.txt, and never overwrites another mod's DebugLoader.lua.
@@ -2179,14 +2356,20 @@ Project root: C:\Users\dengs\Downloads\TWD
 - `mod/lua/`: the mod, plain Lua, installed to <game>\TWDAccess\.
   - main.lua: loads the modules in order: core, settings, text, hooks, carryover, uitext, menus,
     panes, messagebox, prompts, prompts2, choices, choices2, lookaround, lookaround2, lookaround4,
-    actions, action2, qte3, configurator, aiming, sniper, struggle, combat4, turnchoice, inventory,
+    actions, action2, qte3, configurator, aiming, sniper, struggle, combat4, shooter4, sounds, bow4,
+    stars4, beacons, turnchoice, inventory,
     peek, guided, runto, cornfield, drag, drag2, drag3, fastslow, cover, readables, panels,
     subtitles, hotkeys, then discovery and devconsole if enabled.
   - The Final Season modules (twelfth session; see "The Final Season"): configurator.lua (the story
     recap's questions), lookaround4.lua (useables, places and walkers on Tab, Enter or F, stations,
     announcements) and combat4.lua (walkers: warnings, keys in reach, early Q or E kept, slow and
-    auto modes; TWDA.walkerTargets). The Final Season also uses choices2, lookaround2 (places and
-    walking), qte3, struggle, prompts2 (notices) and menus.
+    auto modes; TWDA.walkerTargets; aims Q and E with the target override, groups); thirteenth
+    session: shooter4.lua (shooter stations), bow4.lua (the bow: R, Enter, Tab; turns the camera with
+    the helper's /mouse) and stars4.lua (stargazing). For every season: sounds.lua (TWDA.tone,
+    TWDA.soundDirection, beepvolume and F3) and beacons.lua (sound beacons from each look-around
+    module's TWDA.beaconEntries; F4). The Final Season also uses choices2,
+    lookaround2 (places and walking), qte3, struggle, prompts2 (notices), guided (paths: the key from
+    GetRelativeDirection) and menus.
   - A New Frontier modules (tenth session; see "A New Frontier"): qte3.lua (QTE prompts, things to
     pick, multi-prompt QTEs, TWDA.qteBusy) and drag3.lua (drags). A New Frontier also uses
     choices2, lookaround2, prompts2, struggle, guided and menus.

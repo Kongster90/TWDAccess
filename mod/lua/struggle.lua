@@ -98,9 +98,12 @@ local function prop(agent, key)
   return nil
 end
 
+-- (The Final Season counts the time since the finish became ready, mDeathBlowReadyDelta; after 2
+-- seconds without E the meter drops back to where it began.)
 local function finishReady(game)
   return TWDA.upvalue(game.update, "mDeathBlowReadyStart") ~= nil
     or TWDA.upvalue(game.update, "mDeathBlowController") ~= nil
+    or TWDA.upvalue(game.update, "mDeathBlowReadyDelta") ~= nil
 end
 
 local function pressQ(game)
@@ -207,10 +210,21 @@ TWDA.onFrame("struggle", function()
   if prop(agent, game.pausedKey) == true then return end
 
   local ready = finishReady(game)
+  -- (E pressed while the finish was ready: the finish was made, whatever happens to the meter next.)
+  local okE, eDown = pcall(InputPCIsVKeyPressed, 0x45)
+  if okE and eDown == true then state.eAt = now end
+  if ready and okE and eDown == true then state.struck = true end
+  if state.struck then return end
   if ready and not state.ready then
     TWDA.log("struggle: finishing move ready")
     TWDA.lastHint = "Struggle. Press E now!"
     if mode ~= "auto" then TWDA.say("E now!", { interrupt = true }) end
+  elseif state.ready and not ready and state.eAt and now - state.eAt < 0.6 then
+    -- (The game takes the E and ends the ready state in the same frame: the latch at the school's
+    -- cellar doors, Episode 1, said "Too late" for a finish that was made.)
+    state.struck = true
+    TWDA.log("struggle: finishing move made")
+    return
   elseif state.ready and not ready then
     TWDA.log("struggle: finishing move missed")
     if mode ~= "auto" then TWDA.say("Too late. " .. (game.season2 and "Mash" or "Q") .. " again!", { interrupt = true }) end

@@ -129,14 +129,25 @@ local function targetPrompt()
   end
   -- (The Final Season keeps that list empty: its QTE agents, QTE_GetQuickTimeAgents(), carry their
   -- prompts in "QTE Prompt - 1", "- 2"..., "obj_logicalAction" at the train station.)
+  -- (Several in turn, "obj_logicalAction01" then "02" when Lilly comes at Clementine in Episode 2:
+  -- the one to pick now is the one the game has made selectable, kGameSelectable.)
   local okQ, agents = pcall(rawget(G, "QTE_GetQuickTimeAgents") or function() return nil end)
+  local first, offered = nil, false
   for _, qte in ipairs(okQ and type(agents) == "table" and agents or {}) do
     for i = 1, 5 do
       local prompt = prop(qte, "QTE Prompt - " .. i)
-      if isTarget(prompt) then return prompt end
+      if isTarget(prompt) then
+        first = first or prompt
+        local okA, agent = pcall(AgentFind, prompt)
+        local selectable = okA and agent and prop(agent, rawget(G, "kGameSelectable"))
+        if selectable == true then return prompt end
+        if selectable == false then offered = true end
+      end
     end
   end
-  return nil
+  -- (None selectable just now, between two: nothing to pick yet.)
+  if offered then return nil end
+  return first
 end
 
 local function targetName(prompt)
@@ -172,7 +183,11 @@ function TWDA.qteTargetUp()
   return target ~= nil
 end
 TWDA.onFrame("qte3.targets", function()
-  local prompt = qteOn and targetPrompt() or nil
+  -- (A key prompt up wins over a thing to pick: fighting zombie Brody in the school's basement,
+  -- Episode 1, "Left arrow!" came with obj_logicalAction still listed, and "Action: Enter!" talked
+  -- over it.)
+  local keyUp = active ~= nil and TWDA.now() - active.at < 8
+  local prompt = qteOn and not keyUp and targetPrompt() or nil
   if prompt ~= (target and target.prompt) then
     target = prompt and { prompt = prompt, at = TWDA.now() } or nil
     if target then

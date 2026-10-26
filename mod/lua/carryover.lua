@@ -75,9 +75,21 @@ local function writeSaves(slots, order)
   out:close()
 end
 
+-- Season 1's Save Slots menu speaks of slots by number (mCurrentSlot = 3), saves.txt by file name
+-- ("wd1_saveslot3.bundle", as SaveSlots_GetSlot says): a number is made a name after the active
+-- slot's. (Without this a copy of slot 2 to 3 was never written down, 2026-10-26.)
+local function slotKey(slot)
+  if slot == nil then return nil end
+  local text = tostring(slot)
+  if not text:find("^%d+$") then return text end
+  local active = currentSlot()
+  local named = active and active:find("%d+%.bundle$") and active:gsub("%d+%.bundle$", text .. ".bundle")
+  return named or ("wd1_saveslot" .. text .. ".bundle")
+end
+
 local function setSlot(slot, script, via)
+  slot = slotKey(slot)
   if slot == nil then return end
-  slot = tostring(slot)
   local slots, order = readSaves()
   if slots[slot] == script then return end
   if not slots[slot] then order[#order + 1] = slot end
@@ -87,8 +99,9 @@ local function setSlot(slot, script, via)
 end
 
 local function getSlot(slot)
+  slot = slotKey(slot)
   if slot == nil then return nil end
-  return (readSaves())[tostring(slot)]
+  return (readSaves())[slot]
 end
 
 -- The menus' own first scripts never belong to a save.
@@ -243,4 +256,23 @@ TWDA.hookGlobal("LoadScript", function(original)
     end
     return original(script, ...)
   end
+end)
+
+-- The later seasons' game.lua names the scene after the state's first script: Game_NewScene stores
+-- FileStripExtension(ScriptManagerGetCurrentScriptName()) as the game logic's current script, and
+-- Game_StartScene then sets the logic key "<act> - Entered <script>". With the bootstrap first,
+-- that name is "DebugLoader", so no scene was ever marked as entered (The Final Season, Episode 1:
+-- ForestShack looks for "2 - Entered ForestTile" to go on, and without it replayed its first part
+-- with the spear already gone). The stored name is put right after Game_NewScene; the script name
+-- itself stays the bootstrap's, which saves must keep.
+TWDA.hookAfter("Game_NewScene", function()
+  local getter = rawget(G, "Game_GetCurrentScript")
+  local logic, key = TWDA.upvalue(getter, "kLogicAgent"), TWDA.upvalue(getter, "kScriptCurrent")
+  local real = rawget(G, "TWDA_firstScript")
+  if logic == nil or key == nil or type(real) ~= "string" then return end
+  local stored = AgentGetProperty(logic, key)
+  if type(stored) ~= "string" or stored:lower() ~= BOOTSTRAP:lower():gsub("%.lua$", "") then return end
+  local name = real:gsub("%.[Ll][Uu][Aa]$", "")
+  AgentSetProperty(logic, key, name)
+  TWDA.log(("Game_NewScene: current script %s -> %s"):format(stored, name))
 end)

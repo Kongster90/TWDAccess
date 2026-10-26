@@ -48,7 +48,7 @@ while ((Get-Date) -lt $end) {
                 foreach ($k in $rule.Keys) {
                     if ($k.StartsWith("+")) { $mash = $k.Substring(1) }
                     elseif ($k.StartsWith("^")) { $hold = $k.Substring(1) }
-                    else { & "$dev\game_input.ps1" -Keys $k | Out-Null }
+                    elseif ($k -ne "") { & "$dev\game_input.ps1" -Keys $k | Out-Null }
                 }
                 "  pressed " + ($rule.Keys -join ",")
                 break

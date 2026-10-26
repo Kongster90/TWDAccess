@@ -178,6 +178,10 @@ local function trackPeeking()
     local d = lastDirection
     TWDA.say(d and ("Leaning out " .. d[2] .. ". " .. d[3] .. " to get back") or "Leaning out", { interrupt = true })
   else
+    -- (In The Final Season leaning out can lead into a close-up, the stranger in the woods in
+    -- Episode 2: she is not back in cover, and lookaround4.lua says what is offered.)
+    local okM, mode = pcall(Game_GetMode)
+    if okM and type(mode) == "table" and mode.name == "Station" then return end
     TWDA.say("Back in cover", { interrupt = true })
   end
 end

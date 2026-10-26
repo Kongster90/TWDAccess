@@ -7,8 +7,8 @@
     .\react4.ps1 -Seconds 3000 [-Answer 1] [-Extra "Release Brake=>Tab,Enter"]
 #>
 param([int]$Seconds = 3000, [string]$Answer = "1", [string[]]$Extra = @())
-$rules = @("You are dead=>Enter", "Walker, \d+ meters=>Q", "Walker! Q to=>Q", "Walker! E to=>E",
-  "Struggle! Press Q=>+Q", "E now=>E", "Too late=>+Q", "Choices\. 1: Say nothing\. 2=>2", "Choices\. 1=>$Answer",
+$rules = @("You are dead=>Enter", "On target. Enter shoots=>Enter,Enter,Enter", "Burning walkers cannot be killed=>R", "Bow in hand: R draws=>R", "Hold W to go on=>^W", "Hold A to go on=>^A", "Hold S to go on=>^S", "Hold D to go on=>^D", "can move=>", "(?-i)Another walker=>", "more close! Q to attack, E to=>E", "more close! Q to attack!$=>Q", "Walker, \d+ meters=>Q", "Walker! Q to=>Q", "Walker! E to=>E",
+  "Struggle! Press Q=>+Q", "(?-i)\bE now=>E", "(?-i)Too late=>+Q", "Choices\. 1: Say nothing\. 2=>2", "Choices\. 1=>$Answer",
   "Press [Ss]hift and E together=>Shift+E", "Press [Ss]hift and Q together=>Shift+Q",
   "E, [0-9]+ times=>+E", "Q, [0-9]+ times=>+Q", "Hold Enter!=>^Enter", "Hold E!=>^E", "Hold Q!=>^Q",
   "(?<!Hold )Enter!=>Enter", "\sE!$=>E", "\sQ!$=>Q",

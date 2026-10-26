@@ -12,6 +12,7 @@ namespace TWDAccess;
 ///   /say    queue speech          /sayi   interrupt, then speak
 ///   /stop   stop speech           /log    append lines to logs/game.log
 ///   /cmd    returns queued commands for the game (one per line)
+///   /tone   a short panned tone (Tones.cs)   /mouse  a relative mouse move (Mouse.cs)
 /// Anything else is recorded in logs/requests.log so unknown request shapes can be studied.
 /// </summary>
 internal sealed class LocalServer
@@ -24,6 +25,7 @@ internal sealed class LocalServer
     private readonly Speech _speech;
     private readonly CancellationTokenSource _cts = new();
     private readonly Queue<string> _commands = new();
+    private readonly Tones _tones = new();
 
     public int Port { get; }
     public DateTime LastRequestUtc { get; private set; }
@@ -157,6 +159,12 @@ internal sealed class LocalServer
             case "/log":
                 Log.AppendRaw("game.log", text.EndsWith('\n') ? text : text + "\n");
                 return "ok";
+            case "/tone":
+                return _tones.Play(key => QueryValue(query, key));
+            case "/mouse":
+                int.TryParse(QueryValue(query, "dx"), out int dx);
+                int.TryParse(QueryValue(query, "dy"), out int dy);
+                return Mouse.Move(dx, dy);
             case "/enqueue":
                 // Development console: queue Lua for the game to run (see devconsole.lua).
                 QueueCommand(text);
