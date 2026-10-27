@@ -3,11 +3,57 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-10-26 evening (thirteenth session, The Final Season Episode 1 done, Episode 2 to the
-raid; then the bow by ear, beep volume and sound beacons for every season with the user; see the
-first item).
+Last updated: 2026-10-27 about 03:50 (fourteenth session, The Final Season Episodes 2 and 3 done,
+Episode 4 up to the barn, where it is stuck in a loop; see the first item).
 
 ## Start here (where the last session stopped)
+
+- Fourteenth session, 2026-10-26 22:00 to 2026-10-27 about 04:00 (user asleep: "keep playing season 4",
+  closing Playback error boxes allowed; none came up). Committed and pushed when the user woke
+  ("Yes, commit and push tonight's work"). See "The Final
+  Season, Episodes 2 to 4 (fourteenth session)" below. Played in Save 2 from just after the
+  burning-school fight (the user's own win): the end of Episode 2, ALL of Episode 3 (Abel, the river,
+  Minerva, James's barn, the party, the herd with the flashlights, the dock searchlight, the pier
+  fight, the boat, Lilly) and Episode 4 up to ForestBarn.lua.
+  - WHERE IT IS STUCK: Episode 4, ForestBarn.lua, the barn. "We need to get these pen doors
+    closed": Close Stall Door (obj_logicalStallDoor3) starts amb_closeDoorTimer (about 15 s, then
+    Death); the only thing then offered is Move Wheelbarrow (a guided push, W, 11.4 s); when the
+    push reaches 100% the game plays cs_holdDoor (hold the barn door struggle), cs_nowWhat, the
+    pitchfork again (struggle_backFoulBeast, "won false" every time, even in auto mode), and Close
+    Stall Door 3 again: an endless loop, five times round, with and without a reload in between.
+    Tried and ruled out: idling (death), S instead of W (no movement, death), tapping W (slower,
+    death), Shift+W (no movement), pausing the push (it waits at 50%; holdDoor still at 100%), the
+    rope (a look, then the pitchfork), winning backFoulBeast (auto mode), walking to stall doors 1
+    and 2 (they stay hidden; the game's own useable list, mCurrentUseables, only ever has the
+    wheelbarrow), slow mode. Logic keys are right ("2 - Entered ForestBarn" true; act 2). Only
+    trigger: trigger_dialog_clementimeOut. ForestBarn.lua's functions are about stunning walkers
+    (ForestBarn_DisableZombieTri, "Stunning an already stunned zombie"). Not known whether the mod
+    causes it. Next: ask the user to try the barn (they can see if anything differs), or replay the
+    episode from its start (Episodes, Restart Episode 4: Save 2 would lose its Episode 4 progress;
+    the user has played in it too, so ask first). Save 2's checkpoint is the stall door (saves.txt: ForestBarn.lua).
+  - The dev autorun.lua was deleted from the game folder at the end; settings.txt untouched
+    (actionscenes normal, beacons true, beepvolume 30). dist\TWDAccess\mod has every change (copied
+    after each sync). The game was closed at the end (free commit had fallen to 6.6 GB; 12 GB after).
+  - Fixed and tested in the game unless marked: the bow no longer draws itself over the end-of-
+    episode statistics, or with a walker close that Q and E can fight, and Enter goes to the game
+    when the bow is up but cannot shoot ("Use Guts", Episode 3); labels for things with no noun ("Let
+    Him Smoke", not "Abel, let Him Smoke"), "choice" after a thing that makes a story choice ("Useable
+    - Type" Choice) and the notice glyph iconUseable_updated read as "a thing marked choice"; verbs
+    ending in a preposition ("Smear Guts On Louis"); hiding behind walkers from flashlights (Q from up
+    to 15 m, warnings); a group is walkers within 7.5 m (was 5.5); guard names left out of prompts
+    ("Q to stab, E to clobber"); QTEs with several targets in one prompt (Armando's knee or head:
+    Tab and Enter), duplicates and model numbers left out of target names; a false "Too late" in
+    struggles (waits 1.2 s); the Episodes screen puts the focus on Start; "Objective: Escape";
+    place names without "bg_"/"cs_"; "zombat" triggers are no places; walkers that come for her are
+    not "walk up to it" targets; mod walks run while walkers are near (untested whether it speeds
+    her: SetRunning is called, "lookaround2: running true" logs); auto mode waits half a second
+    before acting on a walker (it broke the shore escape); "Hurry!" before what is on offer when a
+    scene dialog named "...Timer" starts (heard in the barn). New searchlight4.lua for the dock's
+    searchlight (Episode 3): written after the barn stopped play, loads cleanly, not heard there.
+  - Questions for the user: the barn (above); whether the herd escape on the shore (Episode 4 start)
+    is playable for them by ear in normal mode (seven walkers to shove with E while the mod's walk
+    runs to "Get off me"; it worked in auto mode only for the test reactor); the earlier questions
+    (AJ shoot at the train station, aim assist) are still open.
 
 - Thirteenth session, 2026-10-25 about 21:30 to 2026-10-26 09:00 (user away overnight: "start working
   on season 4", play to its end, questions saved). Committed and pushed at the end of the
@@ -1886,6 +1932,89 @@ BoardingSchoolInteriorNight, BoardingSchoolExteriorDamaged.
   struggles; "Place: Jump scare zombie" and similar trigger names are spoilers; the burning-school
   fight not yet won.
 
+### The Final Season, Episodes 2 to 4 (fourteenth session, 2026-10-26/27)
+
+Scenes: BoardingSchoolExteriorDamaged (end of Episode 2), then Episode 3: PreviouslyOn,
+BoardingSchoolExteriorBasement (Abel), RiverShoreline (spying: places and stations give "INTEL"
+notices), ForestCamp (James; "Using only E to stun walkers will satisfy James' request"), ForestBarn,
+BoardingSchoolDorm (place the collectibles), BoardingSchoolInterior (the party), TrainTile (Lee,
+"Clementine Flashback" is the game's speaker name), RiverShorelineNight (herd, dock, pier), RiverBoat;
+Episode 4: the sinking boat, RiverShorelineNight again (the shore), the cave (torch), CliffBridge,
+ForestBarn (stuck, see the first item).
+- Episodes screen (TFS): it opens with the focus on the episode's own button, where Enter does
+  nothing; the game moves it to "Start/Continue Episode N" only after Up or Down. menus.lua now
+  selects ui_menuEpisodes_startButton (Clone_Find(menu.agent, "_startButton"):Select(true)) once the
+  game has selected the episode (doing it at 0.8 s was undone by the game's own selection). Tested.
+- Mouse pointer: the bow's /mouse moves leave the pointer anywhere; on Season Select it rested on the
+  left arrow and Enter went to A New Frontier instead of playing The Final Season. Moving it away
+  (/mouse?dx=400&dy=300 a few times) fixed it. Not fixed in the mod.
+- The bow (bow4.lua): it re-drew itself at the end of Episode 2 over the statistics ("Bow drawn.
+  Nothing to shoot at" said over them, and F6 described the bow). Now it re-draws only with
+  something to shoot, no menu up, and no walker within 6 m that Q or E can fight (the pier fight is
+  hand to hand). Enter with the bow up but "Interaction Ranged Enable" off for over 1.5 s, or with
+  nothing to aim at and something the game offers (mSelectedUseable), goes to the game: "Use Guts"
+  at the river was blocked by "Still drawing.".
+- Useable labels (lookaround4.lua): Abel's cigarette offers verb nodes with no noun ("Let Him Smoke",
+  "Burn Him", "Stub Out Cigarette"): said alone (the game shows them so); "Useable - Type" Choice
+  adds ", choice"; the tutorial "When you see <ui_notification_iconUseable_updated.d3dtx>, consider
+  the consequences" says "a thing marked choice" (text.lua). Verbs ending in a preposition go before
+  the noun ("Smear Guts On Louis").
+- Hiding behind walkers (river at night, Episode 3): see combat4.lua's comment. Every herd walker
+  offers prompt 2 "x"/cs_hideBehindZombie; the game takes the target override at 7 m and brings
+  her there (station "cam_station_hideBehindZombie"). bg_flashlightTimer, then
+  RiverShorelineNight_EnableFlashlightTracking(true) about 6 s later, death 4 s after that unless
+  hidden; the raiders shoot her walker (logic_onAgentDeath), bg_stationHideBehindZombieExit, next
+  light 6 s later; five rounds, then cs_flashlightOnClemFinal. Said: "The light is on you! Q to hide
+  behind a walker!", "Hiding behind a walker.", "Out in the open. Q to hide behind another
+  walker!". Played through with Q on those.
+- The dock (same scene): trigger_dialog_dockStealth01 and 02 are thin lines across the dock,
+  enabled while the searchlight is on them (3 to 6 s at a time); crossing one while it is off is
+  safe (tested by walking across each while dark). Added after the barn stopped play: new
+  searchlight4.lua says the next line's light ("Crossing ahead, 3 meters. Crossing ahead is dark.
+  Go!", "Light on the crossing ahead. Wait.", "Past the last crossing.") and F6 starts with it. It
+  loads without errors but was NOT heard at the dock (Episode 3 is behind the save). Places "Dock
+  stealth 01/02" walk a meter past each line. trigger_dialog_bg_flashlightOnClem..03 were never
+  enabled.
+- The pier fight: walkers in groups; a kill (4.5 s) lets the next grab her; shove first, then kill a
+  stunned one (quick). GROUP_METERS 7.5. Won with "E on more close, Q on alone".
+- The boat: the password (Abel: "Only one we use these days is Rockingham") was answered wrong by
+  the test reactor (choice 2), which led to a knock-out fight (E). The Armando ambush is a QTE whose
+  "QTE Prompt - 1" is "obj_logicalArmandoKnee,obj_logicalArmandoHead": two targets at once, a
+  choice. qte3.lua splits prompts on commas: "Armando's knee, or Armando's head. Tab to choose,
+  Enter does Armando's knee!" (worked; Tab switches). (Also: in TFS mQuickTimeEventAgents is keyed
+  by scene; ExecuteAction iterates mQuickTimeEventAgents[mGameScene].)
+- Struggles: struggle_minnie and struggle_climb end their ready state within 40 ms of E and then
+  the struggle, won; "Too late" is now said only if the struggle is still on 1.2 s later. Several
+  story struggles are lost by design ("won false": struggle_lilly, getBackUp, backFoulBeast).
+- The shore at the start of Episode 4 (no knife, "You cannot fight the herd", objective Escape):
+  trigger_dialog_clemKilledZombieWall is a box that sweeps in at about 0.6 m/s and follows her path;
+  inside it, death. Walkers ZombieCombat01..07 stand between her and trigger_dialog_getOffMe
+  (19 m south), where cs_getOffMe (the bite) moves the story on. Done in auto mode: Tab to "Get off
+  me", Enter, the walk resumes after each shove (7 shoves). Normal mode needs E within about half a
+  second for each; the reactor was too slow. Tab's list used to start with "Zombat latecomer" and
+  every walker ("walk up to it"); both left out now. Auto mode's shove the moment the first walker
+  came in reach broke the scene (no objective, no getOffMe): auto now waits 0.5 s.
+- Mod walks call navigatewd.lua's SetRunning (upvalue of Navigate_OnButtonRun; it returns at once if
+  "Player - Run Speed" is 0) while a walker is within 12 m. A test steering 1.5 s each way showed
+  1.5 m walking vs 1.7 m with it: not clearly faster. Unconfirmed.
+- The barn (Episode 4): "Move Wheelbarrow" is a guided push that only goes forward with W, pauses
+  at 50% when W is let go, and plays cs_holdDoor at 100% (checked with ChoredMovement percent);
+  amb_closeDoorTimer (about 15 s) restarts when the wheelbarrow is used and kills her if the push is
+  not finished. lookaround4.lua says "Hurry!" when a "...Timer" scene dialog starts. The loop is in
+  the first item.
+- Other: objectives are said as "Objective: X"; place names drop "bg_"/"cs_" ("Creaky bridge");
+  "Gun p250" is "gun"; "obj_logicalZombieHead1" is "walker head 1"; the mouse-only tutorial "Hold
+  mouse Right Click to leave cover, then press mouse Left Click to fire" (the bridge, Minerva) is
+  followed by "Bow in hand: R draws it" (not checked whether a shot was needed; the scene went on).
+- Test tools: react4.ps1 -NoEarlyQ (no Q on "Walker, 6 meters"), -Extra rules now come first (so
+  they can override); chord.ps1 knows Shift; watch_river4.lua (WR lines: position, attachment,
+  flashlight, mode, Death/Game_RunDialog/AgentAttach calls; copy to autorun.lua), watch_dock4.lua
+  (WD: the dock lines), watch_herd4.lua (WH: every trigger's box), watch_herdwalkers4.lua (WW: AI
+  walkers when an objective comes). Write autorun.lua WITHOUT a byte-order mark
+  ([IO.File]::WriteAllText with UTF8Encoding($false)): PowerShell's Set-Content -Encoding UTF8 adds
+  one and the console reports "unexpected symbol near char(239)". Delete autorun.lua before the user
+  plays.
+
 ### 400 Days replayed (sixth session, 2026-10-10 about 03:15 to 05:20)
 
 After the River Street retest, 400 Days was replayed in slot 2 to test the open items (from
@@ -2365,7 +2494,8 @@ Project root: C:\Users\dengs\Downloads\TWD
     announcements) and combat4.lua (walkers: warnings, keys in reach, early Q or E kept, slow and
     auto modes; TWDA.walkerTargets; aims Q and E with the target override, groups); thirteenth
     session: shooter4.lua (shooter stations), bow4.lua (the bow: R, Enter, Tab; turns the camera with
-    the helper's /mouse) and stars4.lua (stargazing). For every season: sounds.lua (TWDA.tone,
+    the helper's /mouse) and stars4.lua (stargazing); fourteenth session: searchlight4.lua (the dock's
+    searchlight lines, Episode 3: the next crossing's light said; untested by ear). For every season: sounds.lua (TWDA.tone,
     TWDA.soundDirection, beepvolume and F3) and beacons.lua (sound beacons from each look-around
     module's TWDA.beaconEntries; F4). The Final Season also uses choices2,
     lookaround2 (places and walking), qte3, struggle, prompts2 (notices), guided (paths: the key from

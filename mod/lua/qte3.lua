@@ -118,36 +118,45 @@ local function isTarget(prompt)
   return okE and exists == true
 end
 
-local function targetPrompt()
+-- The things to pick now, as a list (usually one).
+local function targetPrompts()
   local execute = executeAction()
   local list = type(execute) == "function" and TWDA.upvalue(execute, "mQuickTimeEventAgents") or nil
   for _, qte in ipairs(type(list) == "table" and list or {}) do
     local prompts = rawget(qte, "promptsCurrent")
     for _, prompt in ipairs(type(prompts) == "table" and prompts or {}) do
-      if isTarget(prompt) then return prompt end
+      if isTarget(prompt) then return { prompt } end
     end
   end
-  -- (The Final Season keeps that list empty: its QTE agents, QTE_GetQuickTimeAgents(), carry their
-  -- prompts in "QTE Prompt - 1", "- 2"..., "obj_logicalAction" at the train station.)
+  -- (The Final Season keeps that list by scene, and its QTE agents, QTE_GetQuickTimeAgents(), carry
+  -- their prompts in "QTE Prompt - 1", "- 2"..., "obj_logicalAction" at the train station.)
   -- (Several in turn, "obj_logicalAction01" then "02" when Lilly comes at Clementine in Episode 2:
-  -- the one to pick now is the one the game has made selectable, kGameSelectable.)
+  -- the one to pick now is the one the game has made selectable, kGameSelectable. Several at once
+  -- in one prompt, "obj_logicalArmandoKnee,obj_logicalArmandoHead" for the ambush on the boat in
+  -- Episode 3: a choice of either, ExecuteAction takes each name.)
   local okQ, agents = pcall(rawget(G, "QTE_GetQuickTimeAgents") or function() return nil end)
-  local first, offered = nil, false
+  local all, selected, offered = {}, {}, false
   for _, qte in ipairs(okQ and type(agents) == "table" and agents or {}) do
     for i = 1, 5 do
-      local prompt = prop(qte, "QTE Prompt - " .. i)
-      if isTarget(prompt) then
-        first = first or prompt
-        local okA, agent = pcall(AgentFind, prompt)
-        local selectable = okA and agent and prop(agent, rawget(G, "kGameSelectable"))
-        if selectable == true then return prompt end
-        if selectable == false then offered = true end
+      local value = prop(qte, "QTE Prompt - " .. i)
+      for prompt in tostring(value or ""):gmatch("[^,%s]+") do
+        -- (Once each: the knife on the boat, Episode 3, is "obj_knifeKaBar,obj_knifeKaBar".)
+        local seen = false
+        for _, other in ipairs(all) do seen = seen or other == prompt end
+        if isTarget(prompt) and not seen then
+          all[#all + 1] = prompt
+          local okA, agent = pcall(AgentFind, prompt)
+          local selectable = okA and agent and prop(agent, rawget(G, "kGameSelectable"))
+          if selectable == true then selected[#selected + 1] = prompt end
+          if selectable == false then offered = true end
+        end
       end
     end
   end
+  if #selected > 0 then return selected end
   -- (None selectable just now, between two: nothing to pick yet.)
-  if offered then return nil end
-  return first
+  if offered or #all == 0 then return nil end
+  return all
 end
 
 local function targetName(prompt)
@@ -157,7 +166,8 @@ local function targetName(prompt)
   -- "obj_rockClem" -> "rock" (the player's own), "obj_logicalHandConrad" -> "Conrad's hand"
   local parts = {}
   for word in prompt:gsub("^obj_", ""):gsub("([%l%d])(%u)", "%1 %2"):gmatch("%S+") do
-    if word:lower() ~= "logical" then parts[#parts + 1] = word end
+    -- (Not a model number: Lilly's gun on the boat, Episode 3, "obj_gunP250".)
+    if word:lower() ~= "logical" and not (#parts > 0 and word:find("^%u%d+$")) then parts[#parts + 1] = word end
   end
   local last = parts[#parts]
   -- (A name only if someone of that name is in the scene: "Conrad", not the "Head" of
@@ -172,46 +182,73 @@ local function targetName(prompt)
     if lower == "clem" or lower == "clementine" or lower == "javier" or lower == "javi" then return rest end
     return last .. "'s " .. rest
   end
-  return table.concat(parts, " "):lower()
+  -- (The name first: the ambush on the boat, Episode 3, "obj_logicalArmandoKnee" -> "Armando's knee".)
+  local firstWord = parts[1]
+  local okF, isPerson = pcall(AgentExists, firstWord or "")
+  if #parts >= 2 and firstWord and firstWord:find("^%u%l") and okF and isPerson then
+    table.remove(parts, 1)
+    return firstWord .. "'s " .. table.concat(parts, " "):lower()
+  end
+  -- (Shooting from the beach, Episode 4: "obj_logicalZombieHead1" -> "walker head 1".)
+  local text = table.concat(parts, " "):lower():gsub("(%a)(%d)", "%1 %2"):gsub("^zombie ", "walker ")
+  return text
 end
 
-local target, enterHeld = nil, false
+local target, enterHeld, tabHeld = nil, false, false
 
--- (lookaround4.lua leaves Enter alone while a thing to pick is up: the train station's
+-- (lookaround4.lua leaves Enter and Tab alone while a thing to pick is up: the train station's
 -- "obj_logicalAction" is a usable too.)
 function TWDA.qteTargetUp()
   return target ~= nil
+end
+local function capital(text)
+  return (text:gsub("^%l", string.upper))
 end
 TWDA.onFrame("qte3.targets", function()
   -- (A key prompt up wins over a thing to pick: fighting zombie Brody in the school's basement,
   -- Episode 1, "Left arrow!" came with obj_logicalAction still listed, and "Action: Enter!" talked
   -- over it.)
   local keyUp = active ~= nil and TWDA.now() - active.at < 8
-  local prompt = qteOn and not keyUp and targetPrompt() or nil
-  if prompt ~= (target and target.prompt) then
-    target = prompt and { prompt = prompt, at = TWDA.now() } or nil
+  local prompts = qteOn and not keyUp and targetPrompts() or nil
+  local key = prompts and table.concat(prompts, ",") or nil
+  if key ~= (target and target.key) then
+    target = prompts and { prompts = prompts, key = key, index = 1, at = TWDA.now() } or nil
     if target then
-      local name = targetName(prompt)
-      TWDA.log("qte3: target " .. prompt .. " (" .. name .. ")")
-      say(name:gsub("^%l", string.upper) .. ": Enter!")
+      local names = {}
+      for i, prompt in ipairs(prompts) do names[i] = targetName(prompt) end
+      target.names = names
+      TWDA.log("qte3: target " .. key .. " (" .. table.concat(names, ", ") .. ")")
+      if #names == 1 then
+        say(capital(names[1]) .. ": Enter!")
+      else
+        say(("%s, or %s. Tab to choose, Enter does %s!"):format(capital(table.concat(names, ", ", 1, #names - 1)),
+          names[#names], names[1]))
+      end
     end
   end
   local ok, down = pcall(InputPCIsVKeyPressed, 0x0D)
   down = ok and down == true
+  local okT, tab = pcall(InputPCIsVKeyPressed, 0x09)
+  tab = okT and tab == true
   local mode = TWDA.settings.actionscenes or "slow"
   if target then
     TWDA.setSlowFor("qte3.target", mode == "slow")
+    if tab and not tabHeld and #target.prompts > 1 then
+      local okS, shift = pcall(InputPCIsVKeyPressed, 0x10)
+      target.index = (target.index - 1 + ((okS and shift) and -1 or 1)) % #target.prompts + 1
+      say(capital(target.names[target.index]) .. ": Enter!")
+    end
     local auto = mode == "auto" and not target.autoDone and TWDA.now() - target.at > 0.3
     if (down and not enterHeld) or auto then
       target.autoDone = true
       local execute = executeAction()
-      local okX, err = pcall(execute, target.prompt)
+      local okX, err = pcall(execute, target.prompts[target.index])
       if not okX then TWDA.log("qte3: target failed: " .. tostring(err)) end
     end
   else
     TWDA.setSlowFor("qte3.target", false)
   end
-  enterHeld = down
+  enterHeld, tabHeld = down, tab
 end)
 
 -- Multi-prompt QTEs (multiqte.lua): MultiQTE_Enable(agent, true) shows several prompts at once,
@@ -296,6 +333,10 @@ TWDA.describeAction2 = function()
     local key = keyFor(active.action, active.agent)
     return active.hold and ("Hold " .. key) or ("Press " .. key)
   end
-  if target then return targetName(target.prompt):gsub("^%l", string.upper) .. ": press Enter" end
+  if target then
+    local now = capital(target.names[target.index]) .. ": press Enter"
+    if #target.names > 1 then now = now .. ". Tab for " .. table.concat(target.names, " or ") end
+    return now
+  end
   return previous and previous() or nil
 end

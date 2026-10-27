@@ -201,8 +201,10 @@ end
 -- cross them anyway.)
 -- (Death traps are no places either: The Final Season's "trigger_dialog_caughtByTrappedZombie" kills
 -- Clementine beside a pinned walker.)
+-- ("zombat": The Final Season's walker fights, "trigger_dialog_zombatLatecomer" on the shore at the
+-- start of Episode 4 brings one more walker, and stood first in Tab's list during the escape.)
 local NOT_PLACES = { "cam", "chore", "depth", "tracking", "death", "dies", "die_", "kill", "pursuer", "fail", "lose",
-  "warp", "caught" }
+  "warp", "caught", "zombat" }
 local DEATH_TRAPS = { "death", "dies", "die_", "kill", "caught" }
 
 local function canWalk()
@@ -212,7 +214,10 @@ local function canWalk()
 end
 
 local function placeName(agentName)
+  -- (The Final Season's "trigger_dialog_bg_creakyBridge", "trigger_dialog_cs_zombiePier": the kind of
+  -- dialog, background or cut scene, is not part of the name.)
   local name = agentName:gsub("^trigger_", ""):gsub("^cam_nav_", ""):gsub("^path_", ""):gsub("^dialog_", "")
+    :gsub("^bg_", ""):gsub("^cs_", "")
   name = name:gsub("([%l])(%u)", "%1 %2"):gsub("(%a)(%d)", "%1 %2"):gsub("_", " "):lower()
   return (name:gsub("^%l", string.upper))
 end
@@ -328,8 +333,22 @@ local function detourAround(here, target)
   return nil
 end
 
+-- (The Final Season runs with Shift, through navigatewd.lua's SetRunning, an upvalue of
+-- Navigate_OnButtonRun. A walk runs while a walker is near: on the shore at the start of Episode 4
+-- the herd sweeps in at about walking pace.)
+local running = false
+local function setRun(on)
+  if on == running then return end
+  local fn = TWDA.upvalue(rawget(G, "Navigate_OnButtonRun"), "SetRunning")
+  if type(fn) == "function" and pcall(fn, on) then
+    running = on
+    TWDA.log("lookaround2: running " .. tostring(on))
+  end
+end
+
 local function stopWalk(text)
   pcall(DirectControl_SetJoystickDirection, Vector(0, 0, 0))
+  setRun(false)
   if walk and walk.pathing then pcall(PathAgentStop, TWDA.player()) end
   if text then TWDA.say(text, { interrupt = true }) end
   if walk then TWDA.log("lookaround2: walk to " .. walk.label .. " ended: " .. tostring(text)) end
@@ -519,6 +538,7 @@ local function steer()
   end
   local length = math.sqrt(dx * dx + dy * dy)
   if length < 0.0001 then return end
+  setRun(TWDA.walkerNear ~= nil and TWDA.walkerNear(12))
   pcall(DirectControl_SetJoystickDirection, Vector(dx / length, dy / length, 0))
 end
 TWDA.onFrame("lookaround2.walk", steer)

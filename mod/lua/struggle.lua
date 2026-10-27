@@ -227,10 +227,18 @@ TWDA.onFrame("struggle", function()
     return
   elseif state.ready and not ready then
     TWDA.log("struggle: finishing move missed")
-    if mode ~= "auto" then TWDA.say("Too late. " .. (game.season2 and "Mash" or "Q") .. " again!", { interrupt = true }) end
-    state.half = false
+    state.missedAt = now
   end
   state.ready = ready
+  -- (Said a moment later, if the struggle is still on: struggle_minnie on the boat, Episode 3, ended
+  -- its ready state 40 ms in and then the struggle, won; struggle_climb, Episode 4, a second later.)
+  if state.missedAt and now - state.missedAt > 1.2 then
+    state.missedAt = nil
+    if not ready and mode ~= "auto" then
+      state.half = false
+      TWDA.say("Too late. " .. (game.season2 and "Mash" or "Q") .. " again!", { interrupt = true })
+    end
+  end
 
   if mode == "auto" and not KIND_TEXT[state.kind] then
     if ready then

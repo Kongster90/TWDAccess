@@ -103,7 +103,7 @@ local function screenPos(point)
 end
 
 local drawn, aim, onTarget, lastSteer = false, nil, false, 0
-local wanted, loweredAt = false, nil -- (the player's own R: the bow stays up until R again)
+local wanted, loweredAt, lastLook = false, nil, 0 -- (the player's own R: the bow stays up until R again)
 local held, toldInHand = {}, false
 
 local function soundMode()
@@ -129,8 +129,11 @@ local function sayTarget(t)
   end
 end
 
+local drawnAt = 0
+
 local function draw(on)
   drawn, aim, onTarget = on, nil, false
+  drawnAt = TWDA.now()
   pcall(rawget(G, on and "AI_Player_RM_Down" or "AI_Player_RM_Up"), {})
   if not on then
     TWDA.say("Bow down.", { interrupt = true })
@@ -294,12 +297,19 @@ TWDA.onFrame("bow4", function()
     loweredAt = now
     TWDA.log("bow4: lowered by the game or the mouse")
   end
+  -- (Only with something to shoot: the game lowers it for cut scenes too, and the end of Episode 2
+  -- had it drawn again over the statistics. Not with a walker close that Q and E can fight: the
+  -- pier, Episode 3, is fought hand to hand; the burning walkers offer no Q or E.)
   local struggling = TWDA.struggleActive and TWDA.struggleActive()
   if wanted and not drawn and not struggling and loweredAt and now - loweredAt > 1
-      and get(props, "AI Player - Interaction Enable") == true then
-    loweredAt = nil
-    TWDA.log("bow4: drawing again")
-    draw(true)
+      and get(props, "AI Player - Interaction Enable") == true and now - lastLook > 0.5 then
+    lastLook = now
+    local melee = TWDA.walkerNear and TWDA.walkerNear(6)
+    if #targets() > 0 and not melee and call("Menu_GetCurrentMenu") == nil then
+      loweredAt = nil
+      TWDA.log("bow4: drawing again")
+      draw(true)
+    end
   end
   for _, vk in ipairs({ VK_R, VK_TAB }) do
     local ok, down = pcall(InputPCIsVKeyPressed, vk)
@@ -327,21 +337,29 @@ end)
 
 -- Enter shoots while the mod holds the bow drawn (Enter is otherwise the game's "use", and
 -- lookaround4.lua's). A click is the game's own shot.
+-- (Drawn but still not ready after a moment and a half, the game has taken the shot away: the river
+-- at night, Episode 3, keeps the bow up while "Use Guts" waits for Enter. With nothing to aim at and
+-- something the game offers, Enter uses that too.)
 TWDA.hookGlobal("Useable_OnButtonUse", function(original)
   return function(event, ...)
-    if drawn then
-      if not (type(event) == "table" and event.code == 816) then -- (816: the left mouse button)
-        local props = playerProps()
-        if get(props, "AI Player - Interaction Ranged Enable") == true then
-          -- (Where the target was on screen, for telling a miss from a walker that takes two.)
-          local pos = aim and screenPos(aim.point)
-          TWDA.log(("bow4: shooting at %s%s"):format(aim and aim.name or "nothing",
-            pos and (" (screen %.3f %.3f)"):format(pos.x, pos.y) or ""))
-          pcall(rawget(G, "AI_Player_L"), {})
-        else
-          TWDA.say("Still drawing.", { interrupt = true })
-        end
+    if drawn and not (type(event) == "table" and event.code == 816) then -- (816: the left mouse button)
+      local props = playerProps()
+      local ready = get(props, "AI Player - Interaction Ranged Enable") == true
+      local offered = TWDA.upvalue(TWDA.unwrap(original), "mSelectedUseable")
+      if ready and (aim or offered == nil) then
+        -- (Where the target was on screen, for telling a miss from a walker that takes two.)
+        local pos = aim and screenPos(aim.point)
+        TWDA.log(("bow4: shooting at %s%s"):format(aim and aim.name or "nothing",
+          pos and (" (screen %.3f %.3f)"):format(pos.x, pos.y) or ""))
+        pcall(rawget(G, "AI_Player_L"), {})
+        return
       end
+      if not ready and TWDA.now() - drawnAt < 1.5 then
+        TWDA.say("Still drawing.", { interrupt = true })
+        return
+      end
+      TWDA.log("bow4: Enter left to the game (" .. (ready and "nothing to aim at" or "bow not ready") .. ")")
+    elseif drawn then
       return
     end
     return original(event, ...)

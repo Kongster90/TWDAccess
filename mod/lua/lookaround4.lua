@@ -74,10 +74,17 @@ local function presetVerb(agent)
   return dialogText("verb_" .. camel) or dialogText("verb_" .. preset:lower():gsub(" ", "")) or preset
 end
 
-local function labelOf(agent)
-  local verb = dialogText(prop(agent, "Useable - Verb Node")) or presetVerb(agent)
+local function nameOf(agent)
+  local ownVerb = dialogText(prop(agent, "Useable - Verb Node"))
+  local verb = ownVerb or presetVerb(agent)
   local noun = call("Game_GetNounText", agent)
   noun = (type(noun) == "string" and noun ~= "") and TWDA.cleanText(noun) or nil
+  -- (With no noun the game shows its own verb alone: Abel's cigarette, Episode 3, "Let Him Smoke",
+  -- "Burn Him" and "Stub Out Cigarette" on obj_logicalAbel, obj_logicalAbelCheek and
+  -- obj_logicalDeskBasement. A state, the gate traps' "No walker in range", still needs the name.)
+  if not noun and ownVerb and not ownVerb:find("^[Nn]o ") then
+    return TWDA.normalCaps((ownVerb:gsub("^%l", string.upper):gsub("%.$", "")))
+  end
   if not noun then
     -- ("obj_logicalTrapBoulderA" -> "Trap boulder A")
     local name = TWDA.agentName(agent):gsub("^obj_", ""):gsub("^logical", ""):gsub("([%l])(%u)", "%1 %2")
@@ -92,11 +99,23 @@ local function labelOf(agent)
   if verb and words >= 3 and base ~= "" and verb:lower():find(base, 1, true) then
     return TWDA.normalCaps((verb:gsub("^%l", string.upper):gsub("%.$", "")))
   end
-  if verb and words >= 3 then
+  -- (One ending in a preposition goes before it: the river at night, Episode 3, "Smear Guts On" Louis.)
+  local last = verb and verb:match("(%a+)%.?$")
+  local prepositions = { on = true, at = true, to = true, with = true, ["in"] = true, into = true, onto = true,
+    from = true, ["for"] = true, off = true, up = true, over = true, down = true, about = true }
+  if verb and words >= 3 and not (last and prepositions[last:lower()]) then
     return TWDA.normalCaps(noun .. ", " .. verb:gsub("^%u", string.lower):gsub("%.$", ""))
   end
   local text = verb and (verb .. " " .. noun) or noun
   return TWDA.normalCaps(text)
+end
+
+-- (A story choice made by using a thing has "Useable - Type" Choice; the game marks its token, and
+-- a tutorial notice says to think before taking one: "a thing marked choice", text.lua.)
+local function labelOf(agent)
+  local label = nameOf(agent)
+  if prop(agent, "Useable - Type") == "Choice" then return label .. ", choice" end
+  return label
 end
 
 local function playerPos()
@@ -412,6 +431,16 @@ local wasPlay, settleFrom, checkPending = false, 0, false
 local lastNames, namesCheckedAt, lastSignature = nil, 0, nil
 local wasWalk = false
 local outSince, forceNext = nil, false
+-- (A scene dialog named a timer runs out on her: the barn, Episode 4, "amb_closeDoorTimer" after the
+-- stall door, and "Move Wheelbarrow" had to be done within 15 seconds. What is on offer then is
+-- said with "Hurry!".)
+local hurryAt = -10
+TWDA.hookBefore("Game_RunSceneDialog", function(node)
+  if type(node) == "string" and node:lower():find("timer$") then
+    hurryAt = TWDA.now()
+    TWDA.log("lookaround4: timer " .. node)
+  end
+end)
 local function announce()
   local now = TWDA.now()
   -- (Out of play, or unable to walk, for a few seconds (a talk, a scene): when control comes back
@@ -459,6 +488,7 @@ local function announce()
   if signature == lastSignature and not forceNext then return end
   lastSignature, forceNext = signature, false
   local prefix = walk and ((TWDA.playerName and TWDA.playerName() or "You") .. " can move. ") or ""
+  if now - hurryAt < 5 and #list > 0 then prefix = "Hurry! " .. prefix end
   if #list == 0 then
     if walk then
       local n = #places()
@@ -482,7 +512,7 @@ TWDA.onFrame("lookaround4", function()
   if not isSeason4() then return end
   announce()
   local active = playMode() and not (TWDA.hasChoices and TWDA.hasChoices()) and not (TWDA.bowDrawn and TWDA.bowDrawn())
-    and not (TWDA.starsActive and TWDA.starsActive())
+    and not (TWDA.starsActive and TWDA.starsActive()) and not (TWDA.qteTargetUp and TWDA.qteTargetUp())
   local ok, down = pcall(InputPCIsVKeyPressed, VK_TAB)
   down = ok and down == true
   if down and not held.tab and active then
@@ -508,7 +538,9 @@ TWDA.onFrame("lookaround4.station", function()
   if not isSeason4() then return end
   local now = station()
   if now and not inStation then
-    if call("Station_AllowExit") ~= false then TWDA.say("Close-up. Backspace steps back.") end
+    -- (Hiding behind a walker at the river, Episode 3, is a station too: combat4.lua says so.)
+    local hidingNow = TWDA.hidingBehindWalker and TWDA.hidingBehindWalker()
+    if call("Station_AllowExit") ~= false and not hidingNow then TWDA.say("Close-up. Backspace steps back.") end
   end
   inStation = now
   local ok, down = pcall(InputPCIsVKeyPressed, 0x08)

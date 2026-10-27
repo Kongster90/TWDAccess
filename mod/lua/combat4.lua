@@ -14,7 +14,9 @@ local G = _G
 
 local KEYS = { a = "E", b = "E", e = "E", x = "Q", y = "Q", q = "Q", rt = "Left click", l = "Left click" }
 local NEAR_METERS, CLOSE_METERS = 6, 3.5
-local GROUP_METERS = 5.5 -- (another walker this close to her when one is in reach: a group)
+-- (Another walker this close to her when one is in reach: a group. A kill takes about four and a
+-- half seconds; at the pier, Episode 3, one 6 meters off grabbed her during it.)
+local GROUP_METERS = 7.5
 local BUFFER_SECONDS = 3.5 -- (game time; a walker can take three seconds from "3 meters" to reach)
 
 local function call(name, ...)
@@ -45,7 +47,8 @@ local function prop(agent, key)
 end
 
 -- "cs_attackTarget" -> "attack", "cs_stunTarget" -> "shove".
-local WORDS = { stun = "shove", attack = "attack", kill = "kill", push = "push", shove = "shove", stab = "stab" }
+local WORDS = { stun = "shove", attack = "attack", kill = "kill", push = "push", shove = "shove", stab = "stab",
+  ["hide behind zombie"] = "hide behind it" }
 local function actionWord(node)
   -- ("cs_schoolDamaged_targetAttack": the scene's name first.)
   local base = tostring(node or ""):gsub("^cs_", ""):match("([^_]*)$") or ""
@@ -73,14 +76,18 @@ local function targetOf(props)
 end
 
 -- The prompts a walker offers: { key = "Q", letter = "y", word = "attack" }.
+-- (A person's name in the node is left out: the guard on the boat, Episode 3, "cs_stabMichael".)
 local function promptsOf(agent)
   local list = {}
+  local own = " " .. TWDA.agentName(agent):lower()
   for i = 1, 2 do
     local pre = "AI Agent - Player Used Interaction Prompt " .. i
     if prop(agent, pre .. " Enable") == true then
       local letter = tostring(prop(agent, pre) or ""):lower()
       if KEYS[letter] then
-        list[#list + 1] = { key = KEYS[letter], letter = letter, word = actionWord(prop(agent, pre .. " Dialog Node")) }
+        local word = actionWord(prop(agent, pre .. " Dialog Node"))
+        if #word > #own and word:sub(-#own) == own then word = word:sub(1, -#own - 1) end
+        list[#list + 1] = { key = KEYS[letter], letter = letter, word = word }
       end
     end
   end
@@ -176,21 +183,58 @@ local function canShove(agent)
   return false
 end
 
+-- Hiding behind walkers from the raiders' flashlights (the river at night, Episode 3,
+-- RiverShorelineNight.lua): every walker of the herd offers Q, "cs_hideBehindZombie", and the game
+-- takes one several meters off once it is the target, bringing her to it; hiding is a station
+-- (dialogs "bg_stationHideBehindZombieEnter" and "...Exit"). The flashlight
+-- (RiverShorelineNight_EnableFlashlightTracking(true)) finds her about six seconds after the herd
+-- sets off and again after each hide ends (the raiders shoot the walker she hid behind); four
+-- seconds later, out in the open, she is shot. The herd walks on ahead of her, out of reach of Q.
+local HIDE_METERS = 15 -- (the game took one 7 meters off; the herd can be further ahead of her)
+
+local function canHide(agent)
+  for _, p in ipairs(promptsOf(agent)) do
+    if p.word:find("^hide") then return true end
+  end
+  return false
+end
+
 -- The walker in reach that matters: the game's target while it can be shoved; else the nearest in
--- reach that can be; else the game's target, or the nearest in reach.
+-- reach that can be; else the game's target, or the nearest in reach; else one to hide behind.
 local function reachTarget(props)
   local gameTarget = targetOf(props)
   if gameTarget and canShove(gameTarget) then return gameTarget end
-  local coming, comingD, any, anyD = nil, math.huge, nil, math.huge
+  local coming, comingD, any, anyD, hide, hideD = nil, math.huge, nil, math.huge, nil, math.huge
   for _, agent in ipairs(aliveWalkers()) do
     local d = distance(agent)
     if d and d <= ASSIST_METERS then
       if d < comingD and canShove(agent) then coming, comingD = agent, d end
       if d < anyD then any, anyD = agent, d end
     end
+    if d and d <= HIDE_METERS and d < hideD and canHide(agent) then hide, hideD = agent, d end
   end
-  return coming or gameTarget or any
+  return coming or gameTarget or any or hide
 end
+
+local hiding, hideWanted = false, nil -- (hideWanted: when auto mode should hide her)
+function TWDA.hidingBehindWalker()
+  return hiding
+end
+TWDA.hookBefore("Game_RunDialog", function(node)
+  if node == "bg_stationHideBehindZombieEnter" then
+    hiding, hideWanted = true, nil
+    TWDA.say("Hiding behind a walker.", { interrupt = true })
+  elseif node == "bg_stationHideBehindZombieExit" then
+    hiding, hideWanted = false, TWDA.now()
+    TWDA.say("Out in the open. Q to hide behind another walker!", { interrupt = true })
+  end
+end)
+TWDA.hookBefore("RiverShorelineNight_EnableFlashlightTracking", function(on)
+  if on == true and not hiding then
+    hideWanted = TWDA.now()
+    TWDA.say("The light is on you! Q to hide behind a walker!", { interrupt = true })
+  end
+end)
 
 local function aimAtReachable()
   local props = playerProps()
@@ -221,6 +265,7 @@ end
 local warned = setmetatable({}, { __mode = "k" }) -- walker -> "near" or "close"
 local target, targetAt, targetKeys = nil, 0, nil
 local buffered = nil -- { key, at }
+local autoAt = nil -- (when auto mode acts on the walker in reach)
 local keyHeld = {}
 
 TWDA.onFrame("combat4", function()
@@ -247,7 +292,8 @@ TWDA.onFrame("combat4", function()
   -- with one in reach, unsaid, and grabbed her. While one is in reach the others are "another".)
   if enabled and not struggling and not station then
     for _, other in ipairs(aliveWalkers()) do
-      local dw = other ~= current and distance(other)
+      -- (Not the herd at the river, walkers only to hide behind: they are not coming for her.)
+      local dw = other ~= current and not (canHide(other) and not canShove(other)) and distance(other)
       local stage = dw and (dw <= CLOSE_METERS and "close" or (dw <= NEAR_METERS and "near" or nil))
       if stage and current and stage == "near" then stage = nil end
       if stage and warned[other] ~= stage and not (stage == "near" and warned[other] == "close") then
@@ -295,17 +341,41 @@ TWDA.onFrame("combat4", function()
         end
       end
       buffered = nil
-      if not done and mode == "auto" and #list > 0 then
-        local pick = list[1]
-        for _, p in ipairs(list) do if p.word == "attack" or p.word == "kill" then pick = p end end
-        TWDA.say(nameOf(current) .. ": " .. pick.word .. "!", { interrupt = true })
-        press(pick.letter)
+      -- (The herd at the river: the nearest one to hide behind changes all the time as they walk;
+      -- the flashlight warnings above say when to press Q.)
+      local hideOnly = canHide(current) and not canShove(current)
+      if hideOnly and not done then
+        -- (nothing said)
+      elseif not done and mode == "auto" and #list > 0 then
+        -- (Half a second later, below: on the shore at the start of Episode 4 a shove the moment the
+        -- first walker was in reach came before the game had set the escape up, and it never began.)
+        autoAt = now + 0.5
       elseif not done and #list > 0 and others > 0 then
         TWDA.say(("%s, and %d more close! %s!"):format(nameOf(current), others, promptText(list)), { interrupt = true })
       elseif not done and #list > 0 then
         TWDA.say(("%s! %s!"):format(nameOf(current), promptText(list)), { interrupt = true })
       end
     end
+  end
+
+  if autoAt and now >= autoAt then
+    autoAt = nil
+    local list = current and promptsOf(current) or {}
+    if mode == "auto" and #list > 0 then
+      local pick = list[1]
+      for _, p in ipairs(list) do if p.word == "attack" or p.word == "kill" then pick = p end end
+      aimAtReachable()
+      TWDA.say(nameOf(current) .. ": " .. pick.word .. "!", { interrupt = true })
+      press(pick.letter)
+    end
+  end
+
+  -- (Auto mode hides her when the light comes or her walker is shot.)
+  if hideWanted and mode == "auto" and not hiding and current and canHide(current) then
+    hideWanted = nil
+    aimAtReachable()
+    TWDA.log("combat4: hiding behind " .. TWDA.agentName(current))
+    press("x")
   end
 
   -- Q or E pressed while a walker comes, before it is in reach: kept for a moment.
@@ -336,7 +406,9 @@ function TWDA.walkerTargets()
   for _, agent in ipairs(aliveWalkers()) do
     local d = distance(agent)
     local okW, pos = pcall(AgentGetWorldPos, agent)
-    if d and d < 25 and okW and pos and targetOf(props) ~= agent then
+    -- (Not one that can be shoved: it comes for her by itself. Running from the herd on the shore,
+    -- Episode 4, Tab's list was walkers to walk up to before the way out.)
+    if d and d < 25 and okW and pos and targetOf(props) ~= agent and not canShove(agent) then
       local walker = agent
       list[#list + 1] = { agent = agent, place = true, label = nameOf(agent), distance = d, side = sideOf(agent),
         target = Vector(pos.x, here.y, pos.z), stopAt = 0.6,

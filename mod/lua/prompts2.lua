@@ -145,20 +145,20 @@ local function noteText(note)
   if not okN or node ~= note.node then return nil end
   return TWDA.agentText(agent)
 end
-local function queueNote(fnName, indexName, hint)
+local function queueNote(fnName, indexName, hint, prefix)
   TWDA.hookBefore(fnName, function(node, delay)
     if type(node) ~= "string" then return end
     local index = TWDA.upvalue(rawget(G, fnName), indexName)
     local at = TWDA.now() + (type(delay) == "number" and delay or 0)
     local tfs = finalSeasonNoteAgent()
     pendingNotes[#pendingNotes + 1] = { node = node, index = index, at = at, giveUpAt = at + 2, hint = hint,
-      before = tfs and TWDA.agentText(tfs) or nil }
+      before = tfs and TWDA.agentText(tfs) or nil, prefix = prefix }
   end)
 end
 queueNote("Notification_ShowTutorial", "kNotificationTutorial", true)
 queueNote("Notification_ShowChoice", "kNotificationChoice", false)
--- (The Final Season's other kinds.)
-queueNote("Notification_ShowObjective", "kNotificationObjective", true)
+-- (The Final Season's other kinds. An objective says so: Episode 4's "Escape" is not the key.)
+queueNote("Notification_ShowObjective", "kNotificationObjective", true, "Objective: ")
 queueNote("Notification_ShowBranch", "kNotificationBranch", false)
 queueNote("Notification_ShowInventory", "kNotificationInventory", false)
 queueNote("Notification_ShowRelationship", "kNotificationRelationship", false)
@@ -174,6 +174,7 @@ TWDA.onFrame("prompts2.notes", function()
         table.remove(pendingNotes, i)
         if text then
           text = TWDA.normalCaps(text) -- (The Final Season's are in capitals: "HELP AJ MAKE FRIENDS")
+          if note.prefix then text = note.prefix .. text end
           TWDA.log("prompts2: notice " .. note.node .. ": " .. text)
           if note.hint then
             TWDA.lastHint, TWDA.lastHintAt = text, now

@@ -131,7 +131,7 @@ end
 local current = nil  -- { button, widget, text, time }
 local menuTitle = nil
 -- (A New Frontier's Episodes screen, near the end: the one that has settled.)
-local episodesMenu, episodesSeenAt, episodesKeys = nil, nil, {}
+local episodesMenu, episodesSeenAt, episodesKeys, episodesStartAt = nil, nil, {}, nil
 
 -- The widget a button belongs to: settings rows select a child "_button" agent, so walk up.
 local function widgetOf(button)
@@ -1261,7 +1261,7 @@ end)
 TWDA.onFrame("menus.episodes", function()
   local menu = currentMenu()
   if not menu or TWDA.agentName(rawget(menu, "agent")) ~= "ui_menuEpisodes" or rawget(menu, "shown") ~= true then
-    episodesMenu, episodesSeenAt = nil, nil
+    episodesMenu, episodesSeenAt, episodesStartAt = nil, nil, nil
     return
   end
   local list = rawget(menu, "elementList")
@@ -1275,6 +1275,22 @@ TWDA.onFrame("menus.episodes", function()
     if episodesMenu ~= menu then
       episodesMenu = menu
       queue("title", "Episodes. Up and down arrows choose an episode, Enter on Start plays it")
+      episodesStartAt = TWDA.now() + 0.5
+    end
+    -- (It opens with the focus on the episode's own button, where Enter does nothing; the game
+    -- moves it to Start only after Up or Down. So it is put on Start, as the game would, once the
+    -- game has selected the episode itself: done sooner, the game's own selection came after it.)
+    if episodesStartAt and TWDA.now() >= episodesStartAt and rawget(menu, "bTransitioning") ~= true then
+      local widget = current and current.widget
+      local okA, agent = pcall(function() return rawget(widget, "agent") end)
+      local onEpisode = okA and TWDA.agentName(agent):find("_list_element", 1, true) ~= nil
+      if onEpisode and TWDA.now() - (current.time or 0) > 0.3 then
+        episodesStartAt = nil
+        local okB, button = pcall(Clone_Find, rawget(menu, "agent"), "_startButton")
+        if okB and type(button) == "table" then pcall(ThreadStart, function() button:Select(true) end) end
+      elseif TWDA.now() > episodesStartAt + 5 then
+        episodesStartAt = nil
+      end
     end
     return
   end

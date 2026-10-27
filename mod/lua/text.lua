@@ -50,6 +50,9 @@ local function glyph(name)
   if language then return languageNames[language] or words(language) end
   -- Pictures beside a label that says the same (A New Frontier's legend: "iconCopy" before "Copy").
   if key:find("^icon%u") or key:find("%lIcon$") then return "" end
+  -- (The Final Season: "When you see <ui_notification_iconUseable_updated.d3dtx>, consider the
+  -- consequences", the token of a thing that makes a story choice; lookaround4.lua says "choice".)
+  if key:find("iconUseable_updated$") then return "a thing marked choice" end
   -- Otherwise the last part of the texture name, made readable.
   local last = key:match("_(%a[%w]*)$") or key
   last = last:gsub("^keyboardAndMouse(%u)", "%1")
