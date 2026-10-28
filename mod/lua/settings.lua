@@ -19,10 +19,11 @@ local defaults = {
   -- Sound beacons: "tab" (on what Tab chose), "all" (also the nearest things, places and walkers)
   -- or "off"; F4 goes from one to the next.
   beacons = "tab",
-  -- How loud the mod's beeps are (beacons and the bow's tone), in percent; F3 raises, Shift+F3 lowers.
+  -- How loud the mod's beeps are (beacons and the aiming tone), in percent; F3 raises, Shift+F3 lowers.
   beepvolume = 100,
-  -- The bow (The Final Season): "sound" (aim with the arrows by a tone) or "auto" (the mod aims).
-  bowaim = "sound",
+  -- Aiming (The Final Season's bow, Season 1's shotgun and rifle scope): "sound" (aim with the arrows
+  -- by a tone) or "auto" (the mod aims).
+  aim = "sound",
   -- How fast the arrow keys turn the bow's aim (mouse pixels a twentieth of a second; Shift: three times).
   bowturn = 16,
   -- Log what the game's scripts do, for developing the mod.
@@ -32,7 +33,7 @@ local defaults = {
 }
 
 local order = { "subtitles", "menus", "tooltips", "choices", "choicetimer", "actionscenes", "beacons",
-  "beepvolume", "bowaim", "bowturn", "discovery", "devconsole" }
+  "beepvolume", "aim", "bowturn", "discovery", "devconsole" }
 
 local settings = {}
 for k, v in pairs(defaults) do settings[k] = v end
@@ -70,7 +71,7 @@ function TWDA.saveSettings()
   out:write("# actionscenes: normal, slow (slow motion) or auto (the mod acts for you); F11 cycles it\n")
   out:write("# beacons: tab (a sound on what Tab chose), all (on everything near) or off; F4 goes from one to the next\n")
   out:write("# beepvolume: how loud the beeps are, 10 to 150 percent (100); F3 raises it, Shift+F3 lowers it\n")
-  out:write("# bowaim: sound (arrows aim, a tone guides) or auto (the mod aims the bow)\n")
+  out:write("# aim: sound (arrows aim, a tone guides) or auto (the mod aims): the bow, the shotgun and the rifle scope\n")
   out:write("# bowturn: how fast the arrows start turning the bow's aim (16; higher is faster; held, they speed up)\n")
   for _, key in ipairs(order) do
     out:write(("%s = %s\n"):format(key, tostring(settings[key])))

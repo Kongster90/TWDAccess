@@ -7,13 +7,13 @@
 --
 -- The mod: R draws the bow and puts it down. Drawn, it takes the nearest target (the swinging
 -- target's hit box "ai_hitBox_target" at the school, or a walker's head) and, with the setting
--- bowaim = sound (the default), plays a tone on it every eighth of a second (sounds.lua): panned to
+-- aim = sound (the default), plays a tone on it every eighth of a second (sounds.lua): panned to
 -- where it is from where the camera looks, higher the nearer the aim is to it, muffled behind, and
 -- a quick double tick when it is in the middle ("On target. Enter shoots." once). The arrow keys turn
 -- the camera (the helper's /mouse: the camera turns only with the mouse), slowly when tapped and
 -- faster the longer they are held, Shift faster still; the height
 -- is kept level with the target, and the last few degrees are closed for the player once the arrows
--- are let go. With bowaim = auto the mod turns the camera onto the target by itself. Enter shoots,
+-- are let go. With aim = auto the mod turns the camera onto the target by itself. Enter shoots,
 -- Tab picks the next target. A bow drawn with the mouse is left to the mouse.
 local TWDA = ...
 local G = _G
@@ -107,7 +107,7 @@ local wanted, loweredAt, lastLook = false, nil, 0 -- (the player's own R: the bo
 local held, toldInHand = {}, false
 
 local function soundMode()
-  return (TWDA.settings.bowaim or "sound") ~= "auto"
+  return (TWDA.settings.aim or "sound") ~= "auto"
 end
 
 local function whereText(t)
@@ -164,19 +164,13 @@ local turnSince, turnWay = nil, nil -- (when the arrows held now went down, and 
 
 -- The tone on the target: see the top of the file.
 local function playTone(on)
-  if not TWDA.tone then return end
+  if not TWDA.aimTone then return end
   local dir = TWDA.soundDirection and TWDA.soundDirection(aim.point)
   if not dir then return end
-  local volume = 0.5 - math.min(0.3, aim.distance / 60)
-  if on then
-    TWDA.tone({ f = { 1500, 2000 }, ms = 25, p = 0, v = volume, w = "q" })
-    return
-  end
-  -- (Panned fully at 30 degrees off: fine near the middle. Pitch from 300 Hz at 90 degrees or more
-  -- to 1000 Hz in the middle.)
-  local off = math.min(1, math.abs(dir.angle) / (math.pi / 2))
-  TWDA.tone({ f = math.floor(1000 - 700 * off), ms = 45, p = math.max(-1, math.min(1, dir.angle / (math.pi / 6))),
-    v = volume, w = "t", behind = dir.behind })
+  -- (Panned fully at 30 degrees off: fine near the middle. Lowest at 90 degrees or more.)
+  TWDA.aimTone({ on = on, off = math.abs(dir.angle) / (math.pi / 2),
+    pan = math.max(-1, math.min(1, dir.angle / (math.pi / 6))), v = 0.5 - math.min(0.3, aim.distance / 60),
+    behind = dir.behind })
 end
 
 local function steer()

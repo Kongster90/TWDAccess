@@ -3,16 +3,55 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-10-28 about 01:35 (fifteenth session: the barn loop solved, ALL of The Final
-Season now played; see the first item).
+Last updated: 2026-10-28 about 12:30 (sixteenth session: aiming by a tone for Season 1's shotgun and
+rifle scope; see the first item).
 
 ## Start here (where the last session stopped)
+
+- Sixteenth session, 2026-10-28 10:20 to about 12:30 (user asked which other scenes let you aim, then
+  "Yes, add tones": the bow's aiming tone for Season 1's shotgun and rifle scope). Done and tested
+  by tone alone (tools\dev\aimbyear.ps1 taps the arrows from the logged tone and presses Enter on
+  the tick). Committed and pushed (see git log). Game closed; autorun.lua deleted; Season 1 Save 2 restored from
+  dev_saves\s1_slot2_before_aimtones (identical files; saves.txt line
+  env_manorInteriorClementineSearch.lua). dist\TWDAccess\mod has every change (restart.ps1).
+  - Setting: bowaim is renamed aim (sound or auto), for the bow, the shotgun and the scope. The
+    user's file had bowaim = sound and now has aim = sound (old key dropped on load). With aim =
+    auto both Season 1 scenes behave exactly as before (Tab assist; "In sight! Enter!").
+  - sounds.lua: TWDA.aimTone (the bow's tone, shared: 300 to 1000 Hz, pan, muffled, the 1500/2000
+    Hz double tick); TWDA.aimDebug = true logs each one ("aimtone:" lines).
+  - Shotgun (aiming.lua): arrows move the pointer (Shift x3); the tone is panned to where a shot
+    would hit the cop, found by the hit test along the crosshair's row (then rows above and below);
+    the head through cam_pan_player_horizontal was up to 0.1 screen off what a shot hits. Near (0.08
+    screen), arrows let go, the mod closes across and sweeps the height. TWDA.getPointer/setPointer
+    exported. Tested: from a start far left (-Kick 0.15,0.45) the cop was hit by tone alone.
+  - Scope (sniper.lua): the game's sniperUpdate turns the scope with the pointer's ABSOLUTE place
+    (MouseUpdate(x), MouseUpdate(1 - y)) and sniperFire shoots at the screen middle (dumped from
+    memory). Sound mode: arrows move the pointer (0.2/s, Shift x3), tone on the target nearest the
+    crosshair (in sight first; muffled while behind cover), height kept level, last 0.06 closed,
+    Enter = sniperFireAtPos(middle) (miss: the game's Miss Dialog Node). Measured: a pointer move
+    shifts the view the other way about 1.0 across and 0.8 up/down. mode_peek.OnDirection is
+    wrapped so arrows do not lean while the scope is up (mode_peek.imap binds the arrows too).
+    Tested: Episode 4 opening (8 hits, Clementine saved) and the school hallway behind the vending
+    machine (lean W, 5 hits, Vernon's scene went on). The opening is tight: the walkers reach
+    Clementine about 6 s after the scope comes up if nothing is hit.
+  - NOT tested: the Motor Inn bandit attack (Episode 3, peek + scope + A/D sides) and Molly's
+    classroom scope. Getting there from dev_saves\ep3_bandits stalled at the clue hunt: after "I
+    suppose I should go out there", Duck stands in front of the gate and the reticle flickers
+    between "Gate: Use" and Duck, so neither Enter nor useWithReticle used the gate (possibly a mod
+    problem for the user too; check it).
+  - The user pressed F3 once and F4 three times at 10:34 to check that work was still going on:
+    settings.txt now has beepvolume = 40 (was 30) and beacons = tab (was true, the same thing).
+    Their choice; left as they are. (The user may press keys in the game while it is being tested.)
+  - New dev tools: probe_shotgun.lua, probe_scope.lua (PS/PSC lines), cop_setup.lua + cop_run.ps1
+    (zombie cop from dev_saves\zombiecop to the shotgun), aimdebug.lua (also as autorun.lua),
+    aimbyear.ps1 (-Kick, -EnterOn, -LeanKey), arm_after_load.ps1, usechain.ps1. Episode screen
+    F9 (Rewind) did nothing in Season 1 slot 2.
 
 - Fifteenth session, 2026-10-28 00:10 to about 01:35 (user: "try the barn/farm part again in season 4
   and maybe try to figure it out ... look online if you need to ... If not you can move on to try to
   finish up the season"; closing foobar2000's Playback error boxes allowed). THE BARN IS SOLVED AND
   THE FINAL SEASON IS FINISHED in Save 2 (Episode 4 to the hat on the windowsill, the statistics and
-  back to the main menu). Not committed (ask). The game was closed at the end; dev autorun.lua
+  back to the main menu). Committed and pushed as da87270. The game was closed at the end; dev autorun.lua
   deleted; settings.txt untouched (actionscenes normal); dist\TWDAccess\mod has every change (copied
   from build\mod after the last sync; the helper itself was not rebuilt, no C# changed).
   - The barn loop, what it was: after "We need to get these pen doors closed" control comes back

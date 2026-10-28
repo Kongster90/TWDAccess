@@ -26,6 +26,25 @@ function TWDA.tone(opts)
   pcall(HttpGetAsync, url)
 end
 
+-- The aiming tone (the bow, Season 1's shotgun and rifle scope): a quick double tick when on target,
+-- otherwise a tone from 300 Hz (off = 1, far off) up to 1000 Hz (nearly on), panned (-1 to 1) to
+-- where the target is; v as for TWDA.tone (0.4), behind muffles it (the bow: behind; the scope:
+-- behind cover).
+function TWDA.aimTone(opts)
+  -- (TWDA.aimDebug = true logs each one, for tools\dev\aimbyear.ps1.)
+  if TWDA.aimDebug then
+    TWDA.log(("aimtone: pan=%.2f off=%.2f on=%s behind=%s"):format(opts.pan or 0, opts.off or 1, tostring(opts.on == true),
+      tostring(opts.behind == true)))
+  end
+  local v = opts.v or 0.4
+  if opts.on then
+    TWDA.tone({ f = { 1500, 2000 }, ms = 25, p = 0, v = v, w = "q" })
+    return
+  end
+  local off = math.max(0, math.min(1, opts.off or 1))
+  TWDA.tone({ f = math.floor(1000 - 700 * off), ms = 45, p = opts.pan or 0, v = v, w = "t", behind = opts.behind })
+end
+
 -- F3 (louder) and Shift+F3 (quieter): the beeps' volume, said and then heard (a blip in the middle).
 function TWDA.changeBeepVolume(louder)
   local before = volumePercent()
