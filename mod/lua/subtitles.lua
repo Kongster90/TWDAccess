@@ -3,7 +3,8 @@
 local TWDA = ...
 
 -- Speakers whose agent name is not what the game calls them on screen.
-local SPEAKERS = { Campman = "Stranger" } -- (Episode 5's man on the radio)
+-- (Campman: Episode 5's man on the radio. AJToddler: little AJ in The Final Season's last flashback.)
+local SPEAKERS = { Campman = "Stranger", AJToddler = "AJ" }
 
 local function describe(subtitle)
   local okText, text = pcall(SubtitleGetText, subtitle)

@@ -359,7 +359,8 @@ end
 -- many places straight away); steering takes over from wherever it stops.
 local function startWalk(h)
   local w = { agent = h.agent, label = h.label, target = h.target, best = h.distance, first = h.distance, bestAt = TWDA.now(),
-    start = TWDA.now(), pathing = true, stopAt = h.stopAt, stopWhen = h.stopWhen, onArrive = h.onArrive }
+    start = TWDA.now(), pathing = true, stopAt = h.stopAt, stopWhen = h.stopWhen, onArrive = h.onArrive,
+    noResume = h.noResume }
   walk = w
   TWDA.log("lookaround2: walking to " .. h.label)
   TWDA.say(("Walking to %s, %d meters. A movement key stops."):format(h.label, math.floor(h.distance + 0.5)),
@@ -401,7 +402,10 @@ local function steer()
     -- below: through the herd to the generator, Episode 5 of A New Frontier, a walker turns to look
     -- for a few seconds, and then there are only about fifteen to get there.)
     TWDA.log("lookaround2: walk interrupted (play " .. tostring(playMode()) .. ", walking " .. tostring(canWalk()) .. ")")
-    cutShort = { agent = walk.agent, label = walk.label, target = walk.target, first = walk.first, at = now }
+    -- (Not a step made to start a scene, lookaround4.lua's step off a story line.)
+    if not walk.noResume then
+      cutShort = { agent = walk.agent, label = walk.label, target = walk.target, first = walk.first, at = now }
+    end
     stopWalk(nil)
     return
   end

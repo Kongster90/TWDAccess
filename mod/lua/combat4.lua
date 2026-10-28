@@ -53,6 +53,9 @@ local function actionWord(node)
   -- ("cs_schoolDamaged_targetAttack": the scene's name first.)
   local base = tostring(node or ""):gsub("^cs_", ""):match("([^_]*)$") or ""
   local word = base:gsub("^target(%u)", "%1"):gsub("Target$", ""):gsub("([%l])(%u)", "%1 %2"):lower()
+  -- (AJ's own, "cs_ajStunTarget": the game says "Press E to stun, then Q to kill" for him.)
+  local mine = word:match("^aj (.+)$")
+  if mine then return mine end
   return WORDS[word] or (word ~= "" and word or "act")
 end
 
@@ -320,13 +323,14 @@ TWDA.onFrame("combat4", function()
       TWDA.log(("combat4: %s in reach, %s"):format(TWDA.agentName(current), promptText(list)))
       -- Others close behind it: killing one takes long enough for the next to grab her, and that is
       -- death at once ("Walkers are dangerous in groups. Use E to break them up", the woods in
-      -- Episode 2). Then a key pressed early is not done for the player, and the keys are said.
+      -- Episode 2). Then a Q pressed early is not done for the player, and the keys are said. (An
+      -- early E is: a shove, or AJ's stun in the barn, Episode 4, is what a group calls for.)
       local others = 0
       for _, agent in ipairs(aliveWalkers()) do
         local da = distance(agent)
         if agent ~= current and da and da <= GROUP_METERS and canShove(agent) then others = others + 1 end
       end
-      if others > 0 and buffered then
+      if others > 0 and buffered and buffered.key ~= "E" then
         TWDA.log(("combat4: not doing the early %s, %d more close"):format(buffered.key, others))
         buffered = nil
       end

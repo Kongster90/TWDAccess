@@ -33,7 +33,8 @@ end
 -- What to call the player in speech: "Lee", or "Shel" in 400 Days.
 function TWDA.playerName()
   local ok, name = pcall(AgentGetName, TWDA.player())
-  if ok and type(name) == "string" and name:find("^%u%l+$") then return name end
+  -- ("AJ" in The Final Season's barn, Episode 4.)
+  if ok and type(name) == "string" and name:find("^%u%a+$") then return name end
   return "Lee"
 end
 

@@ -3,10 +3,64 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-10-27 about 03:50 (fourteenth session, The Final Season Episodes 2 and 3 done,
-Episode 4 up to the barn, where it is stuck in a loop; see the first item).
+Last updated: 2026-10-28 about 01:35 (fifteenth session: the barn loop solved, ALL of The Final
+Season now played; see the first item).
 
 ## Start here (where the last session stopped)
+
+- Fifteenth session, 2026-10-28 00:10 to about 01:35 (user: "try the barn/farm part again in season 4
+  and maybe try to figure it out ... look online if you need to ... If not you can move on to try to
+  finish up the season"; closing foobar2000's Playback error boxes allowed). THE BARN IS SOLVED AND
+  THE FINAL SEASON IS FINISHED in Save 2 (Episode 4 to the hat on the windowsill, the statistics and
+  back to the main menu). Not committed (ask). The game was closed at the end; dev autorun.lua
+  deleted; settings.txt untouched (actionscenes normal); dist\TWDAccess\mod has every change (copied
+  from build\mod after the last sync; the helper itself was not rebuilt, no C# changed).
+  - The barn loop, what it was: after "We need to get these pen doors closed" control comes back
+    with Clementine standing ON trigger_dialog_clementimeOut, a line 0.7 by 0.1 m (enter dialog
+    empty, EXIT dialog cs_clementimeOut). Its enter fired during the cut scene (triggerwd.lua's
+    RunDialog only runs a non-ambient dialog in play mode: Game_IsPlayMode). Stepping off the line
+    plays her fall, "Cover me", hands the player over to AJ (Objective: Close The Stall Doors), and
+    AJ closes stall door 1 (struggle_stallDoor1), door 2 (a QTE), then door 3 (rope) -> wheelbarrow
+    (W) -> knife and rope QTEs -> a walker fight as AJ ("Press E to stun, then Q to kill") -> "Good
+    job, AJ". Tab and Enter used stall door 3 as Clementine from where she stood, she never stepped
+    off, and that branch's wheelbarrow push ran the barn's opening again (cs_holdDoor...): the loop.
+    Found from the TrueAchievements Episode 4 guide (works in the built-in browser; WebFetch gets
+    403) and the fandom transcript (Take_Us_Back/Transcript, also only in the browser), then
+    checked in the game: holding W a second off the line ran Trigger_OnExitDialog and the scene.
+  - Fixed (lookaround4.lua): Enter on a thing while she stands inside an enabled trigger with an
+    exit dialog whose box is thin (under 0.5 m one way: a line, not a zone) first walks her 1.2 m
+    towards the thing (TWDA.walkTo with noResume: lookaround2 does not resume such a walk after a
+    scene), then uses it if no scene started (also when the step was blocked). NOT YET TESTED AT
+    THE BARN (the checkpoint had moved past it; Episode 4 offers only Restart); tested that the wide
+    zone trigger_dialog_leaveLloyd (4 by 4 m round Lloyd in the flashback, exit = leaving him) is
+    left alone and Question works (the first version stepped there and was blocked).
+  - Fixed and tested: TWDA.playerName() takes "AJ" (said "Lee can move" as AJ); combat4 names AJ's
+    prompts "E to stun", "Q to attack" (were "aj stun"); an early E is kept even with more walkers
+    close (only an early Q is dropped then; early E stunned the first barn walker by ear); speaker
+    "AJToddler" (the last flashback) is said "AJ" (not heard yet).
+  - Played after the barn: Clementine's last scene (choices "Live for me", "You have to kill me"),
+    the ranch flashback (FortMcCarrollRanch.lua: horse ride W, Rodney, Lloyd, Eddie, car push with A,
+    S, D, W, the nursery, the locker key), Act 3 as AJ (ForestShack: spearfishing by shooter4, skull
+    collectible, Replace Spear, Go Outside, the hat in the creek, Tenn), BoardingSchoolExteriorGate
+    (places: Sweethearts ... At the gates), BoardingSchoolExterior (Clementine alive), dinner,
+    BoardingSchoolDorm (Place Skull, Place Crystal, Place Calypso Cauliflower, Place Hat), 17 pages of
+    statistics. All worked by keys; the reactor answered choices with 1.
+  - Seen, not fixed: the notice "Put Clementine's hat by the window when you're done" comes after
+    the hat is placed (the game's order); some subtitles are said two or three times ("Ahhhh! You
+    stupid asshole!", Eddie); the hallway credits on the walls (BoardingSchoolDorm) are not read;
+    "Your Choices, Episode N" statistics pages are picture collages (only the title is read; fine);
+    place names spoil a little ("Poor lloyd", "Beams fall"); TFS has no CheckpointLoad global
+    (Death() then Enter reloads the checkpoint).
+  - New dev saves: s4_ep4_barnfight (Save 2 just before AJ's walker fight in the barn) and
+    s4_ep4done (season finished; copy all *wd4_saveslot2* files, game closed). Save 2 holds
+    s4_ep4done's state now (saves.txt: BoardingSchoolDorm.lua).
+  - New test tools: watch_barn4.lua (WB lines: player, mode, position, dialog and trigger calls,
+    who ran cs_holdDoor; copy to autorun.lua), probe_trigger4.lua (PROBE_TRIGGER's box and whether
+    the player is in it), waitplay4.ps1 (keep focus while react4 plays; stop when something needs the
+    player; print the log without noise), react4.ps1 -EarlyKey E and a "more close! E to" rule.
+  - Questions for the user: whether to replay Episode 4 from its start in Save 2 to hear the barn
+    fix (restore dev_saves\s4_ep4done afterwards); the earlier ones below are still open. Michonne
+    is the only season left unplayed (release plan: after it).
 
 - Fourteenth session, 2026-10-26 22:00 to 2026-10-27 about 04:00 (user asleep: "keep playing season 4",
   closing Playback error boxes allowed; none came up). Committed and pushed when the user woke
@@ -15,7 +69,8 @@ Episode 4 up to the barn, where it is stuck in a loop; see the first item).
   burning-school fight (the user's own win): the end of Episode 2, ALL of Episode 3 (Abel, the river,
   Minerva, James's barn, the party, the herd with the flashlights, the dock searchlight, the pier
   fight, the boat, Lilly) and Episode 4 up to ForestBarn.lua.
-  - WHERE IT IS STUCK: Episode 4, ForestBarn.lua, the barn. "We need to get these pen doors
+  - (SOLVED in the fifteenth session: see above. Not a game bug: Clementine has to step off
+    trigger_dialog_clementimeOut.) WHERE IT WAS STUCK: Episode 4, ForestBarn.lua, the barn. "We need to get these pen doors
     closed": Close Stall Door (obj_logicalStallDoor3) starts amb_closeDoorTimer (about 15 s, then
     Death); the only thing then offered is Move Wheelbarrow (a guided push, W, 11.4 s); when the
     push reaches 100% the game plays cs_holdDoor (hold the barn door struggle), cs_nowWhat, the
@@ -2000,8 +2055,9 @@ ForestBarn (stuck, see the first item).
 - The barn (Episode 4): "Move Wheelbarrow" is a guided push that only goes forward with W, pauses
   at 50% when W is let go, and plays cs_holdDoor at 100% (checked with ChoredMovement percent);
   amb_closeDoorTimer (about 15 s) restarts when the wheelbarrow is used and kills her if the push is
-  not finished. lookaround4.lua says "Hurry!" when a "...Timer" scene dialog starts. The loop is in
-  the first item.
+  not finished. lookaround4.lua says "Hurry!" when a "...Timer" scene dialog starts. The loop came
+  from using stall door 3 as Clementine without stepping off trigger_dialog_clementimeOut: solved
+  in the fifteenth session (first item).
 - Other: objectives are said as "Objective: X"; place names drop "bg_"/"cs_" ("Creaky bridge");
   "Gun p250" is "gun"; "obj_logicalZombieHead1" is "walker head 1"; the mouse-only tutorial "Hold
   mouse Right Click to leave cover, then press mouse Left Click to fire" (the bridge, Minerva) is

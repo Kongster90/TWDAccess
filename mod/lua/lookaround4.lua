@@ -300,7 +300,58 @@ local function walkUpAndUse(agent, label, retried)
     stopAt = 0.8, onArrive = function() use(agent, label, true) end })
 end
 
-use = function(agent, label, retried)
+-- A story line she stands on whose scene starts when she steps off it: an enabled trigger with an
+-- exit dialog, a thin box around her. The barn, Episode 4: control comes back with Clementine on
+-- "trigger_dialog_clementimeOut" (0.7 by 0.1 m; its enter came during the cut scene, which the game
+-- ignores), and stepping off plays her fall and hands over to AJ. Used from where she stood, the
+-- stall door it offers led to an endless loop; a sighted player walks to the doors and steps off.
+-- (Not a wide one: "trigger_dialog_leaveLloyd", 4 by 4 m round Lloyd in the flashback, is walking
+-- away from him.)
+local LINE_METERS = 0.5
+local function exitLineHere()
+  local here = playerPos()
+  local okS, agents = pcall(SceneGetAgents, TWDA.playerScene())
+  if not here or not okS or type(agents) ~= "table" then return nil end
+  local kMin, kMax = rawget(G, "kExtentsMin"), rawget(G, "kExtentsMax")
+  for _, agent in ipairs(agents) do
+    local node = prop(agent, "Trigger - Dialog Node Exit")
+    if type(node) == "string" and node ~= "" and prop(agent, "Trigger Enabled") == true then
+      local okL, lo = pcall(AgentLocalToWorld, agent, prop(agent, kMin))
+      local okH, hi = pcall(AgentLocalToWorld, agent, prop(agent, kMax))
+      if okL and okH and lo and hi and math.min(math.abs(hi.x - lo.x), math.abs(hi.z - lo.z)) < LINE_METERS
+          and here.x >= math.min(lo.x, hi.x) - 0.05 and here.x <= math.max(lo.x, hi.x) + 0.05
+          and here.z >= math.min(lo.z, hi.z) - 0.05 and here.z <= math.max(lo.z, hi.z) + 0.05 then
+        return agent, node
+      end
+    end
+  end
+  return nil
+end
+
+use = function(agent, label, retried, steppedOff)
+  -- (On such a line, a step towards the thing first; the use follows if no scene starts, whether
+  -- or not the step got there.)
+  local line, node = nil, nil
+  if not steppedOff and TWDA.walkTo then line, node = exitLineHere() end
+  local here, okT, there = playerPos(), false, nil
+  if line then okT, there = pcall(AgentGetWorldPos, agent) end
+  local d = okT and there and here and math.sqrt((there.x - here.x) ^ 2 + (there.z - here.z) ^ 2) or 0
+  if line and d > 0.3 then
+    local step = math.min(1.2, d)
+    local target = Vector(here.x + (there.x - here.x) / d * step, here.y, here.z + (there.z - here.z) / d * step)
+    TWDA.log(("lookaround4: stepping off %s (%s) towards %s"):format(TWDA.agentName(line), tostring(node), TWDA.agentName(agent)))
+    busyUntil = TWDA.now() + 0.8
+    state.chosen = nil
+    TWDA.walkTo({ agent = agent, label = label, target = target, distance = step, stopAt = 0.3, noResume = true })
+    pcall(ThreadStart, function()
+      local start = TWDA.now()
+      repeat WaitForNextFrame() until not playMode() or not TWDA.walkingTo() or TWDA.now() - start > 6
+      local ended = TWDA.now()
+      while TWDA.now() - ended < 0.5 and playMode() do WaitForNextFrame() end
+      if playMode() then use(agent, label, retried, true) end
+    end)
+    return
+  end
   busyUntil = TWDA.now() + 0.8
   state.chosen = nil
   TWDA.log("lookaround4: using " .. TWDA.agentName(agent) .. " (" .. tostring(label) .. ")")
