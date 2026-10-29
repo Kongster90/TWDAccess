@@ -58,7 +58,13 @@ while ((Get-Date) -lt $end) {
     }
     # (Mashing in batches from one call: about ten presses a second, as fast as a person.)
     # (Pressed here directly: game_input.ps1 focuses and waits 300 ms on each call, too slow to mash.)
-    if ($mash) { $vkm = VkOf $mash; for ($i = 0; $i -lt 8; $i++) { [GameInput]::Key($vkm, $false, 30); Start-Sleep -Milliseconds 45 } }
+    # ("+Up/Down" mashes two keys in turn: a waggle struggle.)
+    if ($mash -and $mash.Contains("/")) {
+        $pair = $mash -split "/"; $va = VkOf $pair[0]; $vb = VkOf $pair[1]
+        $ext = $va -ge 0x25 -and $va -le 0x28
+        for ($i = 0; $i -lt 4; $i++) { [GameInput]::Key($va, $ext, 30); Start-Sleep -Milliseconds 45; [GameInput]::Key($vb, $ext, 30); Start-Sleep -Milliseconds 45 }
+    }
+    elseif ($mash) { $vkm = VkOf $mash; for ($i = 0; $i -lt 8; $i++) { [GameInput]::Key($vkm, $false, 30); Start-Sleep -Milliseconds 45 } }
     elseif ($hold) { [GameInput]::KeyState((VkOf $hold), $true); Start-Sleep -Milliseconds 100 }
     else { Start-Sleep -Milliseconds 200 }
 }

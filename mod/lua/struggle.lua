@@ -39,6 +39,36 @@ local KIND_TEXT = {
   ["Circle Counter Clockwise"] = "press the arrows round in a circle, Up, Left, Down, Right, over and over",
 }
 
+-- Michonne's struggles (Season 2's struggle.lua) can be waggles or circles instead of mashing:
+-- Struggle_Enter, then Swipe_StartWaggle(bVertical, ...) or Swipe_StartCircle(bCounterClockwise,
+-- ...), which go through Swipe_StartChain. Only the mouse (or a stick) moves the meter: the chain's
+-- monitorCursor calls its progress callback (upvalue mProgressCallback of Swipe_StartChain, the
+-- struggle's own ButtonMash_DoTheMash) for each stroke matched. The arrows reach only the struggle's
+-- finishing swipe. So the mod counts the arrows itself: each stroke the right way calls the
+-- callback (about 7 percent of the meter each; sharpening the machete, Episode 1).
+local swipeKind, swipeAt = nil, -10
+TWDA.hookBefore("Swipe_StartWaggle", function(bVertical)
+  swipeKind, swipeAt = bVertical and "Waggle Vertical" or "Waggle Horizontal", TWDA.now()
+end)
+TWDA.hookBefore("Swipe_StartCircle", function(bCounterClockwise)
+  swipeKind, swipeAt = bCounterClockwise and "Circle Counter Clockwise" or "Circle Clockwise", TWDA.now()
+end)
+local ARROWS = { left = 0x25, up = 0x26, right = 0x27, down = 0x28 }
+-- The stroke that may follow each one.
+local NEXT_STROKE = {
+  ["Waggle Horizontal"] = { left = { right = true }, right = { left = true } },
+  ["Waggle Vertical"] = { up = { down = true }, down = { up = true } },
+  ["Circle Clockwise"] = { up = { right = true }, right = { down = true }, down = { left = true }, left = { up = true } },
+  ["Circle Counter Clockwise"] = { up = { left = true }, left = { down = true }, down = { right = true }, right = { up = true } },
+}
+local arrowsHeld, lastStroke = {}, nil
+local function swipeStroke()
+  local progress = TWDA.upvalue(rawget(G, "Swipe_StartChain"), "mProgressCallback")
+  if type(progress) ~= "function" then return end
+  local ok, err = pcall(progress)
+  if not ok then TWDA.log("struggle: stroke failed: " .. tostring(err)) end
+end
+
 local cache = {}
 local function internals()
   local start = rawget(G, "Struggle_Start")
@@ -165,7 +195,10 @@ local function percentOf(agent, game)
     if type(max) ~= "number" or max <= 0 then max = 1 end
     return current / max
   end
-  return prop(agent, "Chore Scrubber - Percentage Current") or 0
+  -- (Michonne leaves the scrubber at 0 and fills "Button Mash - Current Percentage".)
+  local scrub = prop(agent, "Chore Scrubber - Percentage Current")
+  local mash = prop(agent, "Button Mash - Current Percentage")
+  return math.max(type(scrub) == "number" and scrub or 0, type(mash) == "number" and mash or 0)
 end
 
 TWDA.onFrame("struggle", function()
@@ -186,6 +219,8 @@ TWDA.onFrame("struggle", function()
     -- (A struggle that starts with the meter already half up, struggle_clementine in the RV in
     -- Episode 3, is not "Halfway" yet.)
     local kind = game.typeKey and prop(agent, game.typeKey) or nil
+    if not kind and game.season2 and now - swipeAt < 1 then kind = swipeKind end
+    arrowsHeld, lastStroke = {}, nil
     state = { agent = agent, ready = false, finished = false, lastMash = 0, kind = kind,
       percent = function() return percentOf(agent, game) end,
       half = percentOf(agent, game) >= 0.5 }
@@ -199,6 +234,7 @@ TWDA.onFrame("struggle", function()
     state.started = true
     TWDA.log("struggle: started (" .. TWDA.agentName(agent) .. ", " .. tostring(state.kind) .. ")")
     TWDA.lastHint = startText(mode, game.mashKeys, state.kind)
+    TWDA.urgentAt = now -- (Michonne's tip "Move Mouse Quickly from Side to Side." waits: prompts2.lua)
     TWDA.say(TWDA.lastHint, { interrupt = true })
   end
   if (game.finishedKey and prop(agent, game.finishedKey) == true) or (state.started and not enabled) then
@@ -239,6 +275,28 @@ TWDA.onFrame("struggle", function()
       TWDA.say("Too late. " .. (game.season2 and "Mash" or "Q") .. " again!", { interrupt = true })
     end
   end
+
+  -- Michonne's waggles and circles, stroke by stroke from the arrows (see swipeKind above).
+  local strokes = game.season2 and not game.season3 and NEXT_STROKE[state.kind]
+  if strokes and not ready then
+    if mode == "auto" then
+      if now - state.lastMash >= MASH_INTERVAL then
+        state.lastMash = now
+        swipeStroke()
+      end
+    else
+      for name, vk in pairs(ARROWS) do
+        local okK, down = pcall(InputPCIsVKeyPressed, vk)
+        down = okK and down == true
+        if down and not arrowsHeld[name] then
+          if lastStroke == nil or (strokes[lastStroke] and strokes[lastStroke][name]) then swipeStroke() end
+          if strokes[name] then lastStroke = name end
+        end
+        arrowsHeld[name] = down
+      end
+    end
+  end
+  if mode == "auto" and strokes and ready then pressE(game) return end
 
   if mode == "auto" and not KIND_TEXT[state.kind] then
     if ready then

@@ -38,6 +38,9 @@ local function announce(interrupt)
     parts[#parts + 1] = ("%d: %s"):format(i, describeChoice(c.text))
   end
   TWDA.say(TWDA.joinSentences(parts), { interrupt = interrupt })
+  -- (A notice shown with the choices, Michonne's "Silence is always a valid option...", is said
+  -- after them instead of cutting them off: prompts2.lua.)
+  TWDA.choicesSaidAt = TWDA.now()
 end
 
 local function holdTimer()

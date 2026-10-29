@@ -61,10 +61,30 @@ local function release()
   if not ok then TWDA.log("drag3: release failed: " .. tostring(err)) end
 end
 
+-- Michonne's drags have no action to choose: the mouse pointer over the thing makes it the drag
+-- (Drag_SelectAgent), the button held drags ("Hold and drag to bandage Sam.", Episode 2). Enter on
+-- it in lookaround2's list calls TWDA.pickDrag, and it is kept picked until the drag is over.
+local picked, pickedAt = nil, 0
+function TWDA.pickDrag(agent)
+  picked, pickedAt = agent, TWDA.now()
+  local ok, err = pcall(Drag_SelectAgent, agent)
+  if not ok then TWDA.log("drag3: pick failed: " .. tostring(err)) end
+end
+
 TWDA.onFrame("drag3", function()
   if not isDrag3() then return end
   local ok, agent = pcall(Drag_GetActiveAgent)
   agent = ok and agent or nil
+  if picked then
+    local okD, still = pcall(Drag_IsDragAgent, picked)
+    if not (okD and still) or TWDA.now() - pickedAt > 60 then
+      picked = nil
+    elseif agent == nil then
+      pcall(Drag_SelectAgent, picked)
+      ok, agent = pcall(Drag_GetActiveAgent)
+      agent = ok and agent or nil
+    end
+  end
   if agent ~= activeAgent then
     activeAgent = agent
     release()
@@ -74,6 +94,7 @@ TWDA.onFrame("drag3", function()
   if not agent then return end
   if announceAt and TWDA.now() >= announceAt then
     announceAt = nil
+    TWDA.urgentAt = TWDA.now() -- (a tip shown with it waits: prompts2.lua)
     TWDA.say(waysText(), { interrupt = true })
   end
   -- An arrow held without Enter: hold the button for the player, and pass the arrow on (the game

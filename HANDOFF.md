@@ -3,10 +3,44 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-10-28 about 12:30 (sixteenth session: aiming by a tone for Season 1's shotgun and
-rifle scope; see the first item).
+Last updated: 2026-10-29 about 04:30 (seventeenth session: MICHONNE PLAYED THROUGH, all three
+episodes; every season of the game has now been played with the mod; see the first item).
 
 ## Start here (where the last session stopped)
+
+- Seventeenth session, 2026-10-28 22:15 to 10-29 about 04:30 (user asleep: "Go ahead and start on
+  [Michonne]. Everything from the previous days stands. Closing playback error windows."; then
+  "We can try to fix those 2 loose ends after this": the Season 1 Motor Inn scope test and the
+  Duck/gate reticle flicker are NEXT). ALL OF MICHONNE IS PLAYED by ear in its Save 2
+  (wdm_saveslot2; the user's Save 1 untouched and empty), answering 1, Episodes 1 to 3 and each
+  Your Choices screen. Then Episode 1 was replayed to its storeroom to hear the fixes made on the
+  way (Restart Episode 1), and Save 2 was put back to the finished season afterwards
+  (dev_saves\m_ep3done, byte-identical; saves.txt line wdm_saveslot2.bundle Epilogue.lua). Other dev
+  saves: m_ep1done, m_ep2done (copy all *wdm_saveslot2* files, game closed). No foobar2000
+  playback error boxes came up. Committed and pushed at the user's request in the morning (see git
+  log). Game closed; dev autorun.lua deleted;
+  dist\TWDAccess rebuilt (its mod matches the game folder's copy). See "Michonne (seventeenth
+  session)" below for the framework, every fix, and what is still untested.
+  - Also fixed for every season: Season Select after coming back from a season left keyboard focus
+    on the carousel's left arrow, so Enter on "Michonne" slid left and opened The Final Season
+    (twice, by the test tools; no save touched). menus.lua now moves focus to the season's Play
+    button when the focus is an arrow too (tested: wrap round to Michonne, Enter opened Michonne).
+  - Backspace no longer opens the pause menu where the game binds it (Michonne's UI.imap); Escape
+    does. Worth a check in Season 2, whose engine Michonne shares (not tried there).
+  - New test tools: watch_sm.lua (copy to <game>\TWDAccess\autorun.lua), mplay.ps1 (keep focus,
+    stop when the player is needed), mrun.ps1 (mplay in a loop, Enter on single offers), muse.ps1
+    (use named things in turn), mlog.ps1 (log without noise), usehere.lua (Game_UseAgent with a
+    verb), dragtry.lua, qteagents.lua, qtestate.lua, probe_multi.lua, fill_struggle.lua,
+    radio_m.lua, radio_sweep.ps1, waggle.ps1, dump_pathcb.lua, tilekids.lua, menufields.lua,
+    widgetkeys.lua, globals_like.lua, mstats_test.lua. onsay.ps1 takes "+Up/Down" (two keys in
+    turn). The reactor used: react4.ps1 -Answer 1 -Extra "Stab\. Enter to do it=>Enter","again\?
+    Enter=>Enter","Up and Down arrows in turn=>+Up/Down","Left and Right arrows in
+    turn=>+Left/Right","E, then Q, then E!=>E,Q,E",... (see the section).
+  - Careful with to_season.ps1 from a season's menu: the carousel opens at the last season used,
+    so Right N-1 times can land elsewhere; and goto.ps1 sometimes misses "Definitive Menu" and
+    presses Enter on Episodes (it opened The Final Season's Episodes screen with "Restart Episode
+    4" focused; nothing was pressed there, its save is unchanged). Prefer step-by-step keys that
+    check what was said before Enter.
 
 - Sixteenth session, 2026-10-28 10:20 to about 12:30 (user asked which other scenes let you aim, then
   "Yes, add tones": the bow's aiming tone for Season 1's shotgun and rifle scope). Done and tested
@@ -806,7 +840,8 @@ E. (#14) Long walks are slow and silent (Lee limps: 35 m to Hershel took about 4
    Season 2 was played by ear by the ninth session (one path through the choices). A New Frontier
    (its menus, which are the hub's widget framework, and all five episodes) was done in the tenth
    session. The Final Season was begun in the twelfth session (menus, recap, Episode 1 to the
-   school; see "Start here"); Michonne is untouched.
+   school; see "Start here") and finished in the fifteenth; Michonne was played through in the
+   seventeenth (2026-10-29). Every season is now done; close #5 when the user agrees.
 6. (#6) Done in the eighth session: Escape is the game's (pause menu); Backspace lets go of the
    held hotspot and stops a walk.
 7. (#7) Done 2026-10-09, not yet run against the real game folder: --uninstall now keeps
@@ -823,7 +858,8 @@ E. (#14) Long walks are slow and silent (Lee limps: 35 m to Hershel took about 4
    TWDAccess\dumps folder in the game directory, and remove the stale TWDAccess\globals_*.txt,
    trap.log and stack_*.luac files.
    The user's release plan (2026-10-24): build a release only after the whole game has been
-   played through with the mod (The Final Season and Michonne are still to do). The release must
+   played through with the mod (done as of 2026-10-29; the user wants the two Season 1 loose ends
+   looked at next, then the release is their call). The release must
    bundle the .NET runtime (a self-contained build; today's helper is framework-dependent,
    SelfContained false), so players need not install .NET. Also planned then: a zip without the
    dev modules (devconsole, devtools, discovery), a players' read-me (requirements, keys,
@@ -2109,6 +2145,109 @@ ForestBarn (stuck, see the first item).
   ([IO.File]::WriteAllText with UTF8Encoding($false)): PowerShell's Set-Content -Encoding UTF8 adds
   one and the console reports "unexpected symbol near char(239)". Delete autorun.lua before the user
   plays.
+
+### Michonne (seventeenth session, 2026-10-28/29)
+
+Reached from the hub with to_season.ps1 -Season 5 (SubProject_ResetEngine(MenuSeasonM), MenuBoot.lua,
+then Menu_Main.lua; -FromSeason3 also works from its main menu). Main menu: Play, Save Files, Your
+Choices (locked at first), Settings, Definitive Menu, Exit Game. Save Files is a 2 by 2 grid
+(ui_popupSave_grid, nCols 2, its buttons in widgets of its own); Enter makes a file current
+("checked"). Play opens the Episodes screen (menu_episodeselect.lua, menu agent ui_episodeSelect):
+one button, ui_episodeSelect_episodeStatus "START EPISODE 1", the episode's name drawn as a picture,
+Left/Right slide (Menu_EpisodeSelect_SlideComplete). Episodes: 1 In Too Deep (ShoreLineCove.lua,
+DockChesapeakeBay.lua, FerryExteriorDeck.lua, FerryInterior.lua, BoatTownApproach.lua, Flagship...),
+2 Give No Shelter (PreviouslyOn.lua, FlagshipInteriorEscape..., ShorelineApproachWoods.lua,
+JohnsHouseWoodsTile.lua, JohnsHouseExteriorLawn.lua...), 3 What We Deserve.
+
+Framework: projectseasonm's scripts are Season 2's engine (reticle.lua, ReticleSelection_GetUseables,
+gamedialog: choices2.lua works, Struggle_Enter, quicktimeevent.lua, peek.lua, station.lua, drag.lua
+with Drag_OnHoldPress like A New Frontier, choredmovement.lua like The Final Season's) plus
+deadlyfocus.lua (not met yet) and swipe.lua. Globals: <game>\TWDAccess\globals_smplay.txt,
+globals_smboat.txt. Fixed or added this session (all tested in the game unless marked):
+- menus.lua: the save grid is counted ("Save Files menu, 4 items. A grid, 2 across: arrow keys
+  move"); a check mark agent's own text ("check Mark Current Save") is not read; the Episodes
+  screen says "Episodes. Episode 2: Give No Shelter. Start Episode 2. Left and right arrows choose
+  an episode, Enter plays it" (names hard-coded) and selects the button (after the mouse was used
+  it is left unselected and Enter did nothing); the end-of-episode Your Choices screen
+  (ui_stats_reference without Menu_Stats_TransitionToPage: ui_stats_episodeN_statM_question and
+  _label) is read whole once its rows stop arriving (0.8 s), "... Down arrow, then Enter to
+  continue" after an episode (Continue is selected only after an arrow) or "Escape goes back" from
+  the main menu's Your Choices, where Left/Right switch episode tabs ("Episode 2", then that
+  episode's list). A selected row reads question then answer (not heard yet: the row widget's name
+  ui_stats_episodeN_statM is a guess). Restart Episode N asks "Restarting the Episode will cause all
+  data past the selected Episode to be lost" (Cancel/OK). Credits (F6) end with a stray "empty".
+- lookaround2.lua: Michonne's UI.imap opens the pause menu on Backspace (UI_OnButtonMenu, code 8);
+  the wrapper drops code 8 and an active UI.imap is switched off and on (input maps take callbacks
+  when activated). Backspace in free walk no longer opens the menu (tested).
+  Walking to use is sometimes off for her (Navigate_IsAgentPathingEnabled false: the ferry's deck
+  door, the apartment bedroom door): then, if the game has not used the thing within 0.6 s and
+  no walk runs, Game_UseAgent(agent) where she stands (tested on the replay: "walking is off; using
+  obj_logical_door from here", the door opened). Michonne's navigate.lua (dumped:
+  dumps\up\m_PathToAndUseAgent.luac) uses the thing after AgentPathToAgent only if the walk
+  reports arriving, the thing is still selectable and its input map is on; otherwise it stops
+  silently (3 m from Paige with the ammo, Episode 3). A walk that ends within 4 m without a use
+  now uses it too (Michonne only, isSeason2Michonne; not yet met again after the change).
+  On a guided path with nothing usable in view, things out of view count (the snack bar walker:
+  "Kill Walker", then the rope: "Cut Down"; both off screen while the sneak path waits).
+  In a close-up (Station), a selectable thing with no actions off screen is "Something to look at:
+  turn the view to it" (to your right...): Enter holds the pointer at that screen edge
+  (ReticleCameraControl pans) until it is in view (the storeroom's obj_logical_sawGhostKidsTrigger;
+  tested on the replay: the scene went on 0.07 s after Enter). Drag spots with no actions
+  (Drag_IsDragAgent) are listed "X: take hold, then drag" and Enter calls TWDA.pickDrag (drag3.lua:
+  Drag_SelectAgent, kept selected until the drag is over); drag3 then says "Drag: hold Left
+  arrow." (bandaging Sam; tested by hand with the same calls, the mod's Enter not yet).
+  Names: "obj_Logical_dinghy" is "Dinghy", a word that is someone in the scene keeps its capital
+  ("Gag Jonas"), the same agent listed twice is listed once, "Look At." loses its full stop.
+- qte3.lua: prompts shown by ShowNextPrompt without QTE_UI_ShowPrompt are found by polling the QTE
+  agents (actionPromptShown, promptsCurrent, actionActivateTime); multi-prompt QTEs ("E, then Q,
+  then E!", the ferry fight) are said as MultiQTE_Enable starts, from the agent's "QTE Prompt - N"
+  (the call takes 0.65 s to return; values are not always Lua strings: tostring). Tested on the
+  replay: said 0.66 s sooner, not repeated, the fight won first time (it had killed Michonne twice
+  before, the test tool being too slow for three keys in about 1.6 s).
+- struggle.lua: waggle and circle struggles (Swipe_StartWaggle/Circle after Struggle_Enter): only
+  the mouse moves the meter (the chain's mProgressCallback = Struggle_OnSwipe, about 7% a stroke);
+  the mod counts arrow strokes the right way and calls it ("Struggle! Press Left and Right arrows in
+  turn, over and over."; the meter is "Button Mash - Current Percentage"). Tested by keys on the
+  replay (sharpening the machete: Halfway in 0.6 s, "E now!" at 3 s, won). Michonne's tip "Move
+  Mouse Quickly from Side to Side." now waits until after the mod's line.
+- guided.lua: Michonne's GetRelativeDirection is found through ChoredMovement_Activate's
+  mRefCounterActivate.mCallback (OnPostUpdate): "Hold S to go on", then "Hold D to go on" after a
+  camera cut (the run through the woods, Episode 2; tested, passed). "W does not move Michonne
+  here. Try S, A or D" names all keys.
+- prompts2.lua: Michonne's inventory (Inventory_InitItem(logicKey, texture, text) names items,
+  Inventory_HasItem) - "Got rebar" (heard twice with the dev watcher on: double hooks); F6
+  "Carrying". Tips no longer cut off choices or urgent prompts said in the last 2 s
+  (TWDA.choicesSaidAt, TWDA.urgentAt from qte3, drag3, struggle): "Silence is always a valid
+  option..." had cut the first choice list off.
+- New michonne.lua: the boat radio's dials (Episode 1): a tone rising with the dial every 5% and
+  "All the way left/right" at the ends; F6 gives the percent ("Radio dial, 80 percent of the way
+  round. Hold A or D to turn it"); "The radio dial is in tune. Now the squelch dial." when it lets
+  go by itself (added after the replay's radio: not heard). Tested on the replay: the percent and
+  "All the way right. A turns it back."; the tones go out from the same code (tone requests are
+  not logged anywhere). The radio dial stops by itself in tune about the middle (chore time 2.65
+  of 5); the squelch must go well down (1.6 of 6; once it was in tune at once), then Samantha
+  comes through.
+- Seen, not fixed: "Kill Walker Walker, walking there." (verb plus noun); a tip can still cut off a
+  "Michonne can move ..." list; "Michonne can move. Nothing to interact with here" is said a second
+  before some fight prompts (combat mode between prompts); the Save Files menu's "Page Down:
+  RENAME" sticks to the main menu after it closes (seen in The Final Season too); Main menu's
+  title count is missing the first time ("Main menu" then later "Main menu, 6 items").
+Walkthrough notes (one path, answer 1): Episode 1: bush swipes (Left, Right), the dock fight;
+pull the trigger choice; Pete's boat: radio (turn the Radio Dial until it stops, then the Squelch
+Dial down), binoculars at the Prow: Ferry; sharpen the machete (waggle struggle); the ferry: Ladder:
+Climb Ladder (guided W; slips once), Raft Locker: Open (Piece of Metal = rebar), Door: Open (locked),
+Door: Use Rebar, struggle; upstairs bodies; the sneak path (Kill Walker, Cut Down, then D opens the
+snack bar door); snack bar (Duffel, put things in it, Locker: Open); the fight ("E, then Q, then E"
+fast); the boat town: storeroom (look at everything, Chompy..., then turn the view right); Norma's
+questions; Greg: lean right (D) to the Broken Mirror: Cut Zipties (vertical waggle), screwdriver,
+stab twice within about 4 s each; Your Choices. Episode 2: gag Jonas; the escape; the woods run
+(S, then D); bandage Sam (drag Left); the medkit (vodka, pliers, aspirator, wound drags Up then
+Left); the apartment flashback (look at things, Bedroom: Open Door, Decision time); John's house;
+hiding from Randall's men (lean left, Attack); the flare and arm-lock struggles and prompts; the
+radio talk with Norma (a drag); [Kill him]; Your Choices. Episode 3: the crew talk; James: Talk
+To; John's house: Pete: Give Gun, Stairs, the door upstairs (Alex), Paige: Give Ammo, Stairs, talk
+to Sam; the negotiation on the lawn (struggles), the house fire (struggles), the daughters
+([Leave your daughters]), Sam's hand: Grab; the epilogue; Your Choices. No deaths in Episode 3.
 
 ### 400 Days replayed (sixth session, 2026-10-10 about 03:15 to 05:20)
 

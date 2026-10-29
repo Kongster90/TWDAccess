@@ -43,9 +43,18 @@ end)
 -- (Inventory_AddItem("hammer")) and go when used up (Inventory_RemoveItem). Said out loud.
 -- The bar labels each icon with node "item_<name>" of the dialog its text agent ui_inventory_text
 -- reads ("Survival Knife" for knifeSurvival); items without one are named from their code name.
+-- (Michonne names items by logic key, "Inventory - Flashlight", and gives each its words with
+-- Inventory_InitItem(logicKey, texture, text) as a scene starts.)
+local itemTexts = {}
+TWDA.hookBefore("Inventory_InitItem", function(logicKey, texture, text)
+  if type(logicKey) == "string" then itemTexts[logicKey] = text end
+end)
+
 local function itemName(name)
   if type(name) ~= "string" then return nil end
-  name = name:gsub("^ui_item_", "")
+  local given = TWDA.keyOrText(itemTexts[name])
+  if given then return TWDA.normalCaps(given) end
+  name = name:gsub("^ui_item_", ""):gsub("^Inventory %- ", "")
   local okA, textAgent = pcall(AgentFind, "ui_inventory_text")
   if okA and textAgent then
     local okF, file = pcall(AgentGetProperty, textAgent, "Text Dialog 2.0 File")
@@ -62,10 +71,15 @@ end
 local quietUntil = TWDA.now() + 6
 local gained, lost = {}, {}
 TWDA.hookBefore("Inventory_AddItem", function(name)
-  if type(rawget(G, "Inventory_ItemExists")) ~= "function" or TWDA.now() < quietUntil then return end
-  local ok, exists = pcall(Inventory_ItemExists, name)
+  -- (Michonne's script has Inventory_HasItem instead.)
+  local exists = rawget(G, "Inventory_ItemExists") or rawget(G, "Inventory_HasItem")
+  if type(exists) ~= "function" or TWDA.now() < quietUntil then return end
+  local ok, exists = pcall(exists, name)
   if ok and exists then return end
   local words = itemName(name)
+  for _, already in ipairs(gained) do
+    if already == words then return end
+  end
   if words then gained[#gained + 1] = words end
 end)
 TWDA.hookBefore("Inventory_RemoveItem", function(name)
@@ -178,7 +192,10 @@ TWDA.onFrame("prompts2.notes", function()
           TWDA.log("prompts2: notice " .. note.node .. ": " .. text)
           if note.hint then
             TWDA.lastHint, TWDA.lastHintAt = text, now
-            TWDA.say(text, { interrupt = true })
+            -- (Not over a prompt said just before: Michonne's "Hold and drag to grab the bullet and
+            -- remove it." came 0.6 s after "Drag: hold Left arrow.", Episode 2.)
+            local recent = (TWDA.choicesSaidAt and now - TWDA.choicesSaidAt < 2) or (TWDA.urgentAt and now - TWDA.urgentAt < 2)
+            TWDA.say(text, { interrupt = not recent })
           else
             TWDA.say(text)
           end
@@ -192,6 +209,16 @@ end)
 local previousInventory = TWDA.describeInventory
 TWDA.describeInventory = function()
   local container = TWDA.upvalue(rawget(G, "Inventory_Activate"), "mContainer")
+  if container == nil and type(rawget(G, "Inventory_HasItem")) == "function" then
+    -- (Michonne: the items the scene set up that she has.)
+    local items = {}
+    for key in pairs(itemTexts) do
+      local ok, has = pcall(Inventory_HasItem, key)
+      if ok and has then items[#items + 1] = itemName(key) end
+    end
+    table.sort(items)
+    return #items > 0 and ("Carrying: " .. table.concat(items, ", ")) or nil
+  end
   if container == nil then return previousInventory and previousInventory() or nil end
   local okN, n = pcall(ContainerGetNumElements, container)
   local items = {}

@@ -33,6 +33,8 @@ local function keyFor(action, agent)
 end
 
 local active = nil -- { agent, action, at, hold }
+-- (Michonne: each QTE agent's last prompt said, by its actionActivateTime; see qte3.agents.)
+local shownAt = setmetatable({}, { __mode = "k" })
 local lastSaid, lastSaidAt = nil, 0
 
 local function say(text)
@@ -40,6 +42,7 @@ local function say(text)
   if text == lastSaid and now - lastSaidAt < 0.6 then return end
   lastSaid, lastSaidAt = text, now
   TWDA.lastHint, TWDA.lastHintAt = text, now
+  TWDA.urgentAt = now -- (a tip shown with it waits: prompts2.lua)
   TWDA.say(text, { interrupt = true })
 end
 
@@ -52,6 +55,7 @@ TWDA.hookAfter("QTE_UI_ShowPrompt", function(args)
     kind, tostring(prop(agent, "QTE - UI Enable In-World"))))
   local hold = kind:lower():find("hold", 1, true) ~= nil or tostring(action):lower():find("^hold") ~= nil
   active = { agent = agent, action = action, at = TWDA.now(), hold = hold }
+  if type(agent) == "table" then shownAt[agent] = rawget(agent, "actionActivateTime") end
   say(hold and ("Hold " .. key .. "!") or (key .. "!"))
 end)
 
@@ -274,6 +278,44 @@ local function multiText(agent, kind)
   if same then return ("%s, %d times, fast!"):format(keys[1], #keys) end
   return table.concat(keys, ", then ") .. "!"
 end
+-- (Michonne's MultiQTE_Enable takes about 0.65 s to return, a third of the time to press the keys
+-- in the ferry fight, Episode 1: so the prompts are read from the agent's "QTE Prompt - 1", "- 2"...
+-- as it starts, and from the script's own list once it is done if that was not possible.)
+local function agentMultiText(agent, kind)
+  local keys = {}
+  for i = 1, 8 do
+    local prompt = prop(agent, "QTE Prompt - " .. i)
+    prompt = prompt ~= nil and tostring(prompt) or nil -- (not always a Lua string)
+    if prompt == nil or prompt == "" or prompt:find(",") then break end
+    local key = keyFor(prompt, agent)
+    if not KEY_WORDS[prompt:lower():gsub("^hold", "")] then return nil end
+    keys[#keys + 1] = key
+  end
+  if #keys < 2 then return nil end
+  if kind == "Simultaneous" then return "Press " .. table.concat(keys, " and ") .. " together!" end
+  local same = true
+  for _, k in ipairs(keys) do if k ~= keys[1] then same = false end end
+  if same then return ("%s, %d times, fast!"):format(keys[1], #keys) end
+  return table.concat(keys, ", then ") .. "!"
+end
+local function findAgent(agent)
+  if type(agent) == "string" then
+    local okA, found = pcall(AgentFind, agent)
+    return okA and found or agent
+  end
+  return agent
+end
+local multiSaid, multiSaidAt = nil, -10
+TWDA.hookBefore("MultiQTE_Enable", function(agent, on)
+  if on ~= true then return end
+  agent = findAgent(agent)
+  local text = agentMultiText(agent, tostring(prop(agent, "QTE - Type") or ""))
+  if text then
+    TWDA.log(("qte3: multi on %s (as it starts): %s"):format(TWDA.agentName(agent), text))
+    multiSaid, multiSaidAt = text, TWDA.now()
+    say(text)
+  end
+end)
 TWDA.hookAfter("MultiQTE_Enable", function(args)
   local agent, on = args[1], args[2]
   if on ~= true then
@@ -281,15 +323,12 @@ TWDA.hookAfter("MultiQTE_Enable", function(args)
     TWDA.setSlowFor("qte3.multi", false)
     return
   end
-  if type(agent) == "string" then
-    local okA, found = pcall(AgentFind, agent)
-    agent = okA and found or agent
-  end
+  agent = findAgent(agent)
   local kind = tostring(prop(agent, "QTE - Type") or "")
   multi = { agent = agent, at = TWDA.now(), kind = kind, lastPress = 0 }
   local text = multiText(agent, kind)
   TWDA.log(("qte3: multi %s on %s: %s"):format(kind, TWDA.agentName(agent), tostring(text)))
-  if text then say(text) end
+  if text and not (text == multiSaid and TWDA.now() - multiSaidAt < 3) then say(text) end
 end)
 TWDA.onFrame("qte3.multi", function()
   if not multi then return end
@@ -306,6 +345,45 @@ TWDA.onFrame("qte3.multi", function()
     local index = TWDA.upvalue(rawget(G, "MultiQTE_OnE"), "mCurrentMultiQTEIndex")
     local prompt = type(index) == "number" and prompts[index] or prompts[1]
     if prompt then pcall(onInput, prompt) end
+  end
+end)
+
+-- Michonne's prompts (the arrow drawn over the bush to slash at, Episode 1) are shown by
+-- ShowNextPrompt, a local of quicktimeevent.lua, often without QTE_UI_ShowPrompt. Each QTE agent's
+-- table (mQuickTimeEventAgents) says what is up: actionPromptShown, promptsCurrent ({ "left" }, or
+-- several that each do) and actionActivateTime, new for each prompt.
+local pollAt = 0
+TWDA.onFrame("qte3.agents", function()
+  local now = TWDA.now()
+  if now - pollAt < 0.05 then return end
+  pollAt = now
+  local execute = executeAction()
+  local list = type(execute) == "function" and TWDA.upvalue(execute, "mQuickTimeEventAgents") or nil
+  for _, qte in ipairs(type(list) == "table" and list or {}) do
+    local when = rawget(qte, "actionActivateTime")
+    if rawget(qte, "actionPromptShown") == true and when ~= nil and shownAt[qte] ~= when then
+      shownAt[qte] = when
+      local keys, first = {}, nil
+      for _, prompt in ipairs(rawget(qte, "promptsCurrent") or {}) do
+        local key = type(prompt) == "string" and KEY_WORDS[prompt:lower():gsub("^hold", "")] and keyFor(prompt, qte) or nil
+        if key then
+          first = first or prompt
+          local seen = false
+          for _, k in ipairs(keys) do seen = seen or k == key end
+          if not seen then keys[#keys + 1] = key end
+        end
+      end
+      if first then
+        TWDA.log(("qte3: prompt %s on %s (shown by the agent)"):format(table.concat(rawget(qte, "promptsCurrent"), ","),
+          TWDA.agentName(qte)))
+        local hold = first:lower():find("^hold") ~= nil
+        active = { agent = qte, action = first, at = now, hold = hold }
+        local words = table.concat(keys, " or ")
+        say(hold and ("Hold " .. words .. "!") or (words .. "!"))
+      end
+    elseif rawget(qte, "actionPromptShown") ~= true and active and active.agent == qte then
+      finished()
+    end
   end
 end)
 

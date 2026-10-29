@@ -38,8 +38,12 @@ local function visibleTexts(agent, out, seen, depth)
   if agent == nil or depth > 4 or isHidden(agent) then return end
   local name = TWDA.agentName(agent):lower()
   if name:find("infobutton", 1, true) or name:find("tooltip", 1, true) then return end
-  -- A shown check mark (A New Frontier's save file in use) has no text of its own; said last.
-  if name:find("checkmark$") then seen[""] = true end
+  -- A shown check mark (the save file in use) is said last as "checked" (Michonne's has the text
+  -- "check Mark Current Save").
+  if name:find("checkmark$") then
+    seen[""] = true
+    return
+  end
   local text = TWDA.normalCaps(TWDA.agentText(agent))
   if text and not seen[text] then
     seen[text] = true
@@ -82,6 +86,20 @@ end
 
 local function describeWidget(widget)
   if type(widget) ~= "table" then return nil end
+  -- (Michonne's Your Choices has a tab per episode holding that episode's rows; the rows are read
+  -- with the screen, menus.stats, so a tab is just its episode.)
+  local widgetName = TWDA.agentName(rawget(widget, "agent"))
+  local tab = widgetName:match("^ui_stats_tabsParent_tabEpisode(%d+)$")
+  if tab then return "Episode " .. tab end
+  -- (A row: its question, then how many chose the same.)
+  if widgetName:find("^ui_stats_episode%d+_stat%d+$") then
+    local row = {}
+    for _, suffix in ipairs({ "_question", "_label" }) do
+      local okF, part = pcall(AgentFind, widgetName .. suffix)
+      row[#row + 1] = okF and part and TWDA.agentText(part) or nil
+    end
+    if #row > 0 then return TWDA.joinSentences(row) end
+  end
   local parts = {}
   -- Carousel elements (seasons, episodes) describe themselves.
   for _, method in ipairs({ "GetDisplayTitle", "GetDisplaySubtitle", "GetDisplayStatus", "GetDisplayAction",
@@ -859,14 +877,35 @@ local function shownChoices(widget)
   return count
 end
 
+-- A grid (Michonne's save files, 2 by 2) holds its buttons in widgets of its own.
+local function gridButtons(widget)
+  local count = 0
+  for _, inner in ipairs(type(rawget(widget, "nCols")) == "number" and rawget(widget, "widgets") or {}) do
+    if type(inner) == "table" and buttonCount(inner) > 0 then count = count + 1 end
+  end
+  return count
+end
+
 -- Things to choose: widgets with at least one button, apart from the header and legend.
 local function itemCount(menu)
   local count = 0
   for _, widget in ipairs(rawget(menu, "widgets") or {}) do
     local name = TWDA.agentName(rawget(widget, "agent"))
     if not isChrome(name) and buttonCount(widget) > 0 then count = count + math.max(1, shownChoices(widget)) end
+    if not isChrome(name) then count = count + gridButtons(widget) end
   end
   return count
+end
+
+-- "A grid, 2 across: arrow keys move." for a menu laid out in rows and columns.
+local function gridNote(menu)
+  for _, widget in ipairs(rawget(menu, "widgets") or {}) do
+    local cols = rawget(widget, "nCols")
+    if type(cols) == "number" and cols > 1 and gridButtons(widget) > cols then
+      return ("A grid, %d across: arrow keys move"):format(cols)
+    end
+  end
+  return nil
 end
 
 -- Static text in a menu (the About page's body, for instance): widgets without buttons.
@@ -875,7 +914,7 @@ local function contentTexts(menu)
   for _, widget in ipairs(rawget(menu, "widgets") or {}) do
     local agent = rawget(widget, "agent")
     local name = TWDA.agentName(agent)
-    if not isChrome(name) and buttonCount(widget) == 0 and not isHidden(agent) then
+    if not isChrome(name) and buttonCount(widget) == 0 and gridButtons(widget) == 0 and not isHidden(agent) then
       local parts = {}
       visibleTexts(agent, parts, {}, 0)
       if #parts > 0 then texts[#texts + 1] = TWDA.joinSentences(parts) end
@@ -925,6 +964,7 @@ TWDA.onFrame("menus.title", function()
   if items and not title:find("[%.%?!]$") then text, items = text .. ", " .. items, nil end
   local sentences = { text, items }
   if description then sentences[#sentences + 1] = description end
+  sentences[#sentences + 1] = gridNote(menu)
   for _, note in ipairs(contentTexts(menu)) do sentences[#sentences + 1] = note end
   for _, note in ipairs(sceneNotes(menu)) do sentences[#sentences + 1] = note end
   for _, key in ipairs(unusualKeys(menu)) do sentences[#sentences + 1] = key end
@@ -1126,7 +1166,9 @@ TWDA.hookAfter("Menu_Seasons_Select", function(args)
   TWDA.lastMenuItem = text
   if mouseDepth == 0 and not redirectTo then
     local okSel, selected = pcall(Buttons_GetSelected)
-    if okSel and selected == nil then
+    -- (Back in Season Select after playing a season, focus is still on the carousel's left arrow,
+    -- where Enter slid one season left and played that: The Final Season instead of Michonne.)
+    if okSel and (selected == nil or isArrowButton(selected)) then
       local play = seasonPlayButton()
       if play then redirectTo = { button = play, quiet = true } end
     end
@@ -1195,7 +1237,46 @@ local function finalSeasonStatPage(agent, name)
   return parts
 end
 
+-- Michonne's choices after an episode (its own menu_stats, no pages): one episode's questions at
+-- once, "Did you try to end it?" (ui_stats_episode1_stat1_question) and "You and 32.5% of players
+-- pulled the trigger." (..._label), under ui_stats_episodeTitle ("Episode 1: In Too Deep").
+local function michonneStats(menu)
+  local okS, agents = pcall(function() return SceneGetAgents(AgentGetScene(rawget(menu, "agent"))) end)
+  local rows = {}
+  for _, agent in ipairs(okS and type(agents) == "table" and agents or {}) do
+    local episode, stat, field = TWDA.agentName(agent):match("^ui_stats_episode(%d+)_stat(%d+)_(%a+)$")
+    local text = episode and not isHidden(agent) and TWDA.agentText(agent) or nil
+    if text then
+      local n = tonumber(episode) * 100 + tonumber(stat)
+      rows[n] = rows[n] or {}
+      rows[n][field] = text
+    end
+  end
+  local order = {}
+  for n in pairs(rows) do order[#order + 1] = n end
+  table.sort(order)
+  if #order == 0 then return nil end
+  local okT, title = pcall(AgentFind, "ui_stats_episodeTitle")
+  local parts = { "Your choices", okT and title and TWDA.agentText(title) or nil }
+  for i, n in ipairs(order) do
+    local row = rows[n]
+    parts[#parts + 1] = ("%d: %s"):format(i, TWDA.joinSentences({ row.question, row.label }))
+  end
+  -- (After an episode: Continue, selected only once an arrow key is pressed. From the main menu's
+  -- Your Choices: Previous Menu, Escape.)
+  local okB, back = pcall(AgentFind, "ui_stats_legendMenu_legendButton_back")
+  local backText = okB and back and TWDA.agentText(back) or ""
+  if backText:lower():find("continue", 1, true) then
+    parts[#parts + 1] = "Down arrow, then Enter to continue"
+  else
+    parts[#parts + 1] = "Escape goes back"
+  end
+  local text = TWDA.joinSentences(parts)
+  return text
+end
+
 local statsWidget = nil
+local statsPending, statsPendingAt = nil, 0
 local statsEnterDown = false
 TWDA.onFrame("menus.stats", function()
   local menu = currentMenu()
@@ -1218,6 +1299,18 @@ TWDA.onFrame("menus.stats", function()
   end
   statsEnterDown = enter
   local transition = rawget(G, "Menu_Stats_TransitionToPage")
+  if type(transition) ~= "function" then
+    -- (The rows come in one by one: read once they have held still for 0.8 s.)
+    local text = michonneStats(menu)
+    local now = TWDA.now()
+    if text ~= statsPending then statsPending, statsPendingAt = text, now end
+    if text and text ~= statsWidget and now - statsPendingAt >= 0.8 then
+      statsWidget = text
+      current = { button = nil, widget = nil, text = text, time = now }
+      queue("title", text)
+    end
+    return
+  end
   local widget = TWDA.upvalue(transition, "mVisibleWidget")
   if type(widget) ~= "table" or widget == statsWidget then return end
   statsWidget = widget
@@ -1335,6 +1428,44 @@ TWDA.onFrame("menus.episodes", function()
       end)
     end
     episodesKeys[vk] = down
+  end
+end)
+
+-- Michonne's Episodes screen (menu_episodeselect.lua, menu agent ui_episodeSelect) has one
+-- button, ui_episodeSelect_episodeStatus ("START EPISODE 1"), and draws the episode's name as a
+-- picture; Left and Right slide to the next episode, ending in Menu_EpisodeSelect_SlideComplete
+-- (also run when the screen opens), which sets the button's words a frame later.
+local MICHONNE_EPISODES = { "In Too Deep", "Give No Shelter", "What We Deserve" }
+local slidEpisode, slideReadAt, slideScreen = nil, nil, nil
+TWDA.hookBefore("Menu_EpisodeSelect_SlideComplete", function(episode)
+  slidEpisode, slideReadAt = tonumber(episode), TWDA.now() + 0.3
+end)
+TWDA.onFrame("menus.episodesM", function()
+  if not slideReadAt or TWDA.now() < slideReadAt then return end
+  slideReadAt = nil
+  local menu = currentMenu()
+  if not menu or TWDA.agentName(rawget(menu, "agent")) ~= "ui_episodeSelect" then return end
+  local okS, status = pcall(AgentFind, "ui_episodeSelect_episodeStatus")
+  local action = okS and status and TWDA.normalCaps(TWDA.agentText(status)) or nil
+  local parts = {}
+  if slideScreen ~= menu then
+    slideScreen = menu
+    parts[#parts + 1] = "Episodes"
+  end
+  local name = slidEpisode and MICHONNE_EPISODES[slidEpisode]
+  if slidEpisode then parts[#parts + 1] = ("Episode %d%s"):format(slidEpisode, name and (": " .. name) or "") end
+  if action then parts[#parts + 1] = action end
+  if #parts == 0 then return end
+  local text = TWDA.joinSentences(parts)
+  current = { button = nil, widget = nil, text = text, time = TWDA.now() }
+  TWDA.lastMenuItem = text
+  queue("item", text)
+  queue("value", "Left and right arrows choose an episode, Enter plays it")
+  -- (After the mouse was used, the button is left unselected and Enter does nothing until an
+  -- arrow key selects it: the game's OnWidgetInputChange. Select it now.)
+  if okS and status and type(status.Select) == "function" and rawget(status, "mbSelected") ~= true then
+    quietButton = status
+    pcall(ThreadStart, function() pcall(status.Select, status, true) end)
   end
 end)
 

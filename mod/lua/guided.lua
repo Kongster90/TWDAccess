@@ -53,6 +53,13 @@ local active, startedAt, told = false, 0, false
 local function relativeForward()
   local activate = TWDA.upvalue(rawget(_G, "ChoredMovement_Start"), "Activate")
   local update = activate and TWDA.upvalue(activate, "OnPostUpdate")
+  if not update then
+    -- (Michonne's script keeps the same OnPostUpdate as the callback of ChoredMovement_Activate's
+    -- upvalue mRefCounterActivate: the runs through the woods in Episode 2 want A or D.)
+    local counter = TWDA.upvalue(rawget(_G, "ChoredMovement_Activate"), "mRefCounterActivate")
+    local callback = type(counter) == "table" and rawget(counter, "mCallback") or nil
+    update = type(callback) == "function" and TWDA.upvalue(callback, "OnPostUpdate") or nil
+  end
   local relative = update and TWDA.upvalue(update, "GetRelativeDirection")
   if type(relative) ~= "function" then return nil end
   -- (A scene can turn the controls round at a stop on the way: dragging Omar from the gate during
@@ -74,6 +81,7 @@ local toldForward, fwdSeen, fwdSince = nil, nil, 0
 local KEYS = { { 0x57, "W", "S" }, { 0x53, "S", "W" }, { 0x41, "A", "D" }, { 0x44, "D", "A" },
   { 0x26, "Up arrow", "Down arrow" }, { 0x28, "Down arrow", "Up arrow" },
   { 0x25, "Left arrow", "Right arrow" }, { 0x27, "Right arrow", "Left arrow" } }
+local OTHER_KEYS = { W = "S, A or D", S = "W, A or D", A = "D, W or S", D = "A, W or S" }
 local forwardKey, toldBack = nil, false
 -- (nil until the path's first position is known: one that starts past halfway, such as the way
 -- back down that tower, has no halfway to say.)
@@ -248,7 +256,10 @@ TWDA.onFrame("guided", function()
     else
       -- (The Final Season knows the way: "Hold S" after a camera cut, not the opposite of the key.)
       local way = relativeForward()
-      TWDA.say(key[2] .. " does not move " .. TWDA.playerName() .. " here. " .. (way and ("Hold " .. way) or ("Try " .. key[3])),
+      -- (Michonne's paths go any way on screen: pushing the snack bar door open on the ferry,
+      -- Episode 1, wants D.)
+      local others = OTHER_KEYS[key[2]] or key[3]
+      TWDA.say(key[2] .. " does not move " .. TWDA.playerName() .. " here. " .. (way and ("Hold " .. way) or ("Try " .. others)),
         { interrupt = true })
     end
   end

@@ -105,9 +105,14 @@ end
 local function nameOf(agent)
   local noun = call("Game_GetNounText", agent)
   if type(noun) == "string" and noun ~= "" then return TWDA.normalCaps(TWDA.cleanText(noun)) end
-  local name = TWDA.agentName(agent):gsub("^obj_", ""):gsub("^logical", ""):gsub("^logic_", "")
+  -- (Michonne's "obj_Logical_dinghy", "obj_logical_gagJonas".)
+  local name = TWDA.agentName(agent):gsub("^obj_", ""):gsub("^[Ll]ogical_?", ""):gsub("^logic_", "")
   name = name:gsub("([%l])(%u)", "%1 %2"):gsub("(%a)(%d)", "%1 %2")
-  name = name:gsub("_", " "):lower():gsub("^%s+", "")
+  -- (Someone in the scene keeps a capital: "Gag Jonas".)
+  name = name:gsub("_", " "):gsub("%a+", function(word)
+    local okE, exists = pcall(AgentExists, word:sub(1, 1):upper() .. word:sub(2))
+    return (okE and exists == true and #word > 2) and (word:sub(1, 1):upper() .. word:sub(2)) or word:lower()
+  end):gsub("^%s+", "")
   -- ("obj_doorComicShopUsePoint" -> "Comic shop door", not "Door comic shop use point".)
   name = name:gsub("%s*use ?point$", "")
   local first, rest = name:match("^(%a+)%s+(.+)$")
@@ -119,6 +124,22 @@ end
 
 local function combatMode()
   return call("Reticle_IsCombatMode") == true
+end
+
+-- Michonne's scripts (projectseasonm), told apart from Season 2's by where navigate.lua comes from.
+local michonneCache = nil
+local function isSeason2Michonne()
+  if michonneCache == nil then
+    local fn = TWDA.unwrap(rawget(G, "Navigate_PathToAndUseAgent"))
+    local ok, info = pcall(debug.getinfo, fn, "S")
+    michonneCache = ok and info and tostring(info.source):find("projectseasonm", 1, true) ~= nil or false
+  end
+  return michonneCache
+end
+
+local function inStation()
+  local mode = call("Game_GetMode")
+  return type(mode) == "table" and rawget(mode, "name") == "Station"
 end
 
 -- (On a guided path, such as crawling under the porch, the walking keys move along the path only:
@@ -148,7 +169,7 @@ local function verbText(verb)
   local text = type(verb) == "table" and (rawget(verb, "Text") or rawget(verb, "Preset")) or nil
   if text == "" and type(verb) == "table" then text = rawget(verb, "Preset") end
   text = text and TWDA.normalCaps(TWDA.cleanText(tostring(text))) or ""
-  return text
+  return (text:gsub("%.+$", "")) -- (Michonne's "Look At.")
 end
 
 -- The things to interact with now, nearest first, with names told apart ("Stall 2").
@@ -156,15 +177,40 @@ local function hotspots()
   local list = {}
   local from = playerPos()
   local guided = onGuidedPath()
+  local outOfView = {}
+  local station = inStation()
+  local seen = {}
   for _, agent in pairs(getUsables() or {}) do
-    if type(agent) == "table" and usableNow(agent) and not (guided and sideOf(agent) ~= nil) then
+    -- (Michonne's list can hold one agent twice: "obj_logical_gagJonas", Episode 2.)
+    if type(agent) == "table" and not seen[agent] and usableNow(agent) then
+      seen[agent] = true
       local verbs = verbsOf(agent)
-      if #verbs > 0 then
-        list[#list + 1] = { agent = agent, name = nameOf(agent), verbs = verbs, distance = distanceTo(agent, from),
+      local side = #verbs == 0 and station and sideOf(agent) or nil
+      local okD, drag = pcall(rawget(G, "Drag_IsDragAgent") or function() return false end, agent)
+      if #verbs == 0 and okD and drag == true and TWDA.pickDrag then
+        -- (Michonne's drags have no action: "Hold and drag to bandage Sam", Episode 2.)
+        list[#list + 1] = { agent = agent, name = nameOf(agent), verbs = {}, dragOnly = true,
+          distance = distanceTo(agent, from), side = sideOf(agent) }
+      elseif side then
+        -- (Michonne's close-ups go on when the view is turned to a spot with no actions, as the mouse
+        -- turns it: "obj_logical_sawGhostKidsTrigger" in the boat town's storeroom, Episode 1. Enter
+        -- turns the view to it.)
+        list[#list + 1] = { agent = agent, name = "Something to look at", verbs = {}, lookOnly = true, side = side }
+      elseif #verbs > 0 then
+        local entry = { agent = agent, name = nameOf(agent), verbs = verbs, distance = distanceTo(agent, from),
           side = sideOf(agent) }
+        if guided and entry.side ~= nil then
+          outOfView[#outOfView + 1] = entry
+        else
+          list[#list + 1] = entry
+        end
       end
     end
   end
+  -- (A path that stops on the way for something out of view: Michonne's sneak through the ferry,
+  -- Episode 1, halts by the snack bar for "Walker: Kill Walker", then a close-up wants the rope it
+  -- hangs from, both off screen. With nothing in view, those count.)
+  if #list == 0 then list = outOfView end
   table.sort(list, function(a, b)
     if (a.side == nil) ~= (b.side == nil) then return a.side == nil end -- (in view first)
     return (a.distance or 999) < (b.distance or 999)
@@ -617,6 +663,8 @@ end
 -- as "Throw rock at zombie 1").
 local function entryText(h, numbered)
   if h.place then return "Place: " .. h.label end
+  if h.lookOnly then return h.label .. ": turn the view to it" end
+  if h.dragOnly then return h.label .. ": take hold, then drag" end
   local verbs = verbsText(h, numbered)
   if verbs == "" then return h.label end
   return h.label .. ": " .. verbs
@@ -697,7 +745,40 @@ local function findCurrent()
   return nil
 end
 
+-- Turns a close-up's view to an agent the way the mouse does: the pointer held at the screen's edge
+-- on its side pans the camera (ReticleCameraControl), until it is on screen.
+local function turnViewTo(agent)
+  pcall(ThreadStart, function()
+    local started = TWDA.now()
+    while TWDA.now() - started < 4 and inStation() do
+      local ok, pos = pcall(AgentGetScreenPos, agent)
+      if not ok or not pos then break end
+      local x = pos.x > 0.85 and 0.99 or pos.x < 0.15 and 0.01 or 0.5
+      local y = pos.y > 0.85 and 0.99 or pos.y < 0.15 and 0.01 or 0.5
+      if (pos.z or 1) <= 0 then x = 0.99 end -- (behind: turn one way round)
+      if x == 0.5 and y == 0.5 then break end
+      if TWDA.setPointer then TWDA.setPointer(x, y) end
+      WaitForNextFrame()
+    end
+    if TWDA.setPointer then TWDA.setPointer(0.5, 0.5) end
+  end)
+end
+
 local function use(h, verbIndex)
+  if h.lookOnly then
+    TWDA.log("lookaround2: turning the view to " .. TWDA.agentName(h.agent))
+    current, chosenVerb = nil, nil
+    busyUntil = TWDA.now() + 1
+    turnViewTo(h.agent)
+    return
+  end
+  if h.dragOnly then
+    TWDA.log("lookaround2: taking hold of the drag " .. TWDA.agentName(h.agent))
+    current, chosenVerb = nil, nil
+    busyUntil = TWDA.now() + 1
+    TWDA.pickDrag(h.agent)
+    return
+  end
   local verb = h.verbs[verbIndex or 1] or h.verbs[1]
   local agent = h.agent
   busyUntil = TWDA.now() + 1
@@ -732,6 +813,26 @@ local function use(h, verbIndex)
     -- fights, whose targets are used in other ways.)
     local here = playerPos()
     local moved = startPos and here and VectorDistance(startPos, here) > 0.3
+    -- (Michonne's scenes switch the walk-to-use off for her now and then, Navigate_IsAgentPathingEnabled
+    -- false: the ferry's deck door, Episode 1. There a click uses the thing where she stands, as
+    -- Game_UseAgent does.)
+    -- (She may turn on the spot first, so a small move counts as none here; and the game is given a
+    -- moment to use it itself.)
+    -- (Michonne's navigate.lua also gives up after the walk when AgentPathToAgent does not report
+    -- arriving: she stood 3 m from Paige with the ammo, Episode 3, and at the apartment's bedroom
+    -- door. A walk that ends near it counts as arriving.)
+    local okP, pathing = pcall(rawget(G, "Navigate_IsAgentPathingEnabled") or function() return true end,
+      Game_GetPlayer and Game_GetPlayer() or nil)
+    local nearNow = (distanceTo(agent) or 99) < 4
+    if okUse and usedAgent == nil and ((okP and pathing == false) or (moved and nearNow and isSeason2Michonne())) then
+      local waitUntil = TWDA.now() + 0.6
+      while usedAgent == nil and TWDA.now() < waitUntil do WaitForNextFrame() end
+      if usedAgent == nil and playMode() and call("Navigate_IsPathing") ~= true then
+        TWDA.log("lookaround2: walking is off; using " .. TWDA.agentName(agent) .. " from here")
+        local okG, errG = pcall(Game_UseAgent, agent)
+        if not okG then TWDA.log("lookaround2: use failed: " .. tostring(errG)) end
+      end
+    end
     if okUse and usedAgent == nil and not moved and not fight and not combatMode() and playMode() then
       pcall(ReticleSelection_Lock, false)
       TWDA.log("lookaround2: could not get to " .. TWDA.agentName(agent))
@@ -1077,4 +1178,29 @@ TWDA.onFrame("lookaround2.closeup", function()
     end)
   end
   backHeld = down
+end)
+
+-- Michonne's UI.imap also opens the pause menu on Backspace (UI_OnButtonMenu, code 8), so stepping
+-- back out of a close-up opened the menu as well. Backspace is left to the mod; Escape still opens
+-- the menu. Input maps hold their callbacks by reference, taken when the map is activated, so an
+-- active UI.imap is switched off and on again once the wrapper is in (tested: the wrapper then
+-- gets the key).
+local menuWrapper = nil
+TWDA.onFrame("lookaround2.backspaceMenu", function()
+  local original = rawget(G, "UI_OnButtonMenu")
+  if type(original) ~= "function" or original == menuWrapper then return end
+  menuWrapper = function(event, ...)
+    if type(event) == "table" and event.code == 8 then return end
+    return original(event, ...)
+  end
+  TWDA.wrappers[menuWrapper] = true
+  rawset(G, "UI_OnButtonMenu", menuWrapper)
+  local okA, active = pcall(InputMapperGetActiveMapperNames)
+  for _, map in ipairs(okA and type(active) == "table" and active or {}) do
+    if map == "UI.imap" then
+      pcall(InputMapperDeactivate, "UI.imap")
+      pcall(InputMapperActivate, "UI.imap")
+      TWDA.log("lookaround2: Backspace no longer opens the pause menu")
+    end
+  end
 end)
