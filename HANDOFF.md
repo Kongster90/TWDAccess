@@ -3,10 +3,38 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-10-29 about 04:30 (seventeenth session: MICHONNE PLAYED THROUGH, all three
-episodes; every season of the game has now been played with the mod; see the first item).
+Last updated: 2026-10-29 about 10:30 (seventeenth session: MICHONNE PLAYED THROUGH overnight, then
+the two Season 1 loose ends in the morning; see the first two items).
 
 ## Start here (where the last session stopped)
+
+- Seventeenth session, morning of 2026-10-29 (user: "Start loose ends", after Michonne was committed
+  as d11ee4e): THE TWO SEASON 1 LOOSE ENDS ARE DONE, tested in Season 1 Save 2 (dev_saves\ep3_bandits
+  and ep4_meds), then Save 2 put back (byte-identical to dev_saves\s1_slot2_before_aimtones; saves.txt
+  line env_manorInteriorClementineSearch.lua). Game closed, autorun.lua deleted, dist rebuilt (its
+  mod and the game folder's match). Committed and pushed at the user's request (see git log).
+  - The Motor Inn "gate flicker" was not a stuck gate: using the gate takes Lee out through it
+    silently, and outside two hotspots were both "Gate" (obj_motorInnGate, the way back in, and
+    obj_motorInnGateOuter, the dumpster gate, which cannot be used from inside: "PathToAndUseAgent
+    ended without a use"), so in and out sounded like nothing. lookaround.lua's distinctName now
+    tells apart things the game names alike by the words of their own agent names that the others
+    lack ("Gate", "Outer gate"; before, only people were told apart). Tested: going out, the mod
+    says "Outer gate: Use", and F6 lists both. The clue hunt order that works: Clementine, Broken
+    Glass: 2 Inspect, Chalk X: 2 Inspect, Clementine again (the pink chalk), Chalk Scuff: 2 Inspect
+    (Duck), Gate: Use (out), Fence, Grate: 2 Open, Bag: 2 Pick Up (the attack starts).
+  - The bandit attack by tone (aim = sound): phase 1, 2 hits in 3 s; phase 2, the tone also led to
+    Clementine and Duck, clickable while they run for the RV (a shot "hit"); phase 3 (walkers both
+    sides, the death checkpoint lands here): 10 head shots, "Nothing in sight here. A for the other
+    side." and "Other side." work, scene over (env_road.lua). Fixed: sniper.lua leaves the main
+    cast out of the targets (FRIENDS, also obj_use<Name>: "obj_useMolly"); peek.lua no longer says
+    "Hiding. To lean out: A left" while the scope moves Lee to the other side (it sent him straight
+    back). Phase 2 not replayed after the friends fix (the checkpoint is past it).
+  - Molly's classroom scope (Episode 4): the tone led to obj_useMolly (Molly) first; the shot still
+    saved her (the walker was in front). After the fix it leads to obj_mollyFightZombieHallway: one
+    hit in 2.5 s, Molly saved, Ben's confession goes on.
+  - Tools: aimbyear.ps1 leans the way the mod names ("To lean out: D right") and switches sides on
+    "D for the other side"; probe_occluded.lua (where a hotspot is visible around its dot),
+    probe_focus.lua (what the reticle focuses at a point).
 
 - Seventeenth session, 2026-10-28 22:15 to 10-29 about 04:30 (user asleep: "Go ahead and start on
   [Michonne]. Everything from the previous days stands. Closing playback error windows."; then
@@ -68,11 +96,8 @@ episodes; every season of the game has now been played with the mod; see the fir
     Tested: Episode 4 opening (8 hits, Clementine saved) and the school hallway behind the vending
     machine (lean W, 5 hits, Vernon's scene went on). The opening is tight: the walkers reach
     Clementine about 6 s after the scope comes up if nothing is hit.
-  - NOT tested: the Motor Inn bandit attack (Episode 3, peek + scope + A/D sides) and Molly's
-    classroom scope. Getting there from dev_saves\ep3_bandits stalled at the clue hunt: after "I
-    suppose I should go out there", Duck stands in front of the gate and the reticle flickers
-    between "Gate: Use" and Duck, so neither Enter nor useWithReticle used the gate (possibly a mod
-    problem for the user too; check it).
+  - (Done the next morning, see the first item:) the Motor Inn bandit attack and Molly's
+    classroom scope, and the "gate flicker" at the clue hunt (two hotspots both called "Gate").
   - The user pressed F3 once and F4 three times at 10:34 to check that work was still going on:
     settings.txt now has beepvolume = 40 (was 30) and beacons = tab (was true, the same thing).
     Their choice; left as they are. (The user may press keys in the game while it is being tested.)

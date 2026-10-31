@@ -87,10 +87,23 @@ local state = nil -- while the scope is up: { targets, listAt, checkAt, sight, s
 -- A target with a target of its own is shot through that one: the walkers at the Motor Inn
 -- (Zombie6) only go down to a shot in the head (obj_ZombieHead6, its child); a body shot counts as
 -- a hit and changes nothing.
+-- Never targets, though the game leaves them clickable: Clementine and Duck run for the RV during
+-- the bandit attack's second wave, and the tone led to them (a shot at them "hit").
+local FRIENDS = { clementine = true, duck = true, kenny = true, katjaa = true, lilly = true, carley = true,
+  doug = true, ben = true, mark = true, larry = true, lee = true, christa = true, omid = true, molly = true,
+  chuck = true, vernon = true }
+
+-- ("obj_useMolly" is Molly too, while the walker on her in Episode 4's classroom is
+-- "obj_mollyFightZombieHallway".)
+local function isFriend(agent)
+  local name = TWDA.agentName(agent):lower():gsub("^obj_", ""):gsub("^use_?", "")
+  return FRIENDS[name] == true
+end
+
 local function refreshTargets()
   local list, parents = {}, {}
   for _, entry in ipairs(TWDA.hotspots and TWDA.hotspots() or {}) do
-    if entry.clickable and not state.shot[entry.agent] then
+    if entry.clickable and not state.shot[entry.agent] and not isFriend(entry.agent) then
       list[#list + 1] = entry
       local ok, parent = pcall(AgentGetParent, entry.agent)
       if ok and parent ~= nil then parents[#parents + 1] = parent end

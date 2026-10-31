@@ -227,6 +227,10 @@ TWDA.onFrame("peek", function()
   if key == lastKey then return end
   lastKey = key
   TWDA.log("peek: " .. key)
+  -- (Moving to the other side with the rifle passes through hiding for a second: "To lean out: A
+  -- left" then sent the player, and the test tool, straight back to the first side. sniper.lua
+  -- says "Other side." once there.)
+  if TWDA.sniperSwitchingSides and TWDA.sniperSwitchingSides() then return end
   -- Queued, so it follows the game's own hint rather than cutting it off.
   TWDA.say("Hiding. To lean out: " .. key)
 end)

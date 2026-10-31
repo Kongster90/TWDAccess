@@ -29,7 +29,11 @@ while ((Get-Date) -lt $end -and $fired -lt $Shots) {
     $text = NewText
     if ($text -match $Stop) { "stopped: $($Matches[0])"; break }
     if ($EnterOn -and $text -match $EnterOn) { Tap 0x0D 60; "Enter on $($Matches[0])" }
-    if ($LeanKey -and $text -match "To lean out") { Tap ([uint16][int][char]$LeanKey.ToUpper()) 80; "lean $LeanKey" }
+    # (The way the mod names first: "To lean out: D right" in the bandit attack's second phase.)
+    if ($LeanKey -and $text -match "To lean out: ([WAD]) ") { $k = $Matches[1]; Tap ([uint16][int][char]$k) 80; "lean $k" }
+    elseif ($LeanKey -and $text -match "To lean out") { Tap ([uint16][int][char]$LeanKey.ToUpper()) 80; "lean $LeanKey" }
+    # (The walkers at the RV come from both sides: "Nothing in sight here. D for the other side.")
+    if ($text -match "([AD]) for the other side") { $k = $Matches[1]; Tap ([uint16][int][char]$k) 80; "side $k" }
     $tones = [regex]::Matches($text, "aimtone: pan=(-?[\d.]+) off=([\d.]+) on=(\w+) behind=(\w+)")
     if ($tones.Count -gt 0) { $last = $tones[$tones.Count - 1] }
     if ($Kick -and $last) {

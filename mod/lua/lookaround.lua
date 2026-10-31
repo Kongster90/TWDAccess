@@ -603,24 +603,53 @@ local function sharedNames()
   local agentsByName = {}
   for _, agent in ipairs(TWDA.upvalue(rawget(G, "Reticle_Update"), "mUseables") or {}) do
     local agentName = TWDA.agentName(agent)
-    if isCharacterAgent(agentName) then
-      if knownNames[agentName] == nil then knownNames[agentName] = gameName(agent) or nodeLabel(agent) end
-      local name = knownNames[agentName]
-      if name then
-        agentsByName[name] = agentsByName[name] or {}
-        agentsByName[name][agentName] = true
-      end
+    if knownNames[agentName] == nil then knownNames[agentName] = gameName(agent) or nodeLabel(agent) end
+    local name = knownNames[agentName]
+    if name then
+      agentsByName[name] = agentsByName[name] or {}
+      agentsByName[name][agentName] = true
     end
   end
   for name, agents in pairs(agentsByName) do
-    if next(agents, next(agents)) ~= nil then shared[name] = true end
+    if next(agents, next(agents)) ~= nil then shared[name] = agents end
   end
   return shared
 end
+local function nameWords(text)
+  local words = {}
+  for word in text:lower():gmatch("%a+") do words[word] = true end
+  return words
+end
 local function distinctName(agentName, name)
-  if not (type(name) == "string" and isCharacterAgent(agentName) and sharedNames()[name]) then return name end
-  local own = prettyName(agentName)
-  return own ~= name and own or name
+  local others = type(name) == "string" and sharedNames()[name] or nil
+  if not others then return name end
+  if isCharacterAgent(agentName) then
+    local own = prettyName(agentName)
+    return own ~= name and own or name
+  end
+  -- Things the game names alike: the Motor Inn's gate and the dumpster gate outside it, both
+  -- "Gate" (obj_motorInnGate, obj_motorInnGateOuter), Episode 3: going out through one and back in
+  -- through the other sounded like a gate that did nothing. The words of its own agent name that
+  -- the others lack go first: "Outer gate".
+  local common = nil
+  for other in pairs(others) do
+    local words = nameWords(prettyName(other))
+    if common == nil then
+      common = words
+    else
+      for word in pairs(common) do
+        if not words[word] then common[word] = nil end
+      end
+    end
+  end
+  local skip = nameWords(name)
+  local extra = {}
+  for word in prettyName(agentName):lower():gmatch("%a+") do
+    if not (common and common[word]) and not skip[word] then extra[#extra + 1] = word end
+  end
+  if #extra == 0 then return name end
+  local distinct = (table.concat(extra, " ") .. " " .. name:lower()):gsub("^%l", string.upper)
+  return distinct
 end
 
 local function displayName(agentName, agent)
