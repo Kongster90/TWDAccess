@@ -3,10 +3,29 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-10-29 about 10:30 (seventeenth session: MICHONNE PLAYED THROUGH overnight, then
+Last updated: 2026-10-31 (seventeenth session: TWD Access 1.0.0 released; before that MICHONNE PLAYED THROUGH overnight, then
 the two Season 1 loose ends in the morning; see the first two items).
 
 ## Start here (where the last session stopped)
+
+- Seventeenth session, release (2026-10-31; user: "go for it. Make one", then chose MIT, version
+  1.0.0 and a published GitHub release): TWD ACCESS 1.0.0 IS RELEASED as a GitHub release (tag
+  v1.0.0, asset TWDAccess-1.0.0.zip) on the private repository. Version 1.0.0 in TWDAccess.csproj
+  and main.lua; LICENSE (MIT, Kongster90) at the root. `python tools/make_release.py` builds
+  build\release\TWDAccess-<version>.zip: a self-contained single-file TWDAccess.exe (dotnet publish
+  -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true;
+  prism.dll is inside it and extracted at run time; checked: "Prism 0.18.3 initialised ... using
+  backend NVDA"), mod\ without devconsole, devtools and discovery, README.txt (release\README.txt,
+  the players' read-me), LICENSE.txt, licenses\prism\ (Prism's NOTICE and the LICENSES folder of
+  tools\prism-windows-x64.zip). Release notes: release\notes-1.0.0.md. Tested from the zip's folder
+  against the real game: it installed the mod (the dev modules in the game folder were removed as
+  stale), started the game, ENTER PASSES THE "CLICK TO BEGIN" TITLE SCREEN (answers checklist item
+  4), the hub menu and Michonne's menu spoke, no module errors.
+  - The installed settings.txt now has devconsole = false and discovery = false (checklist #9). FOR
+    DEVELOPMENT set devconsole = true there again and run tools\dev\restart.ps1 (which installs the
+    dev build, dev modules included). The game folder's dumps\, globals_*.txt and the like were
+    left in place (dev leftovers, not part of the zip).
+  - dist\TWDAccess (the framework-dependent dev build) was rebuilt at 1.0.0 too.
 
 - Seventeenth session, morning of 2026-10-29 (user: "Start loose ends", after Michonne was committed
   as d11ee4e): THE TWO SEASON 1 LOOSE ENDS ARE DONE, tested in Season 1 Save 2 (dev_saves\ep3_bandits
@@ -879,7 +898,7 @@ E. (#14) Long walks are slow and silent (Lee limps: 35 m to Hershel took about 4
    follow the game's own device switch (Menu_UsingJoystick in Season 1). Mod commands (F5 to F11)
    would need a button combination; check which buttons the game leaves free (the touchpad click is
    a candidate) and whether a keyboard press flips the game out of controller mode.
-9. (#9) Before release: set discovery and devconsole to false in the installed settings.txt, delete the
+9. (#9) Done 2026-10-31 (TWD Access 1.0.0 released; see "Start here"). Was: set discovery and devconsole to false in the installed settings.txt, delete the
    TWDAccess\dumps folder in the game directory, and remove the stale TWDAccess\globals_*.txt,
    trap.log and stack_*.luac files.
    The user's release plan (2026-10-24): build a release only after the whole game has been

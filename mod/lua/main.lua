@@ -7,7 +7,7 @@ local MOD_DIR = ... or "TWDAccess/"
 local G = _G
 if rawget(G, "TWDA") then return end
 
-local TWDA = { dir = MOD_DIR, version = "0.1.0" }
+local TWDA = { dir = MOD_DIR, version = "1.0.0" }
 rawset(G, "TWDA", TWDA)
 
 -- Loads MOD_DIR/<name>.lua and returns true plus the module's result, or false plus an error
