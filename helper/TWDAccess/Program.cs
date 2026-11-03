@@ -40,6 +40,11 @@ internal static class Program
             return ModInstaller.Uninstall(gameDir, opts.All);
         }
 
+        if (gameDir != null && OwnWindow.Relaunch(gameDir, args))
+            return 0;
+        // (What OBS's window list shows: "[TWDAccess.exe]: TWD Access".)
+        Console.Title = "TWD Access";
+
         using var speech = new Speech(opts.Backend);
         var server = new LocalServer(opts.Port, speech);
         try

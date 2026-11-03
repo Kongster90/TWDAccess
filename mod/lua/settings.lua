@@ -26,6 +26,9 @@ local defaults = {
   aim = "sound",
   -- How fast the arrow keys turn the bow's aim (mouse pixels a twentieth of a second; Shift: three times).
   bowturn = 16,
+  -- Read by the helper (TWDAccess.exe) as it starts: true opens it in a window of its own, so OBS's
+  -- Application Audio Capture can record its beeps and tones (OwnWindow.cs).
+  streaming = false,
   -- Log what the game's scripts do, for developing the mod.
   discovery = false,
   -- Let the helper run Lua in the game (development only).
@@ -33,7 +36,7 @@ local defaults = {
 }
 
 local order = { "subtitles", "menus", "tooltips", "choices", "choicetimer", "actionscenes", "beacons",
-  "beepvolume", "aim", "bowturn", "discovery", "devconsole" }
+  "beepvolume", "aim", "bowturn", "streaming", "discovery", "devconsole" }
 
 local settings = {}
 for k, v in pairs(defaults) do settings[k] = v end
@@ -73,6 +76,7 @@ function TWDA.saveSettings()
   out:write("# beepvolume: how loud the beeps are, 10 to 150 percent (100); F3 raises it, Shift+F3 lowers it\n")
   out:write("# aim: sound (arrows aim, a tone guides) or auto (the mod aims): the bow, the shotgun and the rifle scope\n")
   out:write("# bowturn: how fast the arrows start turning the bow's aim (16; higher is faster; held, they speed up)\n")
+  out:write("# streaming: true opens TWD Access in a window of its own, so OBS can record its sounds; takes effect when TWD Access next starts\n")
   for _, key in ipairs(order) do
     out:write(("%s = %s\n"):format(key, tostring(settings[key])))
   end

@@ -87,6 +87,9 @@ Notepad. Most of them also have a key above.
   beepvolume     How loud the beeps are, in percent (F3).
   aim            sound (you aim by the tone) or auto (the mod aims for you).
   bowturn        How fast the arrow keys turn the bow in The Final Season.
+  streaming      true opens TWD Access in a window of its own, so OBS can record its beeps and
+                 tones: add an Application Audio Capture and pick the window marked
+                 [TWDAccess.exe]. Takes effect the next time TWDAccess.exe starts.
   menus, tooltips, choices   true or false: read menus, their help lines, and choices.
 
 

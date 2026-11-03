@@ -3,10 +3,30 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-10-31 (seventeenth session: TWD Access 1.0.0 released; before that MICHONNE PLAYED THROUGH overnight, then
-the two Season 1 loose ends in the morning; see the first two items).
+Last updated: 2026-11-02 (eighteenth session: the user playing Season 1 themselves, while streaming;
+the "streaming" setting; see the first item).
 
 ## Start here (where the last session stopped)
+
+- Eighteenth session, 2026-11-02 evening (the user playing Season 1 in THEIR Save 1, streaming with
+  OBS, running dist\TWDAccess): two things came up.
+  - Stuck at the Motor Inn truck: "Handle truck door: Open" does nothing; the door is locked by
+    design (no line, no reaction, so Enter seemed broken; the user declined looking into a "nothing
+    happened" cue for now). They had never leaned left (A) at the first wall, where the pillow is;
+    told them the order in "Episode 1 notes" (The Motor Inn).
+  - OBS could not record the mod's tones: Tones.cs plays through waveOut in TWDAccess.exe, and on
+    Windows 11 its console window belongs to WindowsTerminal.exe, so the user's Application Audio
+    Capture (wasapi_process_output_capture, "TWDAccess", in %APPDATA%\obs-studio\basic\scenes\
+    Untitled.json) captured Windows Terminal. In the classic console (conhost.exe) the window is
+    reported as the program's own (checked: Process.MainWindowHandle of cmd.exe under conhost).
+    NEW SETTING streaming (settings.lua, default false; the helper reads it from the game folder's
+    settings.txt): with true, OwnWindow.cs starts the helper again through conhost.exe with the same
+    arguments (env TWDACCESS_OWN_WINDOW stops a loop; skipped when output is redirected or the
+    process already has a window) and the first copy exits; the helper's window is titled "TWD
+    Access" (OBS lists "[TWDAccess.exe]: TWD Access"). README updated. TESTED with the user's OK:
+    dist rebuilt, streaming = true put in the user's settings.txt, started like a double-click: it
+    reopened in conhost, one TWDAccess.exe with its own window, game found (not relaunched). Not
+    yet heard through OBS by the user.
 
 - Seventeenth session, release (2026-10-31; user: "go for it. Make one", then chose MIT, version
   1.0.0 and a published GitHub release): TWD ACCESS 1.0.0 IS RELEASED as a GitHub release (tag
