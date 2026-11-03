@@ -5,6 +5,7 @@ the end of each session.
 
 Last updated: 2026-11-03 (eighteenth session: the user playing Season 1 themselves, while streaming;
 the "streaming" setting, released as TWD Access 1.1.0; fixes for the game's other languages,
+committed as 31af1dc, not released; the later seasons tested in French, a small text.lua change
 uncommitted; see the first item).
 
 ## Start here (where the last session stopped)
@@ -56,7 +57,7 @@ uncommitted; see the first item).
     - The French key hint "Regarder par-dessus le mur (Z)" is for AZERTY; on QWERTY the mod's W
       works and Z does nothing. AZERTY keyboards not tried.
     - Dialog choices not reached (none in that stretch).
-  - 2026-11-03, the language FIXES (user: "Yes, go ahead"), UNCOMMITTED (ask first), NOT RELEASED:
+  - 2026-11-03, the language FIXES (user: "Yes, go ahead"), COMMITTED as 31af1dc, NOT RELEASED:
     - LangGetCurLanguage() gives "english", "french", "russian", "chinese" (Simplified)...:
       TWDA.language() / TWDA.isEnglish() in text.lua. LocalizationGetAllInstalledLanguages() lists
       nine. The game's own tooltip: Italian only in Season One and The Final Season, Traditional
@@ -89,6 +90,37 @@ uncommitted; see the first item).
       put back byte-identical; game and helper closed; dist\TWDAccess and the game folder hold the
       new build. Not tried: other seasons in another language, dialog choices, a real Chinese or
       Russian voice in NVDA.
+  - 2026-11-03, the later seasons in French (user: "Yes, test it"), text.lua change UNCOMMITTED:
+    - The look-vs-do code (Reticle_UpdateActionIcons, ICON_VERBS) is Season 1's (and 400 Days')
+      only: Reticle_UpdateActionIcons is nil in The Final Season's play and in Season 2's state.
+      Season 2, A New Frontier and Michonne (lookaround2.lua) do verbs[1] on Enter, number keys for
+      the rest; The Final Season (lookaround4.lua) uses the game's own Useable_OnButtonUse. So no
+      English verb words decide anything there.
+    - Listing icons: ResourceGetNames("*useicon*") / ("*icon*.d3dtx") once a season's archives are
+      on (Season 1 and A New Frontier from their menus; Season 2, The Final Season and Michonne
+      only in play, or ResourceSetEnable("WalkingDead201") etc. from the menu). Season 1: 134
+      ui_useicon_* (mostly items), plus ui_icon_eye/_ear/_talk/_kick/_hand. Season 2 and A New
+      Frontier use ui_icon_<camelCase> (eye, listen, talk, walk, punch, kick, hitHead...). The Final
+      Season and Michonne: no action icon textures found. text.lua now also matches ui_icon_ and
+      maps kick (not tested in a scene).
+    - TESTED in French: Season 2 from dev_saves\s2_ep2_cabinnight (saves.txt line must say
+      CabinInterior.lua, or the bootstrap loads the slot's recorded scene): dialog choices read and
+      picked by number ("Choices. 1: Je n'ai pas ouvert la porte ! ..."), "Sarah s'en souviendra.",
+      then LakeWoodsClearing: "Portes de camion: Regarder. Scie à métaux: Attraper", Tab, Enter
+      ("Attraper Scie à métaux, walking there"). The Final Season: menus and episode screen in French
+      ("Continuer Épisode 1"); dev_saves\s4_ep1_school loaded BoardingSchoolDorm.lua (saves.txt) with
+      nothing usable (Useable_GetCount 0), so no hotspot test there. A New Frontier and Michonne:
+      not played (same module as Season 2).
+    - Still English-only (cosmetic): lookaround4 nameOf's "^No " state check ("No walker in range"
+      is said without the trap's name in other languages) and its English preposition list; the
+      silent choice is "Say nothing"; menus.lua's "Paused" header.
+    - Archives per language (Archives\WDC_pc_<Lang>ProjectSeason<N>): Chinese and Russian 1-4 and
+      Michonne; French, German, Spanish, Portuguese 1-4; Italian 1, 2 and 4; Traditional Chinese 3,
+      4 and Michonne.
+    - Restored byte-identical afterwards (backup in that session's scratchpad\seasons-backup):
+      prefs.prop (English), every Save 2 file, global.bundle, menu.bundle, ttcd.prop, saves.txt,
+      settings.txt (devconsole = false); one English start checked the build (no module errors);
+      game and helper closed.
 
 - Seventeenth session, release (2026-10-31; user: "go for it. Make one", then chose MIT, version
   1.0.0 and a published GitHub release): TWD ACCESS 1.0.0 IS RELEASED as a GitHub release (tag

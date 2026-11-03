@@ -150,7 +150,7 @@ end
 -- them. In English nothing is noted.
 local ICON_VERBS = { eye = "Look", ear = "Listen", talk = "Talk", sneak = "Move To", walk = "Move To",
   punch = "Punch", punchglass = "Punch", headbutt = "Headbutt", kickwindow = "Kick", hatchetchop = "Chop",
-  pistolshoot = "Shoot", zombiehead_smashleft = "Smash", zombiehead_smashright = "Smash" }
+  pistolshoot = "Shoot", zombiehead_smashleft = "Smash", zombiehead_smashright = "Smash", kick = "Kick" }
 -- Verb properties that are not what English shows: the Motor Inn's stations "Go", shown "Move To".
 local PROP_VERBS = { go = "Move To" }
 local englishVerbs = {} -- shown text -> English
@@ -165,7 +165,9 @@ end
 function TWDA.noteVerbIcon(shown, icon)
   if icon == nil then return end
   local ok, name = pcall(ResourceGetName, icon)
-  local word = ok and type(name) == "string" and ICON_VERBS[name:match("^ui_useicon_(.-)%.d3dtx$") or ""]
+  -- (Season 1's archives also hold ui_icon_eye, _ear, _talk and _kick, the later seasons' spelling.)
+  local word = ok and type(name) == "string"
+    and ICON_VERBS[name:match("^ui_useicon_(.-)%.d3dtx$") or name:match("^ui_icon_(.-)%.d3dtx$") or ""]
   if word then TWDA.noteVerb(shown, word) end
 end
 
