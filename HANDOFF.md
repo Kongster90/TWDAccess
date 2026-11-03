@@ -3,8 +3,8 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-11-02 (eighteenth session: the user playing Season 1 themselves, while streaming;
-the "streaming" setting; see the first item).
+Last updated: 2026-11-03 (eighteenth session: the user playing Season 1 themselves, while streaming;
+the "streaming" setting, released as TWD Access 1.1.0; see the first item).
 
 ## Start here (where the last session stopped)
 
@@ -27,6 +27,12 @@ the "streaming" setting; see the first item).
     dist rebuilt, streaming = true put in the user's settings.txt, started like a double-click: it
     reopened in conhost, one TWDAccess.exe with its own window, game found (not relaunched). Not
     yet heard through OBS by the user.
+  - 2026-11-03 (user: "push and have it in as a new release. I'm thinking about making it public
+    sometime today"): TWD ACCESS 1.1.0 RELEASED (tag v1.1.0, TWDAccess-1.1.0.zip, notes in
+    release\notes-1.1.0.md; version in TWDAccess.csproj, main.lua and README.txt). The zip was
+    tested from its unzipped folder against the running game (same result as above), then
+    dist\TWDAccess rebuilt at 1.1.0 and started again for the user. Going public is still the
+    user's call; two early commits carry their Gmail address as author (told them).
 
 - Seventeenth session, release (2026-10-31; user: "go for it. Make one", then chose MIT, version
   1.0.0 and a published GitHub release): TWD ACCESS 1.0.0 IS RELEASED as a GitHub release (tag
