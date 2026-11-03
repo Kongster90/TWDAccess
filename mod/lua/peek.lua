@@ -106,7 +106,7 @@ local function announceNewlyUsable()
   for _, entry in ipairs(TWDA.hotspots()) do
     -- (Not people to talk to: in the bandit attack at the Motor Inn, Episode 3, Clementine, Duck
     -- and Katjaa are in view from cover, and talking is not what the hiding is for.)
-    local verb = tostring(TWDA.hotspotVerb and TWDA.hotspotVerb(entry.agent) or ""):lower()
+    local verb = tostring(TWDA.englishVerb(TWDA.hotspotVerb and TWDA.hotspotVerb(entry.agent) or "")):lower()
     if entry.clickable and entry.side == nil and not verb:find("talk", 1, true) then
       current[entry.name] = true
       if first or not usable[entry.name] then fresh[#fresh + 1] = entry end

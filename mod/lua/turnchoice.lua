@@ -35,9 +35,10 @@ local function isPerson(agent)
   if okLee and agent == lee then return false end
   -- (Not the walkers hanging on: "Zombie" has a name of its own too.)
   local shown = tostring(TWDA.hotspotName(agent) or ""):lower()
-  if shown:find("zombie") or shown:find("walker") or shown == "lee" then return false end
+  local words = TWDA.hotspotWords(agent)
+  if words:find("zombie") or words:find("walker") or shown == "lee" then return false end
   local verb = TWDA.hotspotVerb(agent)
-  if type(verb) == "string" and verb:lower():find("^talk") then return true end
+  if type(verb) == "string" and TWDA.englishVerb(verb):lower():find("^talk") then return true end
   local name = TWDA.agentName(agent) or ""
   return not name:lower():find("^obj_") and not name:lower():find("trigger") and TWDA.isFightTarget ~= nil
     and not TWDA.isFightTarget(agent)

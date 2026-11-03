@@ -109,9 +109,7 @@ local function describeWidget(widget)
     if text then
       -- "Episode 1 Ties That Bind PART ONE" (A New Frontier): a run of capitals words reads as
       -- words (a lone "AJ" stays).
-      text = text:gsub("%u%u+ [%u ]*%u%u", function(run)
-        return (run:gsub("(%u)(%u+)", function(first, rest) return first .. rest:lower() end))
-      end)
+      text = TWDA.capitalRuns(text)
       -- Its subtitle repeats "Episode 1" from the title.
       local repeated = false
       for _, part in ipairs(parts) do

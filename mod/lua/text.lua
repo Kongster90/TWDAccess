@@ -132,6 +132,78 @@ function TWDA.isPlaceholder(text)
     or lower:find("^[a-z]+$") ~= nil and #lower > 20 and not lower:find("[aeiou][aeiou]")
 end
 
+-- The language the game shows its text in: "english", "french", "russian", "chinese"... (the
+-- Display Text setting).
+function TWDA.language()
+  local ok, language = pcall(LangGetCurLanguage)
+  return ok and type(language) == "string" and language:lower() or "english"
+end
+
+function TWDA.isEnglish()
+  return TWDA.language() == "english"
+end
+
+-- What an action is in English, for the mod's checks on it (looking, talking, a blow), which go by
+-- English words. The game shows actions in the player's language, but a hotspot's verb property
+-- is English underneath ("Look At", shown "Regarder" in French), and an action icon's picture says
+-- what it is (ui_useicon_eye.d3dtx). The mod notes each shown text with its English as it meets
+-- them. In English nothing is noted.
+local ICON_VERBS = { eye = "Look", ear = "Listen", talk = "Talk", sneak = "Move To", walk = "Move To",
+  punch = "Punch", punchglass = "Punch", headbutt = "Headbutt", kickwindow = "Kick", hatchetchop = "Chop",
+  pistolshoot = "Shoot", zombiehead_smashleft = "Smash", zombiehead_smashright = "Smash" }
+-- Verb properties that are not what English shows: the Motor Inn's stations "Go", shown "Move To".
+local PROP_VERBS = { go = "Move To" }
+local englishVerbs = {} -- shown text -> English
+
+function TWDA.noteVerb(shown, english)
+  if type(shown) ~= "string" or type(english) ~= "string" or english == "" or shown == english then return end
+  if TWDA.isEnglish() then return end
+  english = english:match("^[Vv]erb_(.+)$") or english -- (a key: "verb_break")
+  englishVerbs[shown] = PROP_VERBS[english:lower()] or english
+end
+
+function TWDA.noteVerbIcon(shown, icon)
+  if icon == nil then return end
+  local ok, name = pcall(ResourceGetName, icon)
+  local word = ok and type(name) == "string" and ICON_VERBS[name:match("^ui_useicon_(.-)%.d3dtx$") or ""]
+  if word then TWDA.noteVerb(shown, word) end
+end
+
+function TWDA.englishVerb(shown)
+  return englishVerbs[shown] or shown
+end
+
+-- Lua's own case functions only know A to Z. The game's text is UTF-8, and its other languages
+-- have capitals of two bytes: the accented Latin ones (À to Þ, not ×), Œ, and Cyrillic (Ѐ to Я).
+function TWDA.lower(text)
+  text = text:lower():gsub("\195([\128-\150\152-\158])", function(b) return "\195" .. string.char(b:byte() + 32) end)
+  text = text:gsub("\197\146", "\197\147")
+  return (text:gsub("\208([\128-\175])", function(b)
+    local c = b:byte()
+    if c >= 0x90 and c <= 0x9F then return "\208" .. string.char(c + 32) end -- А to П
+    if c >= 0xA0 then return "\209" .. string.char(c - 32) end -- Р to Я
+    return "\209" .. string.char(c + 16) -- Ѐ to Џ
+  end))
+end
+
+-- The text with each capital as "A" and each small letter as "a", byte for byte, so that %u and %l
+-- see the two-byte letters too ("ÉPISODE" -> "AAPISODE"). (ß has no capital: it is neither.)
+local function caseShape(text)
+  return (text:gsub("\195[\128-\150\152-\158]", "AA"):gsub("\197\146", "AA"):gsub("\208[\128-\175]", "AA")
+    :gsub("\195[\160-\182\184-\191]", "aa"):gsub("\197\147", "aa"):gsub("\208[\176-\191]", "aa")
+    :gsub("\209[\128-\159]", "aa"))
+end
+
+-- A word with its first letter kept and the rest in small letters ("ÉPISODE" -> "Épisode"). A
+-- letter here is A to Z, or a character of the Latin, Cyrillic or Chinese ranges (not punctuation
+-- such as « or a curly quote).
+local function capitalized(word)
+  local s = word:find("[%a\195-\223\228-\233]")
+  if not s then return word end
+  local first = word:match("^.[\128-\191]*", s)
+  return word:sub(1, s + #first - 1) .. TWDA.lower(word:sub(s + #first))
+end
+
 -- "THE WALKING DEAD: SEASON TWO" -> "The Walking Dead: Season Two". Only for text with no lower-case
 -- letters at all, which speech would otherwise often spell out.
 local KEEP_CAPS = { CEO = true, CTO = true, CFO = true, COO = true, SVP = true, VP = true, EVP = true, EMEA = true,
@@ -139,13 +211,35 @@ local KEEP_CAPS = { CEO = true, CTO = true, CFO = true, COO = true, SVP = true, 
   CD = true, DVD = true, RV = true, OK = true, AJ = true }
 
 function TWDA.normalCaps(text)
-  if type(text) ~= "string" or text:find("%l") or not text:find("%u%u") then return text end
+  if type(text) ~= "string" then return text end
+  local shape = caseShape(text)
+  if shape:find("%l") or not shape:find("%u%u") then return text end
   -- (A curly apostrophe is part of the word: "IN HARM’S WAY" is "In Harm's Way", not "Harm’S".)
   text = text:gsub("\226\128\153", "'")
-  return (text:gsub("(%a)([%w']*)", function(first, rest)
-    if KEEP_CAPS[first .. rest] then return first .. rest end
-    return first .. rest:lower()
+  return (text:gsub("[%w'\128-\255]+", function(word)
+    if KEEP_CAPS[word] then return word end
+    return capitalized(word)
   end))
+end
+
+-- "Episode 1 Ties That Bind PART ONE" (A New Frontier) -> "... Part One": a run of words in capitals
+-- inside other text reads as words. (A lone "AJ" stays.)
+function TWDA.capitalRuns(text)
+  local shape = caseShape(text)
+  local out, at = {}, 1
+  for first, last in shape:gmatch("()%u%u+ [%u ]*%u%u()") do
+    out[#out + 1] = text:sub(at, first - 1)
+    out[#out + 1] = (text:sub(first, last - 1):gsub("[^ ]+", capitalized))
+    at = last
+  end
+  out[#out + 1] = text:sub(at)
+  return table.concat(out)
+end
+
+-- Whether text ends a sentence: with . ! ? : or the same in Chinese (。！？：) or an ellipsis (…).
+local function endsSentence(text)
+  return text:find("[%.!?:]$") ~= nil or text:find("\227\128\130$") ~= nil or text:find("\239\188[\129\154\159]$") ~= nil
+    or text:find("\226\128\166$") ~= nil
 end
 
 -- Joins phrases into sentences without doubling punctuation ("trust?." -> "trust?").
@@ -156,7 +250,7 @@ function TWDA.joinSentences(parts, separator)
     if part and part ~= "" then
       if out == "" then
         out = part
-      elseif out:find("[%.!?:]$") then
+      elseif endsSentence(out) then
         out = out .. " " .. part
       else
         out = out .. separator .. part

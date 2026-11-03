@@ -4,7 +4,8 @@ Read this first. It is written for the next agent picking up this project, and k
 the end of each session.
 
 Last updated: 2026-11-03 (eighteenth session: the user playing Season 1 themselves, while streaming;
-the "streaming" setting, released as TWD Access 1.1.0; see the first item).
+the "streaming" setting, released as TWD Access 1.1.0; fixes for the game's other languages,
+uncommitted; see the first item).
 
 ## Start here (where the last session stopped)
 
@@ -33,6 +34,61 @@ the "streaming" setting, released as TWD Access 1.1.0; see the first item).
     tested from its unzipped folder against the running game (same result as above), then
     dist\TWDAccess rebuilt at 1.1.0 and started again for the user. Going public is still the
     user's call; two early commits carry their Gmail address as author (told them).
+  - 2026-11-03, other languages (user: "Sure, why not, go for it"): the hub's Settings > Languages
+    > Display Text (one row; Left/Right: English, Traditional Chinese, German, Russian, Spanish,
+    Portuguese, Italian, French, Simplified Chinese), then Escape > "Language Changed" popup >
+    Apply restarts the main menu. The language is kept in Documents\Telltale Games\The Walking Dead
+    Definitive\prefs.prop. Tested FRENCH in Season 1 Save 2 from dev_saves\motorinn (pillow, truck,
+    smother, car door, spark plug). Then everything was put back byte-identical (prefs.prop, Save 2
+    = dev_saves\s1_slot2_before_aimtones, saves.txt, settings.txt with devconsole = false); game
+    and helper left closed. Findings (the first three FIXED the same day, below):
+    - Works: hub and Season 1 menus, save slots, episode screen, names and verbs of things,
+      subtitles, all in French (game text). The mod's own words stay English ("Main menu",
+      "Hiding. To lean out", "Get back now", "Keys:", "Carrying:"); inventory names come from
+      agent names, so English ("Got pillow", "sparkplug").
+    - looksOnly (lookaround.lua) matches English verbs only: Enter on "Camion: 1 Regarder, 2 Se
+      déplacer vers" LOOKED (English: Move To). "Examiner" and "Observer" match by luck ("^examine",
+      "^observe"), so Smother was chosen right. Needs a language-free signal (the action's icon?).
+    - TWDA.normalCaps (text.lua) and the run-of-capitals fix in menus.lua are ASCII-only: "PARAMÈTRES"
+      was read "ParamÈTres", "ÉPISODE" "ÉPisode" (UTF-8 capitals are not %u/%a).
+    - distinctName mixes English agent words into French names ("Car motor inn porte", "Car push
+      hint voiture"): the skip list is the localized name's words.
+    - The French key hint "Regarder par-dessus le mur (Z)" is for AZERTY; on QWERTY the mod's W
+      works and Z does nothing. AZERTY keyboards not tried.
+    - Dialog choices not reached (none in that stretch).
+  - 2026-11-03, the language FIXES (user: "Yes, go ahead"), UNCOMMITTED (ask first), NOT RELEASED:
+    - LangGetCurLanguage() gives "english", "french", "russian", "chinese" (Simplified)...:
+      TWDA.language() / TWDA.isEnglish() in text.lua. LocalizationGetAllInstalledLanguages() lists
+      nine. The game's own tooltip: Italian only in Season One and The Final Season, Traditional
+      Chinese only in The Final Season, A New Frontier and Michonne.
+    - Look vs do: a hotspot's kVerb prop ("WDUseable - Verb") is English in every language ("Look
+      At", "Go", "Talk to", "Take"; Dialog_GetText translates it), and each action choice carries
+      "Choice Icon", whose ResourceGetName is language-free (ui_useicon_eye.d3dtx = look; the
+      Season 1 list has talk, punch, headbutt, pistolshoot, hatchetchop, sneak, walk...). text.lua
+      notes shown text -> English (TWDA.noteVerb from gameVerb, TWDA.noteVerbIcon from the
+      Reticle_UpdateActionIcons hook and actionsOf; nothing noted in English), and TWDA.englishVerb
+      is now used by looksOnly, isBlow, the "talk" and threat checks (lookaround.lua), the talk
+      checks in actions.lua, peek.lua and turnchoice.lua, and firstUseAction's "shoot".
+    - Kinds of things by name (door, gate, ladder, zombie...): TWDA.hotspotWords / kindWords add
+      the agent name's words outside English (nearestWayOut, doorUse, actions.lua wayThrough,
+      turnchoice isPerson).
+    - Capitals: TWDA.lower (Latin-1 capitals, Œ, Cyrillic, by UTF-8 bytes), caseShape (same-length
+      A/a mask so %u/%l see two-byte letters), normalCaps rewritten, TWDA.capitalRuns replaces the
+      menus.lua gsub. joinSentences knows 。！？： and … (no "而战。. Left").
+    - Alike names outside English: numbered by sorted agent name ("Porte 1", "Fenêtre 2", "Oreiller
+      2"), only where the English rule would add words (zombies stay "Zombie"). English unchanged.
+    - actions.lua mentioned(): words with two-byte letters ("fenêtre") match subtitle lines.
+    - TESTED in Season 1 Save 2 (dev_saves\motorinn, saves.txt line env_motorInn_stealthMission.lua)
+      in French (Enter after the lean-right announcement now does "Se déplacer vers"; "Paramètres",
+      "Épisode 1 : Un Nouveau Jour"), Russian ("Выбор Сезона"; all Motor Inn verbs mapped) and
+      Simplified Chinese (text reaches speech intact; "拳打" = Punch), then English again (truck,
+      names such as "Car motor inn door" as before; no hook errors). Language switching: hub
+      Settings > Languages; the first Left/Right only focuses the row. Copies of prefs.prop per
+      language are in that session's scratchpad only. Afterwards prefs.prop (English), Save 2
+      (dev_saves\s1_slot2_before_aimtones), saves.txt and settings.txt (devconsole = false) were
+      put back byte-identical; game and helper closed; dist\TWDAccess and the game folder hold the
+      new build. Not tried: other seasons in another language, dialog choices, a real Chinese or
+      Russian voice in NVDA.
 
 - Seventeenth session, release (2026-10-31; user: "go for it. Make one", then chose MIT, version
   1.0.0 and a published GitHub release): TWD ACCESS 1.0.0 IS RELEASED as a GitHub release (tag

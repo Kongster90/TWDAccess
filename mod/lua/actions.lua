@@ -251,7 +251,7 @@ end
 local recentLines = {} -- { text (lower case), at }
 TWDA.onSubtitle = TWDA.onSubtitle or {}
 TWDA.onSubtitle.actions = function(_, text)
-  table.insert(recentLines, 1, { text = tostring(text):lower(), at = TWDA.now() })
+  table.insert(recentLines, 1, { text = TWDA.lower(tostring(text)), at = TWDA.now() })
   recentLines[6] = nil
 end
 
@@ -261,8 +261,9 @@ local function mentioned(entry, within)
   local name = TWDA.hotspotName and TWDA.hotspotName(entry.agent) or entry.name
   for _, line in ipairs(recentLines) do
     if TWDA.now() - line.at < (within or 8) then
-      for word in tostring(name):lower():gmatch("%a+") do
-        if #word >= 3 and line.text:find("%f[%a]" .. word) then return true end
+      -- (Letters of two bytes count as letters: "fenêtre" is one word.)
+      for word in TWDA.lower(tostring(name)):gmatch("[%a\128-\255]+") do
+        if #word >= 3 and line.text:find("%f[%a\128-\255]" .. word) then return true end
       end
     end
   end
@@ -276,7 +277,7 @@ function TWDA.orderByUrgency(entries)
   local okFocus, focused = pcall(Reticle_GetAgentFocused)
   local function rank(entry)
     local verb = soleVerb(entry.agent)
-    verb = type(verb) == "string" and verb:lower() or ""
+    verb = type(verb) == "string" and TWDA.englishVerb(verb):lower() or ""
     if verb:find("^talk") then return 3 end
     if lookOnly(verb) then return 2 end
     -- (Only for things to do: people's names are said all the time.)
@@ -365,7 +366,7 @@ TWDA.onFrame("actions", function()
   fresh = pick(function(entry)
     if entry.place then return false end
     local verb = soleVerb(entry.agent)
-    return entry.clickable or not (type(verb) == "string" and verb:lower():find("^talk"))
+    return entry.clickable or not (type(verb) == "string" and TWDA.englishVerb(verb):lower():find("^talk"))
   end)
   local first = pick(function(entry) return entry.clickable end)
   -- The game can count things as usable whose marker is just off screen (the tree, the stick and
@@ -441,7 +442,7 @@ TWDA.onFrame("actions", function()
       for _, entry in ipairs(list) do
         local verb = soleVerb(entry.agent)
         if entry.clickable and entry.side == nil and not lookOnly(verb)
-          and not (type(verb) == "string" and verb:lower():find("^talk")) then
+          and not (type(verb) == "string" and TWDA.englishVerb(verb):lower():find("^talk")) then
           local okTo, to = pcall(AgentGetWorldPos, entry.agent)
           local okD, d = pcall(VectorDistance, okLee and from or nil, okTo and to or nil)
           local score = (okD and type(d) == "number" and d or 1000) + (named(entry) and 0 or 10000)
@@ -612,7 +613,7 @@ TWDA.onFrame("sceneoffers", function()
         local new = {}
         local set = {}
         for _, action in ipairs(actions) do
-          if seen and not seen[tostring(action)] and not lookOnly(action) and not tostring(action):lower():find("^talk") then
+          if seen and not seen[tostring(action)] and not lookOnly(action) and not tostring(TWDA.englishVerb(action)):lower():find("^talk") then
             new[#new + 1] = action -- (not "Talk To", which Clementine regains after each smear in Episode 5)
           end
           set[tostring(action)] = true
@@ -646,7 +647,7 @@ TWDA.onFrame("sceneoffers", function()
     local here, named = {}, nil
     for _, entry in ipairs(TWDA.hotspots()) do
       local verb = soleVerb(entry.agent)
-      local talk = type(verb) == "string" and verb:lower():find("^talk")
+      local talk = type(verb) == "string" and TWDA.englishVerb(verb):lower():find("^talk")
       -- (Not the thing just used: the door propped open in the train station, Episode 3, offers
       -- "Open" again, which takes the tool back and shuts it.)
       local justUsed = TWDA.lastUse and TWDA.lastUse.name == entry.name and now - TWDA.lastUse.at < 15
@@ -660,8 +661,8 @@ TWDA.onFrame("sceneoffers", function()
         end
         return false
       end
-      if not justUsed and TWDA.lastUse and now - TWDA.lastUse.at < 15 and wayThrough(TWDA.lastUse.label)
-        and wayThrough(TWDA.hotspotName(entry.agent)) then
+      if not justUsed and TWDA.lastUse and now - TWDA.lastUse.at < 15 and wayThrough(TWDA.lastUse.words)
+        and wayThrough(TWDA.hotspotWords(entry.agent)) then
         justUsed = true
       end
       -- (A door that changes the scene starts a new Lua state, where the door just used is
@@ -669,7 +670,7 @@ TWDA.onFrame("sceneoffers", function()
       -- and the hallway in Crawford, Episode 4: "Nurse's Office: Enter" and "Hallway Door: Use"
       -- offered in turn, and the game crashed during one of the quick scene changes.)
       if not justUsed and now - stateStartedAt < 20 then
-        local label = tostring(TWDA.hotspotName(entry.agent) or ""):lower()
+        local label = TWDA.hotspotWords(entry.agent)
         if wayThrough(label) or label:find("office", 1, true) or label:find("room", 1, true) then justUsed = true end
       end
       if entry.clickable and entry.side == nil and not lookOnly(verb) and not talk and not justUsed then

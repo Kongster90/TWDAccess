@@ -38,10 +38,11 @@ local function call(name, ...)
   return nil
 end
 
--- Actions that only look ("Look At", "Examine", "Observe", "Inspect"), as opposed to doing.
+-- Actions that only look ("Look At", "Examine", "Observe", "Inspect"), as opposed to doing. (In
+-- other languages, by their English: TWDA.englishVerb.)
 local function looksOnly(verb)
   if type(verb) ~= "string" then return false end
-  verb = verb:lower()
+  verb = TWDA.englishVerb(verb):lower()
   return verb:find("^look") ~= nil or verb:find("^examine") ~= nil or verb:find("^observe") ~= nil
     or verb:find("^inspect") ~= nil
 end
@@ -540,7 +541,8 @@ local function gameVerb(agent)
   -- Usually plain text already ("Look At", "Take"); otherwise a dialog text key. Empty when the
   -- hotspot offers several actions (only shown once it is focused).
   local okText, text = pcall(Dialog_GetText, verb, agent)
-  if not (okText and type(text) == "string" and text ~= "") then text = type(verb) == "string" and verb or nil end
+  local translated = okText and type(text) == "string" and text ~= ""
+  if not translated then text = type(verb) == "string" and verb or nil end
   if not text then return nil end
   -- "Cs" marks things that play a short scene when looked at (the walkers seen from cover at the
   -- Motor Inn).
@@ -551,7 +553,10 @@ local function gameVerb(agent)
     word = word:gsub("(%l)(%u)", "%1 %2"):gsub("_", " ")
     text = word:sub(1, 1):upper() .. word:sub(2)
   end
-  return TWDA.cleanText(text)
+  text = TWDA.cleanText(text)
+  -- (The property is English: "Look At" for "Regarder".)
+  if translated and type(verb) == "string" then TWDA.noteVerb(text, verb) end
+  return text
 end
 
 -- Targets in fights (the reticle in combat mode, such as the babysitter's face to punch) have no
@@ -648,6 +653,17 @@ local function distinctName(agentName, name)
     if not (common and common[word]) and not skip[word] then extra[#extra + 1] = word end
   end
   if #extra == 0 then return name end
+  -- In other languages those English words would mix in ("Car motor inn porte"): the things are
+  -- numbered instead, in the order of their agent names ("Porte 2").
+  if not TWDA.isEnglish() then
+    local sorted = {}
+    for other in pairs(others) do sorted[#sorted + 1] = other end
+    table.sort(sorted)
+    for i, other in ipairs(sorted) do
+      if other == agentName then return name .. " " .. i end
+    end
+    return name
+  end
   local distinct = (table.concat(extra, " ") .. " " .. name:lower()):gsub("^%l", string.upper)
   return distinct
 end
@@ -667,6 +683,15 @@ local function displayName(agentName, agent)
   return distinctName(agentName, name)
 end
 
+-- A hotspot's name in small letters for the checks on what kind of thing it is (a door, a gate),
+-- which go by English words: in other languages its agent name's words are added ("porte door car
+-- motor inn" for obj_doorCarMotorInn).
+local function kindWords(agentName, label)
+  label = tostring(label or "")
+  if not TWDA.isEnglish() then label = label .. " " .. prettyName(agentName) end
+  return TWDA.lower(label)
+end
+
 -- The nearest thing within 3 meters, a way out (door, ladder, stairs, gate, hatch, exit) before
 -- anything else: from inside the boxcar or the train's cab (Episode 3) only the door leads
 -- anywhere, with Kenny standing closer. Returns the list entry and its distance, or nil.
@@ -675,7 +700,7 @@ local function nearestWayOut(exceptName)
   for _, entry in ipairs(hotspots()) do
     local d = entry.name ~= exceptName and distanceTo(entry.agent)
     if d and d <= 3 then
-      local label = displayName(entry.name, entry.agent):lower()
+      local label = kindWords(entry.name, displayName(entry.name, entry.agent))
       local exit = label:find("door", 1, true) or label:find("ladder", 1, true) or label:find("stair", 1, true)
         or label:find("gate", 1, true) or label:find("hatch", 1, true) or label:find("exit", 1, true)
       if (exit and not nearestExit) or (exit or not nearestExit) and d < nearestDistance then
@@ -821,7 +846,7 @@ TWDA.hookBefore("ReticleUI_Contract", function() contractedAt = TWDA.now() end)
 local lastUsed = { name = nil, at = -10 }
 -- A blow or a shot ("Punch", "Shoot"): taken again at the same thing, it means another go.
 local function isBlow(verb)
-  verb = tostring(verb or ""):lower()
+  verb = tostring(TWDA.englishVerb(verb or "")):lower()
   for _, word in ipairs({ "punch", "hit", "kick", "stab", "strike", "smash", "bash", "shove", "elbow", "headbutt",
     "stomp", "chop", "shoot", "fire" }) do
     if verb:find("^" .. word) then return true end
@@ -833,7 +858,7 @@ local function checkStrike(focused, actions)
   if call("ReticleUI_InCombatMode") ~= true then
     local name = TWDA.agentName(focused)
     local single = type(actions) == "table" and #actions == 1 and not looksOnly(tostring(actions[1]))
-      and not tostring(actions[1]):lower():find("talk", 1, true)
+      and not tostring(TWDA.englishVerb(actions[1])):lower():find("talk", 1, true)
     -- (Characters only, "zombiePilot": a gate or door is simply offered again after its use; and
     -- not talking: Clementine is offered again when a short talk with her ends. Or a blow at a
     -- part of someone: "Attacker: Punch" on obj_armNate, reaching into the car in 400 Days, takes
@@ -854,7 +879,7 @@ local function checkStrike(focused, actions)
   if TWDA.turnChoiceActive and TWDA.turnChoiceActive() and TWDA.turnChoiceSides then
     local sides = TWDA.turnChoiceSides()
     for _, entry in ipairs(hotspots()) do
-      local verb = tostring(hotspotVerb(entry.agent) or ""):lower()
+      local verb = tostring(TWDA.englishVerb(hotspotVerb(entry.agent) or "")):lower()
       local threat = verb:find("shoot") or verb:find("attack") or verb:find("hit") or verb:find("kill")
         or verb:find("stab") or verb:find("kick") or verb:find("shove") or verb:find("punch") or verb:find("bash")
       if entry.side ~= nil and sides[entry.side] and entry.name ~= name and threat then waiting = true end
@@ -886,7 +911,10 @@ TWDA.hookBefore("Reticle_UpdateActionIcons", function(default, choices, defaultT
     for _, choice in iterate(choices) do
       local text = type(choice) == "table" and (choice["Choice Display Text"] or choice.mVerb) or nil
       text = TWDA.keyOrText(text)
-      if text then actions[#actions + 1] = text end
+      if text then
+        actions[#actions + 1] = text
+        TWDA.noteVerbIcon(text, choice["Choice Icon"])
+      end
     end
   end
   if #actions == 0 then actions[1] = TWDA.keyOrText(defaultText) end
@@ -1069,7 +1097,10 @@ local function actionsOf(agent)
             if tostring(id) == tostring(kid["Node ID"]) and type(display) == "table" then
               local text = display["Choice Display Text"]
               text = TWDA.keyOrText(text) or text
-              if type(text) == "string" and text ~= "" then out[#out + 1] = text end
+              if type(text) == "string" and text ~= "" then
+                out[#out + 1] = text
+                TWDA.noteVerbIcon(text, display["Choice Icon"])
+              end
             end
           end
         end
@@ -1360,9 +1391,10 @@ for _, name in ipairs({ "Main_OnUse", "PathToAndUseAgent" }) do
     local acts = (lastActions and lastActions.name == lastUsed.name) and lastActions.actions or {}
     lastUsed.blow = #acts == 1 and isBlow(acts[1])
     TWDA.lastUse = { name = lastUsed.name, at = lastUseAt, label = displayName(lastUsed.name, agent) }
+    TWDA.lastUse.words = kindWords(lastUsed.name, TWDA.lastUse.label)
     -- A door used where Lee stands may take him through to another room of the same scene without
     -- a sound (the truck stop's Kitchen Doors and Pantry Door, 400 Days): see doorPassed below.
-    local label = TWDA.lastUse.label:lower()
+    local label = TWDA.lastUse.words
     if name == "Main_OnUse" and (label:find("door", 1, true) or label:find("gate", 1, true) or label:find("hatch", 1, true)) then
       doorUse = { label = TWDA.lastUse.label, from = playerPos(), at = lastUseAt }
     end
@@ -1407,7 +1439,7 @@ local function firstUseAction()
   for i, action in ipairs(actionList()) do
     local text = tostring(action)
     if not looksOnly(text) then
-      if not text:lower():find("shoot", 1, true) then return i end
+      if not TWDA.englishVerb(text):lower():find("shoot", 1, true) then return i end
       first = first or i
     end
   end
@@ -2090,6 +2122,10 @@ function TWDA.preferNextTab(name, actionIndex)
   if actionIndex then chosen = { name = name, index = actionIndex } end
 end
 TWDA.hotspotName = function(agent) return displayName(TWDA.agentName(agent), agent) end
+TWDA.hotspotWords = function(agent)
+  local name = TWDA.agentName(agent)
+  return kindWords(name, displayName(name, agent))
+end
 TWDA.hotspotVerb = hotspotVerb
 -- Fight targets (a walker's head, the babysitter's face) have no name of their own in the game.
 TWDA.isFightTarget = function(agent) return gameName(agent) == nil end
