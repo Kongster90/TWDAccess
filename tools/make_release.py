@@ -6,6 +6,7 @@ The zip holds one folder, TWDAccess, with:
     mod\\              the files the helper installs into the game folder, without the development
                       modules (devconsole, devtools, discovery)
     README.txt        the players' read-me (release/README.txt)
+    CHANGES.txt       what changed in each version (release/CHANGES.txt)
     LICENSE.txt       the mod's licence (MIT)
     licenses\\         Prism's NOTICE and the licences of Prism and what it uses
 
@@ -51,6 +52,7 @@ def main() -> None:
         pdb.unlink()
 
     shutil.copy(ROOT / "release" / "README.txt", STAGE / "README.txt")
+    shutil.copy(ROOT / "release" / "CHANGES.txt", STAGE / "CHANGES.txt")
     shutil.copy(ROOT / "LICENSE", STAGE / "LICENSE.txt")
     licenses = STAGE / "licenses"
     licenses.mkdir()

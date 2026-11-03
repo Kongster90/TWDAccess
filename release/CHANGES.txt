@@ -1,0 +1,49 @@
+TWD Access: what changed in each version
+Newest first.
+
+
+1.2.0 (3 November 2026): the game's other languages
+
+The game can be played in French, German, Spanish, Portuguese, Italian, Russian, Simplified
+Chinese and Traditional Chinese as well as English. The mod now works much better in them:
+
+- Season One and 400 Days: Enter does the right action in any language. Before, in French,
+  Enter on the Motor Inn's truck looked at it instead of moving to it. The same goes for the
+  "Again! Enter!" call during a fight, for talking, for which walker to deal with first, and for
+  knowing which things are doors, gates and ladders.
+- Season One and 400 Days: things the game names alike are numbered, "Porte 1" and "Porte 2"
+  (door 1, door 2), instead of getting English words mixed into their names.
+- Every season: words written in capitals are read normally when they have accents or are in
+  Russian, for example "Paramètres" and "Épisode 1" in French, "Выбор Сезона" in Russian.
+  Before, they came out as "ParamÈTres" and "ÉPisode".
+- In Chinese, the mod no longer adds a full stop after the game's own.
+
+Tested in Season One in French, Russian and Simplified Chinese, and in Season Two in French
+(dialog choices, names, Tab and Enter). The Final Season's menus were checked in French. The
+later seasons already did the right action on Enter in any language. English plays as before.
+
+Still in English: the mod's own words, such as "Main menu", "Tab to choose" and "Say nothing".
+
+
+1.1.0 (3 November 2026): the streaming setting
+
+- A new setting, streaming, for streaming or recording with OBS. With streaming = true in the
+  game folder's TWDAccess\settings.txt, TWD Access opens in a window of its own, called
+  "TWD Access", so OBS's Application Audio Capture can record its beeps and tones: pick the
+  window marked [TWDAccess.exe]. It is off by default and takes effect the next time
+  TWDAccess.exe starts.
+
+
+1.0.0 (31 October 2026): the first release
+
+- Every season in the Definitive Series: Season One with 400 Days, Season Two, A New Frontier,
+  The Final Season and Michonne, each played through from start to end with the mod, by ear.
+- Menus, settings, save screens and each episode's choices screen are read in every season.
+- Dialog choices are read as a numbered list: press 1 to 4. Timed choices wait for you.
+- Tab and Shift+Tab move between the things you can use and the places you can walk to; Enter
+  uses one, walking you there first if needed.
+- Quick-time events, struggles, fights, guided paths, drags, hiding and leaning out: the mod
+  says which key to press, and when.
+- Aiming by a tone with the arrow keys: the shotgun and rifle scope in Season One, the bow in
+  The Final Season.
+- Action scenes at normal speed, in slow motion, or played for you (F11).

@@ -4,9 +4,8 @@ Read this first. It is written for the next agent picking up this project, and k
 the end of each session.
 
 Last updated: 2026-11-03 (eighteenth session: the user playing Season 1 themselves, while streaming;
-the "streaming" setting, released as TWD Access 1.1.0; fixes for the game's other languages,
-committed as 31af1dc, not released; the later seasons tested in French, a small text.lua change
-uncommitted; see the first item).
+the "streaming" setting, released as TWD Access 1.1.0; fixes for the game's other languages and
+the later seasons tested in French, released as TWD Access 1.2.0; see the first item).
 
 ## Start here (where the last session stopped)
 
@@ -90,7 +89,14 @@ uncommitted; see the first item).
       put back byte-identical; game and helper closed; dist\TWDAccess and the game folder hold the
       new build. Not tried: other seasons in another language, dialog choices, a real Chinese or
       Russian voice in NVDA.
-  - 2026-11-03, the later seasons in French (user: "Yes, test it"), text.lua change UNCOMMITTED:
+  - 2026-11-03 (user: "Commit and update everything on github. Make it a new release, with the
+    changes in a changes text file"): TWD ACCESS 1.2.0 RELEASED (tag v1.2.0, TWDAccess-1.2.0.zip,
+    notes in release\notes-1.2.0.md; version in TWDAccess.csproj, main.lua and README.txt).
+    New: release\CHANGES.txt (every version, newest first), copied into the zip by
+    make_release.py; README.txt has a LANGUAGES section and points to CHANGES.txt. The zip was
+    tested from its unzipped folder (1.2.0 starting, "Main menu", no module failures), then
+    dist\TWDAccess rebuilt at 1.2.0; prefs.prop, which the game rewrites while running, put back.
+  - 2026-11-03, the later seasons in French (user: "Yes, test it"), committed as 9c3c098:
     - The look-vs-do code (Reticle_UpdateActionIcons, ICON_VERBS) is Season 1's (and 400 Days')
       only: Reticle_UpdateActionIcons is nil in The Final Season's play and in Season 2's state.
       Season 2, A New Frontier and Michonne (lookaround2.lua) do verbs[1] on Enter, number keys for

@@ -1,4 +1,4 @@
-TWD Access 1.1.0
+TWD Access 1.2.0
 Screen reader support for The Walking Dead: The Telltale Definitive Series
 
 
@@ -18,6 +18,8 @@ Frontier, The Final Season and Michonne. All of them have been played through fr
 with the mod, by ear.
 
 Character speech (subtitles) is not read by default, since you hear the voices; F7 turns it on.
+
+CHANGES.txt lists what is new in each version.
 
 
 WHAT YOU NEED
@@ -91,6 +93,15 @@ Notepad. Most of them also have a key above.
                  tones: add an Application Audio Capture and pick the window marked
                  [TWDAccess.exe]. Takes effect the next time TWDAccess.exe starts.
   menus, tooltips, choices   true or false: read menus, their help lines, and choices.
+
+
+LANGUAGES
+
+The game can show its text in French, German, Spanish, Portuguese, Italian, Russian, Simplified
+Chinese or Traditional Chinese as well as English: in the game's main menu, Settings, then
+Languages. The mod then reads the game's text in that language; its own words ("Main menu",
+"Tab to choose") stay in English. Use a screen reader voice that speaks the language you choose.
+Not every season has every language: the game's language setting says which ones do.
 
 
 SAVES
