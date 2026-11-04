@@ -64,7 +64,14 @@ press Enter.
 
 Exploring:
   Tab and Shift+Tab   Move between the things you can interact with and the places you can walk
-                      to. Each is read with its actions and how far away it is.
+                      to. Each is read with its actions and how far away it is. Where you walk
+                      about (Season One and 400 Days), something you cannot use from where you
+                      stand is called "out of reach", and Enter walks there. "Blocked" means a
+                      walk there already stopped short, for example at a closed gate; such things
+                      come last. "In another area" means the game will not let you use it until
+                      you have walked over there, for example across a fence. When a door you
+                      open leaves nothing to use beyond it, the mod says it is open and offers
+                      "Open doorway": Enter walks you through.
   1 to 4              Pick one of a thing's actions (Look At, Use, Talk To...).
   Enter               Do it. The mod walks you there first if needed.
   W A S D             Walk yourself, as usual.

@@ -3,11 +3,106 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-11-03 (eighteenth session: the user playing Season 1 themselves, while streaming;
-the "streaming" setting, released as TWD Access 1.1.0; fixes for the game's other languages and
-the later seasons tested in French, released as TWD Access 1.2.0; see the first item).
+Last updated: 2026-11-03 (nineteenth session: Tab says "out of reach", "blocked" and "in another
+area" in free walking, and an opened door that leaves nothing to Tab to (the Macon pharmacy) is
+offered as "Open doorway", and the dairy porch has "Porch steps"; tested in the game (pharmacy,
+dairy), uncommitted, see the nineteenth-session item; before that the
+eighteenth: the "streaming" setting, released as TWD Access 1.1.0; fixes for the game's other
+languages and the later seasons tested in French, released as TWD Access 1.2.0).
 
 ## Start here (where the last session stopped)
+
+- Nineteenth session, 2026-11-03 (the user playing Season 1 Episode 2 at the dairy in THEIR Save 1,
+  streaming; the tones were heard on stream). They asked for the Tab list to say which things
+  cannot be used from where Lee stands: at the dairy, things beyond the fence were offered like
+  any other until Lee went through. Asked for options 1 to 3 below (not a "usable only" filter,
+  which in free walking would drop most things, the cameras being fixed). Tested offline first
+  (the user was using the computer), then in the game once they were away (below). Built into
+  dist by restart.ps1. NOT COMMITTED. (The default Python has no lupa; the repo's .venv has it,
+  which build_mod.py uses.) All in lookaround.lua (Season 1 and 400 Days free walking):
+  1. Tab on a thing the reticle cannot take from here (the walk offer in cycle) now says a reason
+     after the name: "Toolbox, out of reach, to your left, 15 meters. Enter walks there, 3 of 20".
+     Things usable from here are read with their actions as before.
+  2. `blocked` (weak table, agent -> { from, near }): set in walkTick's "got to N meters ... can go
+     no further this way" branch (not for another floor or a place such as stairs). Tab says
+     "blocked, the last walk stopped near Gate" (near = nearestWayOut within 3 m, else just
+     "blocked"); such things rank last (2.5, after behind) and the list key carries a "!" so the
+     order is redone. Cleared by any use (forgetNoWay, from the Main_OnUse/PathToAndUseAgent hook),
+     by a later walk there that arrives, or when Lee is NO_WAY_CLEAR_METERS (10) from where he
+     stopped. ("There is no way to X" still drops a thing from the list, as before.)
+  3. "in another area": dialogAllows(agent) == nil, i.e. findDialogWithNode finds no loaded dialog
+     for its use node (dialogs load by area; the gazebo from the barn side). Such things are never
+     clickable here. Verified at the dairy: it is the picket gate / porch and the barn gate split
+     (below). Not said of characters or of anything within 3 m (Lilly, below).
+  F6 (describeLookaround) adds only "blocked" / "in another area" in front of the distance (not
+  "out of reach", which would be said of most things). README.txt (Exploring, Tab) explains the
+  three words. CHANGES.txt not yet updated (written at release time).
+  4. The user's bug: Episode 1, Macon drugstore office at night (env_drugstoreOffice.lua): after
+     "Door to Pharmacy: 2 Open" (the keys) nothing said to walk through the doorway; they had to
+     walk a little to the right by hand to start the alarm (their twda.log, 18:14 and 18:22 on
+     2026-11-03: the list was only Lilly, Bedding, First Aid Kit, TV). Item F / issue #15's
+     doorway. FIX (generic, no agent names needed, as the trigger's name is unknown): the
+     Main_OnUse hook remembers a door/gate/hatch used (`openDoor`: agent, label, where Lee stood).
+     openDoorway(): once that door's hotspot is gone (not Game Selectable, or hidden; within
+     DOORWAY_SECONDS = 60 of the use) while Lee is still on this side (not half a meter past it)
+     and stood within 4 m to open it, the place "Open doorway" (name "doorway:<door agent>") is
+     listed, with a point 2.5 m past the door straight on from where Lee stood, put on the walk
+     boxes (none offered if that point lands on this side: no floor beyond). The frame loop says
+     once, 1.2 s after control is back, "<Door> is open. Enter walks through it." and sets the
+     walk offer; NOT said if a subtitle line, a hint or an action scene came after the use (the
+     story moved on: Episode 2's farmhouse Door, then the rush to Clementine), though still on
+     Tab. startWalk(agent, act, name) takes the entry's name; a doorway walk uses
+     AgentPathToPosition to that point (goalDistance(w) measures to it); arrival says "Through the
+     doorway. If nothing happens, walk on a little with <keys>" (keysAlong: the way through on
+     screen, as runto.lua). Places in cycle are always walk offers now.
+  OFFLINE TEST (new): tools\dev\offline_lookaround.lua + .py run lookaround.lua under lupa with
+  stand-ins for the engine (doorway announced, walked, gone once through; the three tags; blocked
+  last, cleared by a use and by 10 m; not announced after a line; Lilly; the porch steps). All 22
+  checks pass. Run `python tools/dev/offline_lookaround.py <folder with lupa>`.
+  TESTED IN THE GAME the same evening (user: "Go ahead and try/test everything you need", while
+  away), Save 2 only:
+  - Pharmacy (dev_saves\pharmacy, saves.txt env_drugstoreExteriorNight.lua): Gate Latch, Brick,
+    TV Store 2, Lee's Brother 2 + choice 1, Kill x6, Find keys -> office. "Door to Pharmacy: 2 Open"
+    -> "No more key office. No more food" -> "Door to Pharmacy is open. Enter walks through it." ->
+    Enter: "Walking to Open doorway." -> "Oh no." (the alarm) at once. The door agent is
+    obj_doorDrugstoreOfficePharmacy; the point walked to was 2.5 m past it. WORKS.
+  - FOUND there: Lilly (1 m away) was "in another area": her use dialog is not loaded either, yet
+    she talks when used directly. Fixed: reachTag never says "in another area" of a character
+    (isCharacterAgent) or of anything within 3 m.
+  - Dairy (dev_saves\ep2_dairy, saves.txt env_dairyExteriorDay.lua; the opening talk takes ~4 min
+    with talk.ps1 -Answers 1,1,1,1). tools\dev\probe_areas.lua (AREA lines) showed the dialog-not-
+    loaded set: from the yard, the porch things (Front Door, Plants, Shoe Bucket, Awards, Wind
+    Chimes) and the barn side (Barn Door, Hay Bales, Hay Pile, Sign, Shoes, Gazebo, Corn Field);
+    from the porch, the reverse (the yard's things, Mark, the generator...). So "in another area"
+    = beyond the picket gate or the barn gate. Tab in the yard: "Front Door, in another area, 19
+    meters", "Mailbox, out of reach, to your right, 1 meters", things in reach with their actions.
+    "Blocked": from the porch, Lee saw -> "Lee got to 8 meters ... Close by: Front Door" -> Tab:
+    "Lee saw, blocked, the last walk stopped near Front Door, behind you, 8 meters" (last of 27).
+    The barn gate by day is story-locked (Andy: "after we get back from securing the perimeter").
+  - FOUND there: the picket gate ("Door picket fence farm gate: Use") takes Lee UP ONTO THE PORCH
+    (y 3.9, a walk-box set of its own; Lee at 21.9 3.9 -4.8); using the gate again from the porch
+    only plays the same scene, and walks to the yard stop short. The way down is walking into
+    trigger_dialog_exitPorch (25.5 3.9 -3.8; no hotspot). Fixed: SCENE_PLACES
+    env_dairyexteriorday.lua: "Porch steps", sameLevel (listed only within 1.5 m of its height,
+    i.e. on the porch), taken = "Down the porch steps, in the yard.". Tested: "Porch steps, below
+    you, 1 meters" -> Enter -> "Walking to Porch steps." -> "Down the porch steps, in the yard."
+    (Lee at 25.7 0.0 7.6). New: SCENE_PLACES `sameLevel` and `taken` (placeTaken; said when a
+    scene takes over a walk to a place, instead of "the walk was cut short").
+  - NOT DONE, worth a look: the dairy yard also has warp triggers (trigger_warp_fromFrontYard_
+    toSwing / toSwing_fromFrontYard at 23.4 9.8 and 20.3 9.1, fromBarn_toGazebo / toGazebo_fromBarn,
+    WorkBench2 ones disabled by day; tools\dev\triggers1.lua lists them). The user's walks to the
+    swing (16 m short), gazebo, sign, hay, corn field stopped short; walking into
+    fromFrontYard_toSwing from the gate (walk_to.lua) did not move Lee anywhere new. Panel and
+    Power Switch are "out of reach" at 1 m (only usable inside the Generator close-up).
+  - Restored afterwards: Save 2 files and prefs.prop from that session's scratchpad backup (every
+    save file checked by MD5; only the game's own session_*.epage / menu_log_*.estore telemetry
+    differs, which it rotates itself), settings.txt (streaming = true, devconsole = false) and
+    saves.txt byte-identical. Game and helper closed. dist\TWDAccess and the game folder hold the
+    new (dev) build, so the user's next play has these changes.
+  - The user's own twda.log of that evening (18:00 to 20:05, Macon and the dairy) was LOST: three
+    restart.ps1 runs, and it kept only one twda.prev.log. restart.ps1 now also copies twda.log to
+    <game>\TWDAccess\oldlogs\twda-<time>.log (last ten kept).
+  New dev scripts: probe_areas.lua, probe_gate.lua, walk_to.lua (WALK_TO = "<agent>").
 
 - Eighteenth session, 2026-11-02 evening (the user playing Season 1 in THEIR Save 1, streaming with
   OBS, running dist\TWDAccess): two things came up.

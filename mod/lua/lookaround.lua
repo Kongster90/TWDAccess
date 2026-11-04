@@ -265,8 +265,33 @@ local noWay = {} -- agent name -> true
 local noWayFrom = nil -- where Lee was
 local NO_WAY_CLEAR_METERS = 10
 
+-- Hotspots a walk got only part of the way to ("can go no further this way": a closed gate or a
+-- fence between, the dairy's yard gate on the way to the barn). Still listed, but last and tagged
+-- "blocked", until something is used (that can open the way), a walk there gets through, or Lee
+-- is well away from where he stopped. Agent -> { from = where Lee stopped, near = the way out
+-- close by then, by name } (by agent, not name: another scene can have a "Gate" too).
+local blocked = setmetatable({}, { __mode = "k" })
+
 local function forgetNoWay()
   noWay, noWayFrom = {}, nil
+  blocked = setmetatable({}, { __mode = "k" })
+end
+
+-- A door just opened where Lee stays: the game can take its hotspot away, leaving the way on
+-- through the doorway with nothing to Tab to. The Door to Pharmacy in the Macon drugstore's
+-- office (Episode 1, env_drugstoreOffice.lua): after "Open" only walking through it, a little to
+-- the right, starts the alarm. Remembered from the use (see the Main_OnUse hook); while its
+-- hotspot is gone and Lee is still on this side, the doorway is a place to walk through, "Open
+-- doorway". { agent, name, label, from = where Lee stood, at, seen, told }
+local openDoor = nil
+local DOORWAY = "doorway:" -- (the place's name: this and the door's agent name)
+local doorways = {} -- place name -> { point = a little past the door, dx, dz = the way through }
+local DOORWAY_BEYOND_METERS = 2.5
+local DOORWAY_SECONDS = 60 -- (gone longer after the use than this: something else took it away)
+-- A line said after the door was opened: see where the doorway is announced.
+TWDA.onSubtitle = TWDA.onSubtitle or {}
+TWDA.onSubtitle.lookaroundDoor = function()
+  if openDoor then openDoor.talked = true end
 end
 
 -- Free walking (the game's navigate.lua: Navigate.imap is active, W A S D walk relative to the
@@ -306,8 +331,17 @@ local SCENE_PLACES = {
   ["env_savannahsewers.lua"] = {
     { agent = "trigger_dialog_chuck", name = "Way on along the tunnel" },
   },
+  -- Episode 2, the St. John dairy: the gate in the picket fence takes Lee up onto the farmhouse
+  -- porch, a walk area of its own (walks from there to the yard stop short); the way back down is
+  -- walking into the top of the porch steps, where nothing is to be used. Only offered while Lee
+  -- is up there (sameLevel: within a meter and a half of its height); walking into it takes him
+  -- down to the yard by the gate.
+  ["env_dairyexteriorday.lua"] = {
+    { agent = "trigger_dialog_exitPorch", name = "Porch steps", sameLevel = true, taken = "Down the porch steps, in the yard." },
+  },
 }
 local placeArrive = {} -- agent name -> what to say on arrival
+local placeTaken = {} -- agent name -> what to say when a scene took over on the way (it was the way on)
 -- Views (close-up cameras that turn with the reticle) where something happens only once the view
 -- is turned all the way to one side, with no hotspot there to Tab to. Camera name -> { side, name }.
 local SCENE_VIEWS = {
@@ -362,6 +396,56 @@ function nearestStairs()
     end
   end
   return best
+end
+
+-- The door just opened, as a place: its name, or nil when there is none (see openDoor above).
+-- None while its hotspot is still on offer (shut again, or the use did not open it), when Lee
+-- stood well away to open it (no telling which side is which), once he is half a meter past it,
+-- or when there is no floor beyond it. The point to walk to is DOORWAY_BEYOND_METERS past the
+-- door, straight on from where Lee stood, put on the walk boxes.
+local function openDoorway()
+  local d = openDoor
+  if not d or not d.from then return nil end
+  local okPos, at = pcall(AgentGetWorldPos, d.agent)
+  if not okPos or not at then
+    openDoor = nil -- (gone with its scene)
+    return nil
+  end
+  if prop(d.agent, "Game Selectable") == true and call("AgentIsHidden", d.agent) ~= true then return nil end
+  if not d.seen then
+    if TWDA.now() - d.at > DOORWAY_SECONDS then
+      openDoor = nil
+      return nil
+    end
+    d.seen = true
+  end
+  local nx, nz = d.from.x - at.x, d.from.z - at.z
+  local length = math.sqrt(nx * nx + nz * nz)
+  if length < 0.3 or length > 4 then return nil end
+  nx, nz = nx / length, nz / length -- (towards this side)
+  local here = playerPos()
+  if here and (here.x - at.x) * nx + (here.z - at.z) * nz < -0.5 then
+    openDoor = nil -- (through)
+    return nil
+  end
+  local name = DOORWAY .. d.name
+  if doorways[name] == nil then
+    local beyond = Vector(at.x - nx * DOORWAY_BEYOND_METERS, d.from.y, at.z - nz * DOORWAY_BEYOND_METERS)
+    local okWB, walkBoxes = pcall(PathAgentGetWalkBoxes, TWDA.player())
+    local okG, ground = false, nil
+    if okWB then okG, ground = pcall(WalkBoxesPosOnWalkBoxes, beyond, walkBoxes) end
+    local point = (okG and ground and ground.x) and ground or beyond
+    -- (Floor only on this side: nowhere to walk through to.)
+    if (point.x - at.x) * nx + (point.z - at.z) * nz > -0.5 then
+      doorways[name] = false
+    else
+      doorways[name] = { point = point, dx = -nx, dz = -nz }
+      TWDA.log(("lookaround: open doorway at %s, walk to %.1f %.1f"):format(d.name, point.x, point.z))
+    end
+  end
+  if not doorways[name] then return nil end
+  places[name] = "Open doorway"
+  return name
 end
 
 local listOrder, listKey = {}, ""
@@ -432,12 +516,28 @@ local function hotspots()
   for _, place in ipairs(walk and SCENE_PLACES[script] or {}) do
     local okFind, agent = pcall(AgentFind, place.agent)
     local okPos, pos = pcall(AgentGetScreenPos, agent)
+    local level = true
+    if place.sameLevel then
+      local okAt, at = pcall(AgentGetWorldPos, agent)
+      local here = playerPos()
+      level = okAt and at and here and math.abs(at.y - here.y) < 1.5
+    end
     if okFind and agent ~= nil and okPos and pos and call("AgentIsHidden", agent) ~= true
-      and prop(agent, "Trigger Enabled") ~= false then
+      and prop(agent, "Trigger Enabled") ~= false and level then
       local side = sideOf(agent, pos)
       places[place.agent] = place.name
       placeArrive[place.agent] = place.arrive or ("At the " .. place.name:lower() .. ".")
+      placeTaken[place.agent] = place.taken
       list[#list + 1] = { agent = agent, name = place.agent, x = pos.x, y = pos.y, behind = side == "behind",
+        side = side, clickable = false, n = #list, place = true }
+    end
+  end
+  local doorway = walk and openDoorway()
+  if doorway then
+    local okPos, pos = pcall(AgentGetScreenPos, openDoor.agent)
+    if okPos and pos then
+      local side = sideOf(openDoor.agent, pos)
+      list[#list + 1] = { agent = openDoor.agent, name = doorway, x = pos.x, y = pos.y, behind = side == "behind",
         side = side, clickable = false, n = #list, place = true }
     end
   end
@@ -450,7 +550,8 @@ local function hotspots()
       pan = pan.side }
   end
   local names = {}
-  for _, entry in ipairs(list) do names[#names + 1] = entry.name end
+  -- (A thing marked blocked or no longer blocked changes the key too, so it moves in the order.)
+  for _, entry in ipairs(list) do names[#names + 1] = entry.name .. (blocked[entry.agent] and "!" or "") end
   table.sort(names)
   local key = table.concat(names, "|")
   -- Where Lee walks about, the order is worked out again once he has moved.
@@ -464,8 +565,11 @@ local function hotspots()
     listKey, listOrder, listFrom = key, {}, here
     if moved then listMoves = listMoves + 1 end
     -- In view first, then out of view to a side, then behind; where Lee walks about, nearest
-    -- first within each (28 things at the dairy, the gate he needs 2 meters away).
-    local function rank(entry) return entry.pan and 3 or entry.behind and 2 or entry.side and 1 or 0 end
+    -- first within each (28 things at the dairy, the gate he needs 2 meters away). Things a walk
+    -- could not get to come last.
+    local function rank(entry)
+      return entry.pan and 3 or blocked[entry.agent] and 2.5 or entry.behind and 2 or entry.side and 1 or 0
+    end
     local distances = {}
     if walk then
       for _, entry in ipairs(list) do distances[entry] = distanceTo(entry.agent) or math.huge end
@@ -990,6 +1094,27 @@ local function stillPreferred()
 end
 local lastTabAt = -10 -- (an announcement made before the last Tab no longer steers Enter)
 
+-- Why Lee cannot use a listed thing from where he stands, for Tab and F6 where he walks about
+-- (players asked to hear it before walking: at the dairy, things beyond the fence were offered
+-- like any other). The game cannot tell in advance whether a walk will get there, so:
+--   "blocked": a walk there already stopped short (see blocked above);
+--   "in another area": its use dialog is not loaded here. The game loads dialogs by area and
+--     never lets the reticle take such a thing until Lee has walked over there (the gazebo, seen
+--     from the barn side of the dairy);
+--   otherwise plain, which is "out of reach" for Tab and nothing for F6.
+-- Not for places (stairs), which are only walked to.
+local function reachTag(entry, plain)
+  if entry.place then return nil end
+  local b = blocked[entry.agent]
+  if b then return b.near and ("blocked, the last walk stopped near " .. b.near) or "blocked" end
+  -- (Not people, nor anything within a few meters: Lilly beside Lee in the Macon drugstore's
+  -- office has no use dialog loaded either, yet talks when used directly.)
+  if dialogAllows(entry.agent) == nil and not isCharacterAgent(entry.name) and (distanceTo(entry.agent) or 0) > 3 then
+    return "in another area"
+  end
+  return plain
+end
+
 local function cycle(delta)
   quietUntil = 0
   local list = hotspots()
@@ -1036,10 +1161,13 @@ local function cycle(delta)
   end
   -- Where Lee walks freely the cameras are fixed: something the game will not let the reticle take
   -- from here is offered as a walk straight away.
-  if canWalk() and not clickable(entry.agent) then
+  -- (A place is only ever walked to: the open doorway's agent is the door, which the reticle
+  -- no longer takes.)
+  if canWalk() and (entry.place or not clickable(entry.agent)) then
     target = nil
     walkOffer = { agent = entry.agent, name = entry.name, at = TWDA.now(), kind = "walk" }
-    local where = {}
+    -- ("Toolbox, out of reach, to your left, 15 meters. Enter walks there, 3 of 20".)
+    local where = { reachTag(entry, "out of reach") }
     if entry.side then where[#where + 1] = SIDE_WORDS[entry.side] end
     local d = distanceTo(entry.agent)
     if d then where[#where + 1] = d .. " meters" end
@@ -1181,17 +1309,57 @@ local function walkerWords(d, walker)
   return ("A walker %d meters away, %s. "):format(math.floor(d + 0.5), side and SIDE_WORDS[side] or "in view")
 end
 
+-- How far Lee still has to go on a walk: to where the game wants him to stand to use the thing,
+-- or, through an open doorway, to the point past it.
+local function goalDistance(w)
+  local doorway = doorways[w.name]
+  if doorway then
+    local from = playerPos()
+    local ok, d = pcall(VectorDistance, from, doorway.point)
+    if from and ok and type(d) == "number" then return math.floor(d + 0.5) end
+    return nil
+  end
+  return distanceTo(rawget(w.agent, "usePosAgent") or w.agent)
+end
+
+-- "W", "D and S"...: the keys that walk Lee along a direction on the ground, measured on screen
+-- through the scene's camera between him and a point a meter that way (as runto.lua does).
+local function keysAlong(dx, dz)
+  local here = playerPos()
+  local length = math.sqrt(dx * dx + dz * dz)
+  if not here or length < 0.01 then return nil end
+  local okCam, camera = pcall(function() return SceneGetCamera(TWDA.playerScene()) end)
+  if not (okCam and camera ~= nil) then return nil end
+  local okA, a = pcall(CameraGetScreenPosFromWorldPos, camera, here)
+  local okB, b = pcall(CameraGetScreenPosFromWorldPos, camera, Vector(here.x + dx / length, here.y, here.z + dz / length))
+  if not (okA and a and okB and b) then return nil end
+  local sx, sy = b.x - a.x, b.y - a.y
+  local keys = {}
+  if math.abs(sy) >= math.abs(sx) * 0.5 then keys[#keys + 1] = sy < 0 and "W" or "S" end
+  if math.abs(sx) >= math.abs(sy) * 0.5 then keys[#keys + 1] = sx > 0 and "D" or "A" end
+  return #keys > 0 and table.concat(keys, " and ") or nil
+end
+
 -- act: do the hotspot's action on arrival (the walk was started with Enter on it, rather than by
 -- accepting "Enter walks there" for something only looked up with Tab).
-local function startWalk(agent, act)
-  local name = TWDA.agentName(agent)
+-- name: the list entry's name when it is not the agent's own (the open doorway, whose agent is
+-- the door).
+local function startWalk(agent, act, name)
+  name = name or TWDA.agentName(agent)
   local w = { agent = agent, name = name, since = TWDA.now(), act = act, from = playerPos() }
   -- Walkers far away when the walk starts that come close on the way stop it (see walkTick);
   -- not when going for a walker on purpose.
   if not isWalkerName(name) then w.walkerAtStart = nearestWalker() end
+  local doorway = doorways[name]
   local ok, err = pcall(ThreadStart, function()
-    -- To where the game wants Lee to stand to use it, when it says.
-    local okPath, result = pcall(AgentPathToAgent, TWDA.player(), rawget(agent, "usePosAgent") or agent)
+    -- To where the game wants Lee to stand to use it, when it says; through a doorway, to the
+    -- point past it.
+    local okPath, result
+    if doorway then
+      okPath, result = pcall(AgentPathToPosition, TWDA.player(), doorway.point)
+    else
+      okPath, result = pcall(AgentPathToAgent, TWDA.player(), rawget(agent, "usePosAgent") or agent)
+    end
     if not okPath then TWDA.log("walk: " .. tostring(result)) end
     w.done, w.success = true, okPath and result == true
   end)
@@ -1304,7 +1472,7 @@ local function walkTick()
     -- every 10 seconds, while it goes down.
     if walking and not w.done and now - (w.toldAt or w.since) >= 10 then
       w.toldAt = now
-      local left = distanceTo(rawget(w.agent, "usePosAgent") or w.agent)
+      local left = goalDistance(w)
       if left and left > 5 and (not w.lastLeft or left < w.lastLeft - 2) then
         TWDA.say(left .. " meters to go.")
       end
@@ -1325,10 +1493,10 @@ local function walkTick()
   -- floor; walking onto the stairs by hand starts a guided path up or down (guided.lua).
   local where = floorOf(w.agent)
   local floor = where and (" It is " .. where .. ".") or ""
-  local left = distanceTo(rawget(w.agent, "usePosAgent") or w.agent)
+  local left = goalDistance(w)
   -- Usable from where he stopped counts as there (Shawn at the farm's fence, Episode 1: the walk
   -- ends 4 meters from his use position, but he can be talked to from afar).
-  local usable = clickable(w.agent)
+  local usable = not doorways[w.name] and clickable(w.agent)
   -- The path-finding takes Lee as near as it can and can report success well short of the goal: a
   -- closed gate in the way (the yard gate at the dairy, on the way to the barn). Or there is no way
   -- at all: once he is out through Clementine's gate at night (Episode 1), walks to the backyard's
@@ -1350,6 +1518,13 @@ local function walkTick()
   if left and left > 3 and not usable then
     -- Say how far he got and what is close by.
     local nearest, nearestDistance = nearestWayOut(w.name)
+    -- Remembered, so that Tab says so next time (not for a goal on another floor: the stairs
+    -- lead there).
+    if floor == "" and not places[w.name] then
+      blocked[w.agent] = { from = playerPos(),
+        near = nearest and nearestDistance <= 3 and displayName(nearest.name, nearest.agent) or nil }
+      TWDA.log("lookaround: blocked on the way to " .. w.name)
+    end
     TWDA.say(("%s got to %d meters from %s and can go no further this way.%s%s"):format(TWDA.playerName(), left, displayName(w.name, w.agent),
       floor, floor == "" and nearest and nearestDistance <= 3 and (" Close by: " .. displayName(nearest.name, nearest.agent)
         .. ", " .. nearestDistance .. " meters.") or ""), { interrupt = true })
@@ -1361,6 +1536,16 @@ local function walkTick()
     lastTargetName = w.name
     TWDA.say(TWDA.playerName() .. " stopped before reaching " .. displayName(w.name, w.agent) .. "." .. floor
       .. " Enter walks on.", { interrupt = true })
+    return
+  end
+  blocked[w.agent] = nil -- (got there after all)
+  local doorway = doorways[w.name]
+  if doorway then
+    -- (Usually the scene beyond has started on the way. If not, the trigger lies a little further
+    -- on.)
+    local keys = keysAlong(doorway.dx, doorway.dz)
+    TWDA.say("Through the doorway. If nothing happens, walk on a little" .. (keys and (" with " .. keys) or "") .. ".",
+      { interrupt = true })
     return
   end
   if placeArrive[w.name] then
@@ -1397,6 +1582,8 @@ for _, name in ipairs({ "Main_OnUse", "PathToAndUseAgent" }) do
     local label = TWDA.lastUse.words
     if name == "Main_OnUse" and (label:find("door", 1, true) or label:find("gate", 1, true) or label:find("hatch", 1, true)) then
       doorUse = { label = TWDA.lastUse.label, from = playerPos(), at = lastUseAt }
+      -- (And if its hotspot goes while Lee stays this side, the doorway is the way on.)
+      openDoor = { agent = agent, name = lastUsed.name, label = TWDA.lastUse.label, from = playerPos(), at = lastUseAt }
     end
     -- In a fight the camera follows the reticle; holding it where the last target was (the hammer
     -- Clementine held out) turns the view away from the next one, which then cannot be clicked.
@@ -1529,7 +1716,7 @@ local function enterPressed()
       return
     elseif canWalk() then
       -- (In a hurry the action follows the walk without another Enter.)
-      startWalk(offer.agent, TWDA.inActionScene ~= nil and TWDA.inActionScene() == true)
+      startWalk(offer.agent, TWDA.inActionScene ~= nil and TWDA.inActionScene() == true, offer.name)
       return
     end
   end
@@ -1729,8 +1916,12 @@ TWDA.onFrame("lookaround", function()
       walkCutShort = nil
     elseif TWDA.now() - walkCutShort.at > 0.5 then
       walkCutShort = nil
-      local left = distanceTo(rawget(w.agent, "usePosAgent") or w.agent)
-      if left and left > 3 then
+      local left = goalDistance(w)
+      if places[w.name] then
+        -- A place is walked into for what it starts (the porch steps at the dairy, the open
+        -- doorway): a scene taking over on the way is that, not a walk cut short.
+        if placeTaken[w.name] then TWDA.say(placeTaken[w.name], { interrupt = true }) end
+      elseif left and left > 3 then
         walkOffer = { agent = w.agent, name = w.name, at = TWDA.now(), kind = "walk" }
         lastTargetName = w.name
         TWDA.say(("The walk to %s was cut short, %d meters away. Enter walks on."):format(displayName(w.name, w.agent), left))
@@ -1789,6 +1980,32 @@ TWDA.onFrame("lookaround", function()
       TWDA.say("Through " .. d.label .. ".")
     end
   end
+  -- A door opened that left no hotspot behind (the Door to Pharmacy): say once, a moment after
+  -- control is back, that the way on is through it, and let Enter walk there. Nothing else would:
+  -- the rest of the list is the room's things.
+  -- (Only when the door opened without a word, a hint or a countdown since: otherwise the story
+  -- has moved on and something else is the way on. Behind the farmhouse's Door, Episode 2, Mark
+  -- is found, and then Lee must rush downstairs to Clementine. The doorway is still on Tab.)
+  if openDoor and not openDoor.told and not walking and canWalk() then
+    local doorway = openDoorway()
+    local d = openDoor
+    if doorway and d then
+      d.readySince = d.readySince or TWDA.now()
+      local movedOn = d.talked or (TWDA.lastHintAt or -1) >= d.at
+        or (TWDA.inActionScene ~= nil and TWDA.inActionScene() == true)
+      if movedOn then
+        d.told = true
+        TWDA.log("lookaround: open doorway not announced (" .. d.name .. "): the story moved on")
+      elseif TWDA.now() - d.readySince > 1.2 then
+        d.told = true
+        walkOffer = { agent = d.agent, name = doorway, at = TWDA.now(), kind = "walk" }
+        lastTargetName = doorway
+        doorUse = nil -- (the walk through says so itself, not "Through Door to Pharmacy." as well)
+        TWDA.log("lookaround: open doorway offered (" .. d.name .. ")")
+        TWDA.say(d.label .. " is open. Enter walks through it.")
+      end
+    end
+  end
   if lastUsed.name and lastUsed.blow and TWDA.now() - lastUsed.at > 1 and TWDA.now() - lastUsed.at < 10
     and call("ReticleUI_InCombatMode") ~= true and TWDA.agentName(call("Reticle_GetAgentFocused")) == lastUsed.name then
     TWDA.log("lookaround: again at " .. lastUsed.name .. " (still in the reticle)")
@@ -1815,6 +2032,14 @@ TWDA.onFrame("lookaround", function()
   if noWayFrom then
     local okDist, dist = pcall(VectorDistance, playerPos(), noWayFrom)
     if okDist and type(dist) == "number" and dist > NO_WAY_CLEAR_METERS then forgetNoWay() end
+  end
+  if next(blocked) ~= nil then
+    local here = playerPos()
+    for agent, b in pairs(blocked) do
+      b.from = b.from or here
+      local okDist, dist = pcall(VectorDistance, here, b.from)
+      if here and b.from and okDist and type(dist) == "number" and dist > NO_WAY_CLEAR_METERS then blocked[agent] = nil end
+    end
   end
 
   if number then
@@ -1962,7 +2187,7 @@ TWDA.onFrame("lookaround", function()
       local t = target
       target = nil
       if t.actOnReach then
-        startWalk(t.agent, true)
+        startWalk(t.agent, true, t.name)
       else
         walkOffer = { agent = t.agent, name = t.name, at = now, kind = "walk" }
         local d = distanceTo(t.agent)
@@ -2039,6 +2264,10 @@ function TWDA.describeLookaround()
     if floor then where[#where + 1] = floor end
     local state = TWDA.hotspotState and TWDA.hotspotState(entry.agent)
     if state then where[#where + 1] = state end
+    -- (Only "blocked" and "in another area": most things where Lee walks about are out of reach
+    -- from where he stands, so saying that of each would bury the rest.)
+    local tag = walk and reachTag(entry)
+    if tag then table.insert(where, 1, tag) end
     names[#names + 1] = displayName(entry.name, entry.agent) .. (#where > 0 and (" (" .. table.concat(where, ", ") .. ")") or "")
   end
   parts[#parts + 1] = ("%d to interact with: %s. Tab and Shift Tab to move between them"):format(#list,

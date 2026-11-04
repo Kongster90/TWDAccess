@@ -9,7 +9,15 @@ $game = "G:\Steam\steamapps\common\The Walking Dead The Telltale Definitive Seri
 Get-Process WDC -ErrorAction SilentlyContinue | Stop-Process -Force
 Get-Process TWDAccess -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 3
-# Keep the previous session's logs (it may have been the user playing) as *.prev.
+# Keep the previous session's logs (it may have been the user playing) as *.prev, and the last ten
+# in TWDAccess\oldlogs with the time they were set aside: several restarts in a row used to lose
+# the user's own play log (2026-11-03).
+$old = "$game\TWDAccess\oldlogs"
+if (Test-Path "$game\TWDAccess\twda.log") {
+    New-Item -ItemType Directory -Force $old | Out-Null
+    Copy-Item "$game\TWDAccess\twda.log" ("$old\twda-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".log")
+    Get-ChildItem "$old\twda-*.log" | Sort-Object Name -Descending | Select-Object -Skip 10 | Remove-Item -Force
+}
 Move-Item "$game\TWDAccess\twda.log" "$game\TWDAccess\twda.prev.log" -Force -ErrorAction SilentlyContinue
 Remove-Item "$game\TWDAccess\next_script.txt" -ErrorAction SilentlyContinue
 
