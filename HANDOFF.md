@@ -104,6 +104,28 @@ languages and the later seasons tested in French, released as TWD Access 1.2.0).
     restart.ps1 runs, and it kept only one twda.prev.log. restart.ps1 now also copies twda.log to
     <game>\TWDAccess\oldlogs\twda-<time>.log (last ten kept).
   New dev scripts: probe_areas.lua, probe_gate.lua, walk_to.lua (WALK_TO = "<agent>").
+  - Then (user: "Make a new release. I may as well make this public now"): TWD ACCESS 1.3.0
+    RELEASED (tag v1.3.0, TWDAccess-1.3.0.zip, release\notes-1.3.0.md, CHANGES.txt entry; version
+    in TWDAccess.csproj, main.lua, README.txt). The zip was checked unzipped (version, no dev
+    modules, lookaround.lua the tested one) but NOT started against the game (the user was using
+    the computer).
+  - Before going public, a check found no secrets, but tools/ttarchext/ttarchext.exe (Luigi
+    Auriemma's, from the Telltale Modding Group) has RAD Game Tools' Oodle built in, and the two
+    oldest commits had the user's Gmail. User chose "Clean history first": backup bundle in
+    build\TWDAccess-before-rewrite.bundle (all refs before the rewrite; build\ is ignored), then
+    git-filter-repo (pip --target into that session's scratchpad) --invert-paths --path
+    tools/ttarchext/ttarchext.exe --mailmap (dengs <gmail> -> Kongster90 <no-reply>). All 36
+    commits rewritten (every commit now Kongster90 <154498221+Kongster90@users.noreply.github.com>),
+    main and the four tags force-pushed; the four releases kept their zips and follow their tags.
+    ttarchext.exe is kept locally only (.gitignore: tools/ttarchext/; build_mod.py says where to
+    get it). Old commit IDs in this file were mapped to the new ones (.git\filter-repo\commit-map).
+    The repository is now PUBLIC (https://github.com/Kongster90/TWDAccess); the page and the 1.3.0
+    zip open without signing in.
+  - CAVEAT: GitHub still serves the OLD commits by their exact IDs (github.com/Kongster90/
+    TWDAccess/commit/9087445 answered 200 after the rewrite), and with them the old tool and the
+    Gmail author, until GitHub garbage-collects them. Only GitHub Support can purge that (their
+    "remove sensitive data" process: ask them to remove cached views and unreferenced commits for
+    the repository). Told the user; it is their account's request to make.
 
 - Eighteenth session, 2026-11-02 evening (the user playing Season 1 in THEIR Save 1, streaming with
   OBS, running dist\TWDAccess): two things came up.
@@ -153,7 +175,7 @@ languages and the later seasons tested in French, released as TWD Access 1.2.0).
     - The French key hint "Regarder par-dessus le mur (Z)" is for AZERTY; on QWERTY the mod's W
       works and Z does nothing. AZERTY keyboards not tried.
     - Dialog choices not reached (none in that stretch).
-  - 2026-11-03, the language FIXES (user: "Yes, go ahead"), COMMITTED as 31af1dc, NOT RELEASED:
+  - 2026-11-03, the language FIXES (user: "Yes, go ahead"), COMMITTED as 63f057e, NOT RELEASED:
     - LangGetCurLanguage() gives "english", "french", "russian", "chinese" (Simplified)...:
       TWDA.language() / TWDA.isEnglish() in text.lua. LocalizationGetAllInstalledLanguages() lists
       nine. The game's own tooltip: Italian only in Season One and The Final Season, Traditional
@@ -193,7 +215,7 @@ languages and the later seasons tested in French, released as TWD Access 1.2.0).
     make_release.py; README.txt has a LANGUAGES section and points to CHANGES.txt. The zip was
     tested from its unzipped folder (1.2.0 starting, "Main menu", no module failures), then
     dist\TWDAccess rebuilt at 1.2.0; prefs.prop, which the game rewrites while running, put back.
-  - 2026-11-03, the later seasons in French (user: "Yes, test it"), committed as 9c3c098:
+  - 2026-11-03, the later seasons in French (user: "Yes, test it"), committed as 60644a8:
     - The look-vs-do code (Reticle_UpdateActionIcons, ICON_VERBS) is Season 1's (and 400 Days')
       only: Reticle_UpdateActionIcons is nil in The Final Season's play and in Season 2's state.
       Season 2, A New Frontier and Michonne (lookaround2.lua) do verbs[1] on Enter, number keys for
@@ -245,7 +267,7 @@ languages and the later seasons tested in French, released as TWD Access 1.2.0).
   - dist\TWDAccess (the framework-dependent dev build) was rebuilt at 1.0.0 too.
 
 - Seventeenth session, morning of 2026-10-29 (user: "Start loose ends", after Michonne was committed
-  as d11ee4e): THE TWO SEASON 1 LOOSE ENDS ARE DONE, tested in Season 1 Save 2 (dev_saves\ep3_bandits
+  as 75bdcdb): THE TWO SEASON 1 LOOSE ENDS ARE DONE, tested in Season 1 Save 2 (dev_saves\ep3_bandits
   and ep4_meds), then Save 2 put back (byte-identical to dev_saves\s1_slot2_before_aimtones; saves.txt
   line env_manorInteriorClementineSearch.lua). Game closed, autorun.lua deleted, dist rebuilt (its
   mod and the game folder's match). Committed and pushed at the user's request (see git log).
@@ -346,7 +368,7 @@ languages and the later seasons tested in French, released as TWD Access 1.2.0).
   and maybe try to figure it out ... look online if you need to ... If not you can move on to try to
   finish up the season"; closing foobar2000's Playback error boxes allowed). THE BARN IS SOLVED AND
   THE FINAL SEASON IS FINISHED in Save 2 (Episode 4 to the hat on the windowsill, the statistics and
-  back to the main menu). Committed and pushed as da87270. The game was closed at the end; dev autorun.lua
+  back to the main menu). Committed and pushed as 37947e7. The game was closed at the end; dev autorun.lua
   deleted; settings.txt untouched (actionscenes normal); dist\TWDAccess\mod has every change (copied
   from build\mod after the last sync; the helper itself was not rebuilt, no C# changed).
   - The barn loop, what it was: after "We need to get these pen doors closed" control comes back
@@ -664,7 +686,7 @@ languages and the later seasons tested in French, released as TWD Access 1.2.0).
   PLAYED by ear in save file 2: the rest of Episode 2 (from the group talk after Carver's visit),
   Episodes 3, 4 and 5, to the ending (alone with AJ) and back to Season 2's main menu. Choices
   were mostly answer 1, so other branches are unplayed (see "Season 2 walkthrough notes" below).
-  Committed and pushed (2daa27a) at the user's request. dist\TWDAccess was rebuilt with every change and the game was
+  Committed and pushed (ca65281) at the user's request. dist\TWDAccess was rebuilt with every change and the game was
   closed. The user's settings.txt is back to actionscenes = normal (it was slow for this testing).
   A "Playback error" box from the user's music player sat over the game window all session (theirs;
   left alone; it may have stolen focus now and then).
@@ -733,7 +755,7 @@ languages and the later seasons tested in French, released as TWD Access 1.2.0).
 
 - Eighth session, 2026-10-11 16:40 to 18:00 (user: "before trying to move forward with the game,
   we should try to fix some bugs first"). Bug fixes only, all tested in the game unless noted.
-  Committed and pushed (c8789b1) at the user's request; #6 closed, #16 commented (left open).
+  Committed and pushed (1974e7e) at the user's request; #6 closed, #16 commented (left open).
   dist\TWDAccess was rebuilt (restart.ps1) and the game closed.
   - The user's own gate bug (Season 1 Episode 1, night branch: choosing "Get out of here once the
     sun goes down" leads to env_clementineHouseExterior_Night.lua): after "Through Gate." Tab kept
@@ -830,7 +852,7 @@ languages and the later seasons tested in French, released as TWD Access 1.2.0).
   (all but Play, which would start a Season 2 game; ask the user first), then replayed parts of
   400 Days: the cornfield now names the safe row, works round a game bug that left the panic
   meter on, and says when to run out; Russell's mouse-only sneak now works with Up arrow (new
-  fastslow.lua). All of it is committed (c84fe53, 6bdb6e2, bf710e9 and this handoff update);
+  fastslow.lua). All of it is committed (4dda16d, 00f7d9e, 5b10e53 and this handoff update);
   see the Git note under "Developer tooling" for pushing. dist\TWDAccess matches the source.
 
 - Fifth session, 2026-10-09 early morning (user asleep, "keep working on the mod"; questions saved
@@ -3287,7 +3309,7 @@ Gotchas:
   globals a module uses, compile it with lupa (`lupa.lua52.LuaRuntime(encoding=None)`,
   `string.dump`) and run luadis.py on the result, looking for `_ENV[...]` names.
 - PowerShell scripts need `-ExecutionPolicy Bypass` when run from Bash.
-- Git: the first commit (ce1fdff) was made on 2026-10-03 at the user's request, as the fixed point
+- Git: the first commit (b474d09) was made on 2026-10-03 at the user's request, as the fixed point
   for reviews (/mattpocock-skills:code-review). The branch is "main"; the remote "origin" is
   https://github.com/Kongster90/TWDAccess.git (the user's repository, linked and pushed at their
   request). Since 2026-10-10 the repository's own git config has the user's chosen identity,
