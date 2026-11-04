@@ -13,7 +13,9 @@ own bootstrap; everything else stays plain text.
 
 Usage:  python tools/build_mod.py
 Needs:  tools/ttarchext/ttarchext.exe (github.com/Telltale-Modding-Group/Telltale-Script-Editor,
-        resources/ttarchext.exe) and `pip install lupa` for the Lua syntax check.
+        resources/ttarchext.exe) and `pip install lupa` for the Lua syntax check. ttarchext is not
+        kept in this repository (it has RAD Game Tools' Oodle library built in): put a copy there
+        yourself; .gitignore leaves it out.
 """
 
 from pathlib import Path

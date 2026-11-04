@@ -6,7 +6,8 @@ the end of each session.
 Last updated: 2026-11-03 (nineteenth session: Tab says "out of reach", "blocked" and "in another
 area" in free walking, and an opened door that leaves nothing to Tab to (the Macon pharmacy) is
 offered as "Open doorway", and the dairy porch has "Porch steps"; tested in the game (pharmacy,
-dairy), committed d916727, see the nineteenth-session item; before that the
+dairy), released as TWD Access 1.3.0, and the repository made PUBLIC after a history clean-up;
+see the nineteenth-session item; before that the
 eighteenth: the "streaming" setting, released as TWD Access 1.1.0; fixes for the game's other
 languages and the later seasons tested in French, released as TWD Access 1.2.0).
 
@@ -18,7 +19,7 @@ languages and the later seasons tested in French, released as TWD Access 1.2.0).
   any other until Lee went through. Asked for options 1 to 3 below (not a "usable only" filter,
   which in free walking would drop most things, the cameras being fixed). Tested offline first
   (the user was using the computer), then in the game once they were away (below). Built into
-  dist by restart.ps1. Committed as d916727 (not pushed, not released). (The default Python has no lupa; the repo's .venv has it,
+  dist by restart.ps1. Committed as e5b3af8 (hash after the history rewrite below). (The default Python has no lupa; the repo's .venv has it,
   which build_mod.py uses.) All in lookaround.lua (Season 1 and 400 Days free walking):
   1. Tab on a thing the reticle cannot take from here (the walk offer in cycle) now says a reason
      after the name: "Toolbox, out of reach, to your left, 15 meters. Enter walks there, 3 of 20".
@@ -128,7 +129,8 @@ languages and the later seasons tested in French, released as TWD Access 1.2.0).
     release\notes-1.1.0.md; version in TWDAccess.csproj, main.lua and README.txt). The zip was
     tested from its unzipped folder against the running game (same result as above), then
     dist\TWDAccess rebuilt at 1.1.0 and started again for the user. Going public is still the
-    user's call; two early commits carry their Gmail address as author (told them).
+    user's call; two early commits carried their Gmail address as author (told them; rewritten
+    on 2026-11-03, see the nineteenth session).
   - 2026-11-03, other languages (user: "Sure, why not, go for it"): the hub's Settings > Languages
     > Display Text (one row; Left/Right: English, Traditional Chinese, German, Russian, Spanish,
     Portuguese, Italian, French, Simplified Chinese), then Escape > "Language Changed" popup >
@@ -3064,7 +3066,10 @@ Project root: C:\Users\dengs\Downloads\TWD
   encrypts the bootstrap with ttarchext, and writes build/mod/Archives and build/mod/TWDAccess.
 - `tools/prism/`: prism.dll v0.18.3 (x64 release build; no runtime dependencies), prism.h and
   licences.
-- `tools/ttarchext/ttarchext.exe`: only for the bootstrap; see the constraints above.
+- `tools/ttarchext/ttarchext.exe`: only for the bootstrap; see the constraints above. NOT IN GIT
+  since 2026-11-03 (it has RAD Game Tools' Oodle built in; .gitignore leaves tools/ttarchext/ out):
+  keep the local copy, or get it from the Telltale Modding Group's Telltale-Script-Editor
+  (resources/ttarchext.exe).
 - `tools/dev/`: development scripts (see below).
 - `.venv/`: Python environment with lupa (`python -m venv .venv`, then
   `.venv\Scripts\python -m pip install lupa`).
@@ -3287,8 +3292,8 @@ Gotchas:
   https://github.com/Kongster90/TWDAccess.git (the user's repository, linked and pushed at their
   request). Since 2026-10-10 the repository's own git config has the user's chosen identity,
   user.name Kongster90 and their GitHub no-reply address as user.email, so a plain `git commit`
-  is right (the two oldest commits, already on GitHub, say "dengs" with their Gmail; the user
-  rewrote the later ones to the new identity themselves). Only commit or push if the user asks.
+  is right (every commit now has that identity: the two oldest, which had "dengs" and their Gmail,
+  were rewritten on 2026-11-03 before the repository went public). Only commit or push if the user asks.
   Rewriting history (rebase, amend of pushed commits) and writes to GitHub such as editing issue
   comments can be blocked by the auto-mode safety check: then tell the user and let them decide.
 - Matt Pocock's engineering skills are set up (CLAUDE.md "Agent skills", docs/agents/): issues in

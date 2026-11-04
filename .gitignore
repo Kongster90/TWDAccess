@@ -10,5 +10,9 @@ helper/TWDAccess/obj/
 # Downloaded release archive (prism.dll is extracted into tools/prism/)
 tools/prism-windows-x64.zip
 
+# ttarchext.exe (Luigi Auriemma; Oodle built in) is not ours to hand out: get it from the Telltale
+# Modding Group's Telltale-Script-Editor (resources/ttarchext.exe). See tools/build_mod.py.
+tools/ttarchext/
+
 # Copies of the test save slot (slot 2) at useful checkpoints, for restoring scenes while testing
 dev_saves/
