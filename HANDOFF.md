@@ -6,7 +6,7 @@ the end of each session.
 Last updated: 2026-11-03 (nineteenth session: Tab says "out of reach", "blocked" and "in another
 area" in free walking, and an opened door that leaves nothing to Tab to (the Macon pharmacy) is
 offered as "Open doorway", and the dairy porch has "Porch steps"; tested in the game (pharmacy,
-dairy), uncommitted, see the nineteenth-session item; before that the
+dairy), committed d916727, see the nineteenth-session item; before that the
 eighteenth: the "streaming" setting, released as TWD Access 1.1.0; fixes for the game's other
 languages and the later seasons tested in French, released as TWD Access 1.2.0).
 
@@ -18,7 +18,7 @@ languages and the later seasons tested in French, released as TWD Access 1.2.0).
   any other until Lee went through. Asked for options 1 to 3 below (not a "usable only" filter,
   which in free walking would drop most things, the cameras being fixed). Tested offline first
   (the user was using the computer), then in the game once they were away (below). Built into
-  dist by restart.ps1. NOT COMMITTED. (The default Python has no lupa; the repo's .venv has it,
+  dist by restart.ps1. Committed as d916727 (not pushed, not released). (The default Python has no lupa; the repo's .venv has it,
   which build_mod.py uses.) All in lookaround.lua (Season 1 and 400 Days free walking):
   1. Tab on a thing the reticle cannot take from here (the walk offer in cycle) now says a reason
      after the name: "Toolbox, out of reach, to your left, 15 meters. Enter walks there, 3 of 20".
