@@ -1,4 +1,4 @@
-TWD Access 1.2.0
+TWD Access 1.3.0
 Screen reader support for The Walking Dead: The Telltale Definitive Series
 
 

@@ -2,6 +2,25 @@ TWD Access: what changed in each version
 Newest first.
 
 
+1.3.0 (3 November 2026): knowing what is in reach
+
+Season One and 400 Days, where you walk about:
+
+- Tab now says why you cannot use something from where you stand. "Out of reach": Enter walks
+  you there. "Blocked": a walk there already stopped short, for example at a closed gate; such
+  things come last in the list until you use something or walk well away. "In another area": the
+  game will not let you use it until you have gone over there, for example through a gate in a
+  fence. F6 says "blocked" and "in another area" too.
+- After you open a door that leaves nothing to use beyond it, the mod says it is open, and Tab
+  offers "Open doorway": Enter walks you through. In Episode 1 this is the Door to Pharmacy in
+  the drugstore's office, where walking through starts the next scene. Before, nothing said to
+  walk on.
+- Episode 2, the dairy: the gate in the picket fence takes you up onto the farmhouse porch, and
+  the way back down had nothing to Tab to. Tab now offers "Porch steps" while you are up there.
+
+Tested in Season One: the pharmacy door, and the dairy's yard, porch and barn side.
+
+
 1.2.0 (3 November 2026): the game's other languages
 
 The game can be played in French, German, Spanish, Portuguese, Italian, Russian, Simplified
