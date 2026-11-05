@@ -3,7 +3,9 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-11-03 (nineteenth session: Tab says "out of reach", "blocked" and "in another
+Last updated: 2026-11-05 (twentieth session: a player's bug, a walk broken off with a movement
+key no longer drops the thing from Tab; tested offline and in the game, not committed. Before
+that the nineteenth session: Tab says "out of reach", "blocked" and "in another
 area" in free walking, and an opened door that leaves nothing to Tab to (the Macon pharmacy) is
 offered as "Open doorway", and the dairy porch has "Porch steps"; tested in the game (pharmacy,
 dairy), released as TWD Access 1.3.0, and the repository made PUBLIC after a history clean-up;
@@ -12,6 +14,38 @@ eighteenth: the "streaming" setting, released as TWD Access 1.1.0; fixes for the
 languages and the later seasons tested in French, released as TWD Access 1.2.0).
 
 ## Start here (where the last session stopped)
+
+- Twentieth session, 2026-11-05. Two questions from players, passed on by the user:
+  1. Does the mod work with the GOG copy? Answered: probably, untested. GOG sells the same
+     Definitive Series (GOG product 1487652667, one build, 1.6, 2020-12-12; Steam's buildid here is
+     5952618). Only the helper is Steam-bound: GameLocator.cs finds the folder through Steam, and
+     Program.cs starts the game with steam://rungameid. A GOG player runs
+     `TWDAccess.exe --game "<folder with WDC.exe>" --no-launch` and starts the game themselves.
+     Nobody has confirmed the GOG program is called WDC.exe (the helper watches for that process
+     name). Offered, not done: find GOG installs (registry HKLM\SOFTWARE\WOW6432Node\GOG.com\Games\
+     1487652667, values path/exe) and start WDC.exe directly when Steam has no copy.
+  2. A player's bug (their log is Error-Logs/twda.log, Season 1 Episode 1, Clementine's backyard):
+     "press Enter on an object to walk to it, then a direction key to walk by hand: the object is
+     gone from Tab and its beacon dies". Cause: the game ends AgentPathToAgent (false) as soon as a
+     movement key is pressed, and walkTick took a walk that failed within 2 s with Lee under 1.5 m
+     from the start as "There is no way to X from here." (noWay), or one that got further as
+     "can go no further" (blocked). FIX in lookaround.lua: walkTick notes a movement key
+     (movementKeyDown(), W A S D and arrows; it replaced two copies of the key loop) at any frame
+     of the walk (w.byHand); a walk that ends without success after that is over without a word,
+     with nothing remembered and no aiming or use on arrival, logged "lookaround: walk to X taken
+     over with a movement key" (as lookaround2.lua stops walks on a held key). The offline test
+     (tools\dev\offline_lookaround.lua) has a case for it, and the old code fails it.
+     TESTED IN THE GAME the same day, Save 2 only (user: "Test it now"): dev_saves\backyard
+     (saves.txt env_clementineHouseExterior.lua): Enter on Gate, Left held 0.4 s a second later
+     -> logged "taken over", nothing said, Gate still listed (20 -> 18 m); Enter on Pool Cover, Right
+     0.35 s in -> the same, still listed (the player's case); a walk to the Gate with no key ->
+     arrived, "Gate: Look at". dev_saves\backyard_night (env_clementineHouseExterior_Night.lua):
+     through the Gate, then Enter on Treehouse with no key -> "There is no way to Treehouse from
+     here." in 1.4 s (the real dead end still works). Restored afterwards, every file checked by
+     MD5: both Save 2 files, prefs.prop, saves.txt, settings.txt (devconsole = false). Game and
+     helper closed; dist\TWDAccess and the game folder hold this build. Possibly the same kind of thing in The
+     Final Season, not changed: lookaround4.lua's use() falls back to walkUpAndUse (steering) when
+     Navigate_PathToAndUseAgent returns with no use, which a movement key would also cause.
 
 - Nineteenth session, 2026-11-03 (the user playing Season 1 Episode 2 at the dairy in THEIR Save 1,
   streaming; the tones were heard on stream). They asked for the Tab list to say which things

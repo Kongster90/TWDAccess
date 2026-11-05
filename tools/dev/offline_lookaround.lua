@@ -54,7 +54,8 @@ function InputMapperIsActive(name) return name == "Navigate.imap" end
 function InputPCIsVKeyPressed(vk) return KEYS[vk] == true end
 function CursorGetDevicePos() return { x = 0, y = 0 } end
 local pathTo = nil -- function(goal) -> new player position
-function AgentPathToAgent(p, a) local to = pathTo and pathTo(a.pos) or a.pos; PLAYER.pos = Vector(to.x, to.y, to.z); return true end
+local pathOk = true -- what AgentPathToAgent returns (false: the walk ended short)
+function AgentPathToAgent(p, a) local to = pathTo and pathTo(a.pos) or a.pos; PLAYER.pos = Vector(to.x, to.y, to.z); return pathOk end
 function AgentPathToPosition(p, pos) PLAYER.pos = Vector(pos.x, pos.y, pos.z); WALKED_TO = pos; return true end
 function ThreadStart(fn) fn() end
 function PathAgentIsBlocked() return false end
@@ -234,5 +235,40 @@ frame(0.2)
 local inYard = false
 for _, e in ipairs(TWDA.hotspots()) do if e.name == steps.name then inYard = true end end
 check(not inYard, "porch steps not offered down in the yard")
+TWDA_firstScript = nil
+
+print("== a walk taken over with a movement key is not 'no way' (a player's log, 2026-11-05)")
+PLAYER.pos = Vector(0, 0, 0)
+UPV.mUseables = { agent("obj_PoolCover", 12, 0, "Pool Cover", { clickable = false }),
+  agent("obj_Treehouse", -10, 0, "Treehouse", { clickable = false }) }
+local function listed(name)
+  for _, e in ipairs(TWDA.hotspots()) do if e.name == name then return true end end
+  return false
+end
+local function tabTo(prefix)
+  for _ = 1, 4 do
+    press(0x09)
+    if lastSaid():find("^" .. prefix) then return true end
+  end
+  return false
+end
+-- An arrow key a moment into the walk: the game ends it with Lee hardly moved.
+pathTo, pathOk = function() return Vector(0.3, 0, 0) end, false
+frame(0.2)
+check(tabTo("Pool Cover"), "Tab to the Pool Cover")
+KEYS[0x0D] = true; frame(0.05); KEYS[0x0D] = false
+KEYS[0x25] = true; frame(0.05); KEYS[0x25] = false
+frame(0.5)
+check(lastSaid() == "Walking to Pool Cover.", "nothing said after the walk was taken over: " .. lastSaid())
+check(listed("obj_PoolCover"), "the Pool Cover is still on the Tab list")
+check(tostring(TWDA.describeLookaround()):find("blocked") == nil, "not tagged blocked")
+-- The same failed walk with no key down is still no way there.
+PLAYER.pos = Vector(0, 0, 0)
+check(tabTo("Pool Cover"), "Tab to the Pool Cover again")
+press(0x0D)
+frame(0.5)
+check(lastSaid() == "There is no way to Pool Cover from here.", "no key: " .. lastSaid())
+check(not listed("obj_PoolCover"), "then it leaves the list")
+pathTo, pathOk = nil, true
 
 print(FAILED and ("FAILED " .. FAILED) or "ALL PASSED")

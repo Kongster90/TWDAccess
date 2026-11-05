@@ -1271,6 +1271,16 @@ local walking = nil   -- { agent, name, since, done, success, blockedSince }
 local walkCutShort = nil -- { w = the walk, at } when the game took Lee over during a walk
 local WALK_GIVE_UP_SECONDS = 60
 
+-- W A S D or an arrow key down: the player is walking Lee by hand.
+local MOVE_KEYS = { 0x57, 0x41, 0x53, 0x44, 0x25, 0x26, 0x27, 0x28 }
+local function movementKeyDown()
+  for _, vk in ipairs(MOVE_KEYS) do
+    local ok, down = pcall(InputPCIsVKeyPressed, vk)
+    if ok and down == true then return true end
+  end
+  return false
+end
+
 -- The nearest walker that can be seen, as (distance, agent), or nil. Walkers are agents with
 -- "zombie" or "walker" in their names that are no helper (obj_, trigger_, lights, sounds) and
 -- have a head bone: River Street's "Zombie_wall_vocals_near_water" (a sound) stopped a walk.
@@ -1395,6 +1405,11 @@ local function walkTick()
   local w = walking
   if not w then return end
   local now = TWDA.now()
+  -- A movement key during the walk: the player has taken over, and the game ends the walk
+  -- (AgentPathToAgent returns false at once). Not seen before the walk is over, such a walk would
+  -- count as "no way there" or "blocked": in Clementine's backyard (a player's log, 2026-11-05) an
+  -- arrow key a second into each walk dropped the Pool Cover and the Tea Set from Tab.
+  if movementKeyDown() then w.byHand = true end
   -- Danger on the way (the red panic vignette, or the game's "Dying" flag): stop at once and say
   -- so. A walk takes the shortest way, and in the Savannah sewers (Episode 4) that led Lee past the
   -- walkers at the leaking pipe.
@@ -1489,6 +1504,12 @@ local function walkTick()
   quietUntil = 0
   forgetFocusPassed(w)
   debug("walk to " .. w.name .. " finished, success " .. tostring(w.success))
+  -- Ended by the player walking off by hand: nothing to say or remember, and nothing done there
+  -- (as a movement key stops walks in the later seasons, lookaround2.lua).
+  if w.byHand and not w.success then
+    TWDA.log("lookaround: walk to " .. w.name .. " taken over with a movement key")
+    return
+  end
   -- The path-finding does not take stairs (the dairy farmhouse): say when the goal is on another
   -- floor; walking onto the stairs by hand starts a guided path up or down (guided.lua).
   local where = floorOf(w.agent)
@@ -1608,11 +1629,7 @@ TWDA.hookAfter("PathToAndUseAgent", function(args)
   local name, now = TWDA.agentName(p.agent), TWDA.now()
   TWDA.log("lookaround: PathToAndUseAgent ended without a use of " .. name)
   if now - (pathRetried[name] or -60) < 20 or prop(p.agent, "Game Selectable") ~= true then return end
-  -- (Not when the player walked off with a movement key.)
-  for _, vk in ipairs({ 0x57, 0x41, 0x53, 0x44, 0x25, 0x26, 0x27, 0x28 }) do
-    local okKey, down = pcall(InputPCIsVKeyPressed, vk)
-    if okKey and down == true then return end
-  end
+  if movementKeyDown() then return end -- (not when the player walked off with a movement key)
   pathRetried[name] = now
   target = { agent = p.agent, name = name, since = now, actOnReach = true }
   lastTargetName = name
@@ -1965,11 +1982,7 @@ TWDA.onFrame("lookaround", function()
   -- the player walks off by hand or with Enter.)
   if doorUse then
     local d = doorUse
-    local moving = walking ~= nil
-    for _, vk in ipairs({ 0x57, 0x41, 0x53, 0x44, 0x25, 0x26, 0x27, 0x28 }) do
-      local okKey, down = pcall(InputPCIsVKeyPressed, vk)
-      if okKey and down == true then moving = true end
-    end
+    local moving = walking ~= nil or movementKeyDown()
     local here = playerPos()
     local okDist, dist = pcall(VectorDistance, here, d.from)
     if moving or TWDA.now() - d.at > 6 then
