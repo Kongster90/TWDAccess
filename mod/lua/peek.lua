@@ -137,10 +137,12 @@ local function announceNewlyUsable()
 end
 
 -- Leaning out sticks after the key is let go (a tap of W keeps Lee up); the opposite key brings
--- him back. Peek_IsPeeking says whether he is out; the last direction key pressed says which way.
+-- him back. Peek_IsPeeking says whether he is out; the direction key that leaned him out says
+-- which way (peekDirection).
 local KEYS = { { 0x57, "up", "S" }, { 0x26, "up", "S" }, { 0x41, "left", "D" }, { 0x25, "left", "D" },
   { 0x44, "right", "A" }, { 0x27, "right", "A" }, { 0x53, "down", "W" }, { 0x28, "down", "W" } }
-local held, lastDirection, wasPeeking = {}, nil, false
+local OPPOSITE = { up = "down", down = "up", left = "right", right = "left" }
+local held, wasPeeking = {}, false
 -- Leaning out can start a hidden timer (the dialog timer_ZombiesSeeLee at the Motor Inn: over the
 -- wall at the first cover, to the left at the RV): about five or six seconds later Lee is seen and
 -- dies. The game only says "Peek for too long and you will be seen", once, so after RISKY_SECONDS
@@ -148,12 +150,28 @@ local held, lastDirection, wasPeeking = {}, nil, false
 local RISKY_SECONDS = 3
 local peekSince, warned, peekDirection = 0, false, nil
 
-local function trackPeeking()
+-- Whether a direction key leans Lee out a new way, which starts the count again. Not a way this
+-- cover does not have, nor the way he already leans, nor the opposite one (that brings him back):
+-- those change nothing, and the game's timer runs on. (A player's log, 2026-11-06, the Motor Inn
+-- in Russian: a lean left went 7 s with no warning before Lee was seen, and "Get back now, S!" was
+-- said while he leaned right at a cover with only left and right.) open is nil when the cover's
+-- ways cannot be read, or none are found; then every key counts.
+local function newWayOut(k, open)
+  if open and not open[k[2]] then return false end
+  local d = wasPeeking and peekDirection
+  return not (d and (k[2] == d[2] or k[2] == OPPOSITE[d[2]]))
+end
+
+local function trackPeeking(ways)
+  local open
+  if ways and #ways > 0 then
+    open = {}
+    for _, d in ipairs(ways) do open[d[2]:match("%a+$")] = true end
+  end
   for _, k in ipairs(KEYS) do
     local ok, down = pcall(InputPCIsVKeyPressed, k[1])
     down = ok and down == true
-    if down and not held[k[1]] then
-      lastDirection = k
+    if down and not held[k[1]] and newWayOut(k, open) then
       -- (A new way out, straight from another, starts the count again.)
       peekSince, warned, peekDirection = TWDA.now(), false, k
     end
@@ -165,7 +183,7 @@ local function trackPeeking()
   local scope = TWDA.sniperActive and TWDA.sniperActive()
   if peeking and not warned and not scope and TWDA.now() - peekSince > RISKY_SECONDS then
     warned = true
-    local d = lastDirection
+    local d = peekDirection
     TWDA.say("Get back now" .. (d and (", " .. d[3]) or "") .. "!", { interrupt = true })
   end
   if peeking == wasPeeking then return end
@@ -175,7 +193,7 @@ local function trackPeeking()
   -- (Moving to the other side with the rifle, sniper.lua, leans out and back by itself.)
   if TWDA.sniperSwitchingSides and TWDA.sniperSwitchingSides() then return end
   if peeking then
-    local d = lastDirection
+    local d = peekDirection
     TWDA.say(d and ("Leaning out " .. d[2] .. ". " .. d[3] .. " to get back") or "Leaning out", { interrupt = true })
   else
     -- (In The Final Season leaning out can lead into a close-up, the stranger in the woods in
@@ -199,8 +217,8 @@ TWDA.onFrame("peek", function()
     -- (Season 2: what comes into view is announced by lookaround2.lua. Leaning sticks after a tap
     -- here too, and peeking too long gets Clementine seen: behind the chair when Carver's people
     -- search the lodge, Episode 2.)
-    if not choiceCamera() then trackPeeking() end
     local parts, ways = directions()
+    if not choiceCamera() then trackPeeking(ways) end
     if not parts or #parts == 0 then return end
     local key = table.concat(parts, ", ")
     if key == lastKey then return end
@@ -219,9 +237,9 @@ TWDA.onFrame("peek", function()
     end
     return
   end
-  trackPeeking()
+  local parts, ways = directions()
+  trackPeeking(ways)
   announceNewlyUsable()
-  local parts = directions()
   if not parts or #parts == 0 then return end
   local key = table.concat(parts, ", ")
   if key == lastKey then return end

@@ -16,6 +16,10 @@ Next version (not released yet)
   letters cannot be used, because the game already uses them (W, A, S, D, Z, Q, E, F, T, P and
   R): TWDAccess.exe says so when it starts, and the mod keeps Tab. Moving off Tab also keeps the
   Steam overlay from opening by mistake.
+- Hiding and leaning out, as at the Motor Inn in Season One: "Get back now" comes on time again,
+  three seconds into a lean, and names the right key. Before, pressing a key that changes nothing
+  (the way you already lean, or a way that cover does not have) put the warning off, sometimes
+  until after you were seen, and could make it name a key that does nothing there.
 
 
 1.3.0 (3 November 2026): knowing what is in reach

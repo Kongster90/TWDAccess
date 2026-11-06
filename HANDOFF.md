@@ -4,8 +4,8 @@ Read this first. It is written for the next agent picking up this project, and k
 the end of each session.
 
 Last updated: 2026-11-05 (twentieth session: the tabkey setting moves Tab to a letter, letters the
-game uses refused after reading every season's input maps, tested in Seasons 1, 2 and 4, not
-committed; Tab lag reported by players, not reproduced, likely the Steam overlay's
+game uses refused after reading every season's input maps, tested in Seasons 1, 2 and 4,
+committed and pushed as d9e88c2; SteelSeries GG's memory leak reported fixed by the user; Tab lag reported by players, not reproduced, likely the Steam overlay's
 Shift+Tab, a start-up warning added, committed and pushed as f3c7dd1; before that a player's bug, a walk broken off with a movement
 key no longer drops the thing from Tab; tested offline and in the game, committed as 2a7829a. Before
 that the nineteenth session: Tab says "out of reach", "blocked" and "in another
@@ -18,6 +18,30 @@ languages and the later seasons tested in French, released as TWD Access 1.2.0).
 
 ## Start here (where the last session stopped)
 
+- Memory: on 2026-11-05 the user said SteelSeries GG fixed its Moments memory leak, so the older
+  notes below about rationing game launches (one capture copy per launch) no longer apply. If the
+  game crashes with no mod error, still check free commit memory first (see the memory note).
+- 2026-11-06, a player's logs (Error-Logs\logs.7z, opened with Windows' tar.exe; the helper's
+  speech.log, TWDAccess.log, debug.log, not the game folder's twda.log): Season 1 Episode 1 in
+  Russian, the Motor Inn hiding, Lee seen three times. Once a lean left went 7 s with no "Get back
+  now"; once "Get back now, S!" came while he leaned right at a cover with only A and D. Cause in
+  peek.lua: ANY direction key press restarted the 3 s count and became the key named, also the
+  way already leaned or a way the cover lacks, while the game's timer_ZombiesSeeLee runs on.
+  FIXED and committed ("Get back now" commit, 2026-11-06), NOT PUSHED, NOT RELEASED: newWayOut(k, open) only counts a key for a way the cover has (directions()'
+  ways, passed to trackPeeking; unreadable or none = every key counts, as before) that is not the
+  current lean nor its opposite; lastDirection is gone, peekDirection names the key. TESTED
+  offline (scratchpad peek_test.py, lupa from .venv, a model of the hiding: 7 cases, the old code
+  fails 3) and IN THE GAME, Season 1 Save 2 from dev_saves\motorinn: W, W again at 1 s, Up at 2 s
+  -> "Get back now, S!" at 3.0 s, Lee seen at 6.2 s (so the game's timer does not restart on those
+  keys either); A then S -> "Get back now, D!" at 3.0 s; D back, D right -> "Get back now, A!",
+  A -> "Back in cover". No script errors. Restored, MD5 checked: both Save 2 files, prefs.prop,
+  saves.txt, settings.txt (devconsole = false). Game and helper closed; dist\TWDAccess and the
+  game folder hold this build. Not tried: Season 2's hiding (same code path, ways read the same
+  way; every season's lean-out hiding goes through peek.lua: Season 1's mode_peek, and the Peek
+  mode of Season 2, A New Frontier, The Final Season and Michonne; not The Final Season's hiding
+  behind walkers, combat4.lua). The user declined a Season 2 test. CHANGES.txt "Next version" has it. Asked of the player (via the user): what went wrong in
+  their words, the game folder's TWDAccess\twda.log, and whether the game closed by itself the
+  first time (7 s after the Controls screen, no exit menu in speech.log).
 - Twentieth session, 2026-11-05. Three reports from players, passed on by the user, and a setting:
   1. Does the mod work with the GOG copy? Answered: probably, untested. GOG sells the same
      Definitive Series (GOG product 1487652667, one build, 1.6, 2020-12-12; Steam's buildid here is
@@ -84,7 +108,7 @@ languages and the later seasons tested in French, released as TWD Access 1.2.0).
      a GOG-style folder is not a Steam copy. NOT heard spoken: that needs the overlay turned on in
      the user's Steam. Built into dist\TWDAccess. Committed as f3c7dd1, pushed with 2a7829a.
   4. The tabkey setting (user: "so that people can switch tab and shift tab to other things ...
-     maybe a letter, then shift plus the same letter"). NOT COMMITTED, NOT RELEASED (CHANGES.txt
+     maybe a letter, then shift plus the same letter"). Committed as d9e88c2 and pushed; NOT RELEASED (CHANGES.txt
      "Next version" has it). settings.lua: tabkey = Tab (default) or a letter; TWDA.tabVK (key code)
      and TWDA.tabName ("Tab" or "G"), and TWDA.tabWords(text), which swaps the whole word "Tab" for
      the chosen key ("G and Shift G to move between them"). Every Tab check reads TWDA.tabVK:
