@@ -9,10 +9,17 @@ internal static class GameLocator
     public const string AppId = "1449690";
     public const string ExeName = "WDC.exe";
 
+    public static string? SteamPath() =>
+        Registry.GetValue(@"HKEY_CURRENT_USER\Software\Valve\Steam", "SteamPath", null) as string
+        ?? Registry.GetValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath", null) as string;
+
+    /// <summary>Whether a game folder is a Steam copy (in a Steam library), not GOG's or another.</summary>
+    public static bool IsSteamCopy(string gameDir) =>
+        gameDir.Replace('/', '\\').Contains(@"\steamapps\common\", StringComparison.OrdinalIgnoreCase);
+
     public static string? Find()
     {
-        var steamPath = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Valve\Steam", "SteamPath", null) as string
-                        ?? Registry.GetValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath", null) as string;
+        var steamPath = SteamPath();
         if (steamPath == null) return null;
 
         var libraries = new List<string> { steamPath };

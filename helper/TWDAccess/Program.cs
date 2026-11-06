@@ -70,6 +70,15 @@ internal static class Program
         bool gameRunning = Process.GetProcessesByName("WDC").Length > 0;
         speech.Say($"TWD Access ready, using {speech.BackendName}." + (gameRunning ? "" : opts.NoLaunch ? "" : " Starting the game."), interrupt: true);
 
+        // Steam's overlay opens with Shift+Tab unless told otherwise, and the mod uses Shift+Tab too.
+        string? steamPath = GameLocator.SteamPath();
+        if (gameDir != null && steamPath != null && GameLocator.IsSteamCopy(gameDir)
+            && SteamOverlay.OpensWithShiftTab(steamPath, GameLocator.AppId))
+        {
+            Log.Write(SteamOverlay.Warning);
+            speech.Say(SteamOverlay.Warning);
+        }
+
         if (!gameRunning && !opts.NoLaunch)
         {
             Log.Write("Starting the game through Steam");

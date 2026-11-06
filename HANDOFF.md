@@ -3,8 +3,9 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-11-05 (twentieth session: a player's bug, a walk broken off with a movement
-key no longer drops the thing from Tab; tested offline and in the game, not committed. Before
+Last updated: 2026-11-05 (twentieth session: Tab lag reported by players, not reproduced, likely the
+Steam overlay's Shift+Tab; before that a player's bug, a walk broken off with a movement
+key no longer drops the thing from Tab; tested offline and in the game, committed as 2a7829a. Before
 that the nineteenth session: Tab says "out of reach", "blocked" and "in another
 area" in free walking, and an opened door that leaves nothing to Tab to (the Macon pharmacy) is
 offered as "Open doorway", and the dairy porch has "Porch steps"; tested in the game (pharmacy,
@@ -15,7 +16,7 @@ languages and the later seasons tested in French, released as TWD Access 1.2.0).
 
 ## Start here (where the last session stopped)
 
-- Twentieth session, 2026-11-05. Two questions from players, passed on by the user:
+- Twentieth session, 2026-11-05. Three reports from players, passed on by the user:
   1. Does the mod work with the GOG copy? Answered: probably, untested. GOG sells the same
      Definitive Series (GOG product 1487652667, one build, 1.6, 2020-12-12; Steam's buildid here is
      5952618). Only the helper is Steam-bound: GameLocator.cs finds the folder through Steam, and
@@ -46,6 +47,40 @@ languages and the later seasons tested in French, released as TWD Access 1.2.0).
      helper closed; dist\TWDAccess and the game folder hold this build. Possibly the same kind of thing in The
      Final Season, not changed: lookaround4.lua's use() falls back to walkUpAndUse (steering) when
      Navigate_PathToAndUseAgent returns with no use, which a movement key would also cause.
+     Committed as 2a7829a (not pushed).
+  3. "Tab and Shift+Tab are lagging out their mods and game" (some players, no log, season not
+     said). NOT REPRODUCED here, and probably not the mod: the Steam overlay's default hotkey is
+     Shift+Tab (GOG Galaxy's overlay too). On this computer the overlay is off (g:\steam\userdata\
+     191380921\config\localconfig.vdf: "EnableGameOverlay" "0", "InGameOverlayShortcutKey"
+     "KEY_NONE"), so it never opens here. Measured in the game, Save 2, dev_saves\ep2_after_tractor
+     (saves.txt env_dairyExteriorDay.lua, talk.ps1 -Answers 1 to free roam; 28 things on Tab): every
+     frame callback wrapped with an os.clock timer from the dev console (scratchpad prof.lua and
+     prof2.lua: log lines "PROF name ms" over 4 ms, "GAP ms" for frames over 40 ms). Over 13 Tab
+     and Shift+Tab presses the lookaround callback took at most 2 ms and no frame was slow. The
+     only spike: actions.lua's callback takes 7 to 10 ms once every 5 seconds (not Tab). Seasons 2
+     to 4 not measured: their Tab (lookaround2.lua cycle -> entries -> places) scans every agent in
+     the scene (SceneGetAgents) per press, the likeliest cost there if the overlay is not it.
+     Restored afterwards, MD5 checked: both Save 2 files, prefs.prop, saves.txt, settings.txt
+     (devconsole = false). The user was given a ready-to-paste reply for the players (turn the
+     overlay off in the game's Steam Properties, General; send twda.log if it still lags).
+     DONE (user: "Yes, add it"): the helper warns at start. New helper/TWDAccess/SteamOverlay.cs:
+     a small VDF parser and OpensWithShiftTab, which reads the Steam user's localconfig.vdf
+     (ActiveProcess\ActiveUser while Steam runs, else the userdata folder whose file was written
+     last): root "system" "EnableGameOverlay" (absent = on), "InGameOverlayShortcutKey" (absent =
+     Shift+Tab; "KEY_NONE" when cleared; Shift+KEY_TAB with nothing else held counts), and the
+     game's own switch, root "apps" > 1449690 > "OverlayAppEnable" "0" (the key name confirmed in
+     this computer's file, for app 413150). It logs "Steam overlay: overlay on/off, for this game
+     on/off, shortcut X (file)" every start. Program.cs, after "TWD Access ready": only for a Steam
+     copy (GameLocator.IsSteamCopy: the folder is under steamapps\common; new GameLocator.SteamPath),
+     queues SteamOverlay.Warning (not interrupting). Read-me: a paragraph under "If something goes
+     wrong" (also GOG Galaxy's overlay); CHANGES.txt: a "Next version (not released yet)" entry
+     with this and the movement-key fix. TESTED: a throwaway test in the scratchpad (overlaytest,
+     compiling SteamOverlay.cs, Log.cs and GameLocator.cs) ran nine cases on this computer's real
+     localconfig.vdf, edited in memory only (off; on with KEY_NONE; on with Shift\tKEY_TAB; on with
+     no shortcut line; no lines at all; on but off for the game; Ctrl+Tab; Shift+Ctrl+Tab; written
+     "Shift+Tab"): all as expected; the start-up condition here gives no warning (overlay off), and
+     a GOG-style folder is not a Steam copy. NOT heard spoken: that needs the overlay turned on in
+     the user's Steam. Built into dist\TWDAccess.
 
 - Nineteenth session, 2026-11-03 (the user playing Season 1 Episode 2 at the dairy in THEIR Save 1,
   streaming; the tones were heard on stream). They asked for the Tab list to say which things

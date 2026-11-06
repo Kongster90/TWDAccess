@@ -141,6 +141,15 @@ Logs are in the logs folder next to TWDAccess.exe (what was spoken is in speech.
 the game folder's TWDAccess\twda.log. The mod was played through once, mostly choosing the first
 answer, so other choices can lead to scenes it has not met; F6 and Tab usually still help there.
 
+If the game seems to lag or stops taking keys after Shift+Tab, the Steam overlay has probably
+opened: Steam opens it with Shift+Tab, which the mod uses too. Press Shift+Tab again to close it.
+To stop it happening, turn the overlay off for this game: in your Steam Library, right-click The
+Walking Dead: The Telltale Definitive Series, choose Properties, and on the General page uncheck
+"Enable the Steam Overlay while in-game". Or keep the overlay and give it another shortcut in
+Steam's Settings, under In Game. TWDAccess.exe reminds you of this when it starts while the
+overlay is on with Shift+Tab. GOG Galaxy's overlay opens with Shift+Tab as well; it can be
+turned off in Galaxy's settings.
+
 
 LICENCES
 
