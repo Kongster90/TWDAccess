@@ -35,7 +35,7 @@ local function mode()
 end
 
 local MODES = { "tab", "all", "off" }
-local MODE_TEXT = { tab = "Beacons on what Tab chose.", all = "Beacons on everything near.", off = "Beacons off." }
+local MODE_TEXT = { tab = TWDA.tabWords("Beacons on what Tab chose."), all = "Beacons on everything near.", off = "Beacons off." }
 
 function TWDA.toggleBeacons()
   local nextMode = MODES[1]

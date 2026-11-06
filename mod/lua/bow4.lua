@@ -19,7 +19,7 @@ local TWDA = ...
 local G = _G
 
 local BASE = "http://127.0.0.1:41234"
-local VK_R, VK_TAB, VK_SHIFT = 0x52, 0x09, 0x10
+local VK_R, VK_TAB, VK_SHIFT = 0x52, TWDA.tabVK or 0x09, 0x10
 local VK_LEFT, VK_UP, VK_RIGHT, VK_DOWN = 0x25, 0x26, 0x27, 0x28
 local STEER_EVERY = 0.15 -- seconds between mouse moves in auto aim (each one the helper spreads out)
 local TURN_EVERY = 0.05 -- seconds between turns while an arrow is held
@@ -279,8 +279,8 @@ TWDA.onFrame("bow4", function()
   end
   if not toldInHand then
     toldInHand = true
-    TWDA.say(soundMode() and "Bow in hand: R draws it. Drawn, arrows aim, Enter shoots, Tab picks another target."
-      or "Bow in hand: R draws it. Drawn, Enter shoots, Tab picks another target.")
+    TWDA.say(soundMode() and TWDA.tabWords("Bow in hand: R draws it. Drawn, arrows aim, Enter shoots, Tab picks another target.")
+      or TWDA.tabWords("Bow in hand: R draws it. Drawn, Enter shoots, Tab picks another target."))
   end
   -- (Lowered by the game, a walker grabbing her, or drawn with the mouse: the player's own aim.
   -- A bow the mod drew comes back up a second after the game lowers it, until R puts it away:

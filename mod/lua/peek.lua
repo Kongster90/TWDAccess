@@ -129,7 +129,7 @@ local function announceNewlyUsable()
     end
   end
   local parts = TWDA.offerTexts(fresh, false)
-  parts[#parts + 1] = #fresh == 1 and "Enter!" or "Tab to choose, Enter."
+  parts[#parts + 1] = #fresh == 1 and "Enter!" or TWDA.tabWords("Tab to choose, Enter.")
   -- (Queued after "Leaning out ..." when that was just said.)
   local recent = TWDA.now() - (TWDA.lastSpokenAt or -10) < 1
   TWDA.say(table.concat(parts, ". "), { interrupt = not recent })

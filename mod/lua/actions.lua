@@ -496,14 +496,14 @@ TWDA.onFrame("actions", function()
     elseif mode ~= "auto" and fresh[1].clickable and numbered then
       parts = { TWDA.hotspotName(fresh[1].agent) .. ": " .. table.concat(numbered, ", "), "Pick a number, then Enter!" }
     elseif mode ~= "auto" and fresh[1].clickable then
-      parts[#parts + 1] = #fresh == 1 and "Enter!" or "Tab to choose, Enter"
+      parts[#parts + 1] = #fresh == 1 and "Enter!" or TWDA.tabWords("Tab to choose, Enter")
     elseif mode ~= "auto" and turning then
       -- (Out of view while a turn choice is up: the arrow keys bring it into view.)
       parts[#parts + 1] = "Turn with the arrow keys"
     elseif mode ~= "auto" and hurry then
       -- (Out of reach but needed in time: the semi truck to climb in the Crawford auto shop,
       -- Episode 4. Tab goes to it first; Enter walks there and does it.)
-      parts[#parts + 1] = "Tab to it, then Enter"
+      parts[#parts + 1] = TWDA.tabWords("Tab to it, then Enter")
     end
     local body = table.concat(parts, ". ")
     -- The time first, so that what to press comes last.
@@ -778,10 +778,10 @@ TWDA.onFrame("sceneoffers", function()
     if entry.clickable and entry.side == nil and not lookOnly(soleVerb(entry.agent)) then doable = doable + 1 end
   end
   if asked then
-    parts[#parts + 1] = doable <= 1 and "Enter!" or "Tab to choose, Enter"
+    parts[#parts + 1] = doable <= 1 and "Enter!" or TWDA.tabWords("Tab to choose, Enter")
   elseif not lookOnly(verb) then
     -- (Sometimes with only seconds to act and no hint: Danny, rifle in hand, in the barn.)
-    parts[#parts + 1] = doable <= 1 and enterWords(fresh[1]) or "Tab to choose, Enter."
+    parts[#parts + 1] = doable <= 1 and enterWords(fresh[1]) or TWDA.tabWords("Tab to choose, Enter.")
   end
   TWDA.log("sceneoffers: " .. table.concat(parts, ". "))
   TWDA.say(table.concat(parts, ". "), { interrupt = asked or nil })

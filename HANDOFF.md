@@ -3,8 +3,10 @@
 Read this first. It is written for the next agent picking up this project, and kept current at
 the end of each session.
 
-Last updated: 2026-11-05 (twentieth session: Tab lag reported by players, not reproduced, likely the
-Steam overlay's Shift+Tab; before that a player's bug, a walk broken off with a movement
+Last updated: 2026-11-05 (twentieth session: the tabkey setting moves Tab to a letter, letters the
+game uses refused after reading every season's input maps, tested in Seasons 1, 2 and 4, not
+committed; Tab lag reported by players, not reproduced, likely the Steam overlay's
+Shift+Tab, a start-up warning added, committed and pushed as f3c7dd1; before that a player's bug, a walk broken off with a movement
 key no longer drops the thing from Tab; tested offline and in the game, committed as 2a7829a. Before
 that the nineteenth session: Tab says "out of reach", "blocked" and "in another
 area" in free walking, and an opened door that leaves nothing to Tab to (the Macon pharmacy) is
@@ -16,7 +18,7 @@ languages and the later seasons tested in French, released as TWD Access 1.2.0).
 
 ## Start here (where the last session stopped)
 
-- Twentieth session, 2026-11-05. Three reports from players, passed on by the user:
+- Twentieth session, 2026-11-05. Three reports from players, passed on by the user, and a setting:
   1. Does the mod work with the GOG copy? Answered: probably, untested. GOG sells the same
      Definitive Series (GOG product 1487652667, one build, 1.6, 2020-12-12; Steam's buildid here is
      5952618). Only the helper is Steam-bound: GameLocator.cs finds the folder through Steam, and
@@ -47,7 +49,7 @@ languages and the later seasons tested in French, released as TWD Access 1.2.0).
      helper closed; dist\TWDAccess and the game folder hold this build. Possibly the same kind of thing in The
      Final Season, not changed: lookaround4.lua's use() falls back to walkUpAndUse (steering) when
      Navigate_PathToAndUseAgent returns with no use, which a movement key would also cause.
-     Committed as 2a7829a (not pushed).
+     Committed as 2a7829a, pushed.
   3. "Tab and Shift+Tab are lagging out their mods and game" (some players, no log, season not
      said). NOT REPRODUCED here, and probably not the mod: the Steam overlay's default hotkey is
      Shift+Tab (GOG Galaxy's overlay too). On this computer the overlay is off (g:\steam\userdata\
@@ -80,7 +82,55 @@ languages and the later seasons tested in French, released as TWD Access 1.2.0).
      no shortcut line; no lines at all; on but off for the game; Ctrl+Tab; Shift+Ctrl+Tab; written
      "Shift+Tab"): all as expected; the start-up condition here gives no warning (overlay off), and
      a GOG-style folder is not a Steam copy. NOT heard spoken: that needs the overlay turned on in
-     the user's Steam. Built into dist\TWDAccess.
+     the user's Steam. Built into dist\TWDAccess. Committed as f3c7dd1, pushed with 2a7829a.
+  4. The tabkey setting (user: "so that people can switch tab and shift tab to other things ...
+     maybe a letter, then shift plus the same letter"). NOT COMMITTED, NOT RELEASED (CHANGES.txt
+     "Next version" has it). settings.lua: tabkey = Tab (default) or a letter; TWDA.tabVK (key code)
+     and TWDA.tabName ("Tab" or "G"), and TWDA.tabWords(text), which swaps the whole word "Tab" for
+     the chosen key ("G and Shift G to move between them"). Every Tab check reads TWDA.tabVK:
+     aiming.lua, bow4.lua, lookaround.lua, lookaround2.lua, lookaround4.lua, menus.lua (navKeyAt),
+     qte3.lua, stars4.lua; every spoken string naming Tab is wrapped in TWDA.tabWords (about thirty,
+     also actions, beacons, guided, peek). offline_lookaround.lua stubs tabVK/tabName/tabWords.
+     REFUSED letters (Tab kept), because the mod only listens and the game would act on them too:
+     W A S D, Z (AZERTY), Q, E, T, F, P, and R (the mod's bow key). Found by reading EVERY season's
+     input maps in the game (user: "Test later seasons first"): tools\dev\imapscan.lua through the
+     dev console, ResourceGetNames("*.imap") for the season's map names (plus "x.imap" strings in
+     the bytecode of loaded functions) and InputMapperGetNumEvents/GetInput/GetCallback for their
+     letter bindings, run at each season's main menu (the hub, Season 1, 2, A New Frontier,
+     Michonne) and in The Final Season's play. Letters in play: every season W A S D, Q, E; T =
+     Navigate_OnButtonShowTokens (Season 2, Michonne), ReticleSelection_OnButtonShowTokens (A New
+     Frontier), Useable_OnButtonShowTokens (The Final Season and the hub), Toggle_LookLock
+     (Season 1's firstperson.imap); F = Useable_OnButtonUse (The Final Season); P = Game_OnDebug
+     (Season 1's game_debug.imap). Every letter only in ui_keyboard.imap (Season 1) and
+     keyboardinput.imap (Season 2), on-screen keyboard screens. Unbound everywhere else, e.g. G.
+     The texts suggest NO letter (user: "leave out the suggestion of g. Just let them know that
+     there are keys that can not work because the game is already using it"; T had been the first
+     suggestion, until Season 2 showed it is the game's). Helper: new TabKey.cs reads tabkey from settings.txt (same refused list) and SAYS the
+     problem once at start ("The tabkey setting, T, cannot be used: T shows the game's labels.
+     Using Tab. ..."); the mod only logs it, as its scripts restart with each scene in Season 1
+     (tried: spoken twice at start alone). With a usable letter the Steam overlay warning is left
+     out; its text now also mentions tabkey ("set tabkey ... to a letter"). Read-me: KEYS (Exploring), SETTINGS
+     (tabkey), the overlay paragraph.
+     TESTED offline: settings.lua under lupa with 16 values (Tab, tab, G, g, " x ", T, f, P, r, W,
+     e, Z, 5, F2, empty, no file) and TabKey.Read with 12 (scratchpad tabkey_test.py and
+     overlaytest). TESTED IN THE GAME, all in Save 2:
+     - Season 1 Episode 4 (the Marsh house), tabkey = T (before T was refused): F6 "... T and
+       Shift T to move between them", T, T, Shift+T forward, forward, back; Tab silent. tabkey = W:
+       the helper's log has the message once, Tab and Shift+Tab worked.
+     - Season 2 from dev_saves\s2_ep2_cabinnight (saves.txt CabinInterior.lua; play2.ps1 -Answer 1
+       with -Stop changed to the new key's words, about 5 minutes to LakeWoodsClearing): with T,
+       "Clementine can move. Truck Doors: Look At. Hacksaw: Grab. T to choose.", F6 "... T and
+       Enter to use", T, T, Shift+T right, Tab silent. With G (final list): "G to choose", F6 "G and
+       Enter to use", G, G, Shift+G right, Tab silent, Enter "Grab Hacksaw, walking there."
+     - The Final Season from dev_saves\s4_ep1_school (Continue Episode 1, BoardingSchoolDorm,
+       "Objective: Find AJ"): with T, T and Shift+T answered "Nothing to interact with here." (the
+       Tab code's own reply), Tab silent. Useable_GetCount() is 0 in that scene, so no real list.
+     NOT tried with a letter: A New Frontier and Michonne play (lookaround2.lua, as Season 2), a list
+     in The Final Season, the shotgun, the bow, stars and quick-time targets (the same one-line
+     change in each). Restored afterwards, MD5 checked: all 144 *wd2/wd3/wd4/wdm_saveslot2* files
+     (scratchpad backup_later; nothing extra was left), both Season 1 Save 2 files, prefs.prop,
+     saves.txt, settings.txt (devconsole = false; the user's settings.txt gets "tabkey = Tab" written
+     in at its next start). Game closed; dist and the game folder hold this build.
 
 - Nineteenth session, 2026-11-03 (the user playing Season 1 Episode 2 at the dairy in THEIR Save 1,
   streaming; the tones were heard on stream). They asked for the Tab list to say which things

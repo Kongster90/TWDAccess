@@ -18,7 +18,8 @@ internal static class SteamOverlay
         "Note: the Steam overlay is on for this game and opens with Shift+Tab, which TWD Access also uses. " +
         "If the game seems to lag or stops taking keys, press Shift+Tab to close the overlay. " +
         "To turn it off: right-click the game in your Steam Library, choose Properties, and uncheck " +
-        "Enable the Steam Overlay while in-game. The read-me has more.";
+        "Enable the Steam Overlay while in-game. Or set tabkey in TWD Access's settings to a letter, " +
+        "to use that instead of Tab. The read-me has more.";
 
     /// <summary>True when the overlay would open with Shift+Tab in the game; false when not, or when
     /// Steam's settings cannot be read. What was found is logged.</summary>

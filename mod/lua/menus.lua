@@ -641,7 +641,7 @@ end)
 local navKeyAt, mouseMovedAt, lastCursor = -10, -10, nil
 TWDA.onFrame("menus.input", function()
   local now = TWDA.now()
-  for _, vk in ipairs({ 0x09, 0x25, 0x26, 0x27, 0x28, 0x31, 0x32, 0x33, 0x34 }) do
+  for _, vk in ipairs({ TWDA.tabVK or 0x09, 0x25, 0x26, 0x27, 0x28, 0x31, 0x32, 0x33, 0x34 }) do
     local ok, down = pcall(InputPCIsVKeyPressed, vk)
     if ok and down == true then navKeyAt = now end
   end

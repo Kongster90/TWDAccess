@@ -10,6 +10,12 @@ Next version (not released yet)
   game seems to lag and stops taking keys. TWDAccess.exe now says so when it starts while the
   overlay is on for the game with that shortcut, and says how to turn the overlay off. The
   read-me has the same under "If something goes wrong".
+- A new setting, tabkey, moves Tab to a letter of your choice: set tabkey to that letter in the
+  game folder's TWDAccess\settings.txt, and the letter and Shift with it do everything Tab and
+  Shift+Tab did, in every season; the mod names the letter where it used to say Tab. Some
+  letters cannot be used, because the game already uses them (W, A, S, D, Z, Q, E, F, T, P and
+  R): TWDAccess.exe says so when it starts, and the mod keeps Tab. Moving off Tab also keeps the
+  Steam overlay from opening by mistake.
 
 
 1.3.0 (3 November 2026): knowing what is in reach

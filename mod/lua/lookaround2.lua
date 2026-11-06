@@ -864,8 +864,8 @@ local function enter()
       h = list[1]
     else
       local placesToo = #list == 0 and #places() > 0
-      speak(placesToo and "Nothing to interact with here. Tab for places to walk to."
-        or (#list == 0 and "Nothing to interact with here." or "Nothing chosen. Tab to choose something."))
+      speak(placesToo and TWDA.tabWords("Nothing to interact with here. Tab for places to walk to.")
+        or (#list == 0 and "Nothing to interact with here." or TWDA.tabWords("Nothing chosen. Tab to choose something.")))
       return
     end
   end
@@ -903,7 +903,7 @@ TWDA.describeLookaround = function()
     for _, p in ipairs(walkTo) do names[#names + 1] = ("%s (%s)"):format(p.label, whereText(p)) end
     sentences[#sentences + 1] = ("Places to walk to: %s"):format(table.concat(names, ", "))
   end
-  sentences[#sentences + 1] = "Tab and Enter to use"
+  sentences[#sentences + 1] = TWDA.tabWords("Tab and Enter to use")
   return TWDA.joinSentences(sentences)
 end
 
@@ -1059,7 +1059,7 @@ local function announceControl()
     -- (Everything used up: say where the way on is, if there are places to walk to.)
     local walkTo = (canWalk() and not walk) and places() or {}
     if #walkTo > 0 then
-      TWDA.say(("%s can move. Nothing to interact with here. %d %s to walk to, Tab to choose."):format(
+      TWDA.say((TWDA.tabWords("%s can move. Nothing to interact with here. %d %s to walk to, Tab to choose.")):format(
         TWDA.playerName and TWDA.playerName() or "You", #walkTo, #walkTo == 1 and "place" or "places"))
     end
     return
@@ -1083,9 +1083,9 @@ local function announceControl()
     if #list == 1 then
       text = first .. ". Enter!"
     elseif #list <= 3 and not allAlike(list) then
-      text = ("%s, or %s. Enter for the first, or Tab to choose."):format(table.concat(parts, ", ", 1, #list - 1), parts[#list])
+      text = (TWDA.tabWords("%s, or %s. Enter for the first, or Tab to choose.")):format(table.concat(parts, ", ", 1, #list - 1), parts[#list])
     else
-      text = ("%s, and %d more. Enter for the nearest, or Tab to choose."):format(first, #list - 1)
+      text = (TWDA.tabWords("%s, and %d more. Enter for the nearest, or Tab to choose.")):format(first, #list - 1)
     end
     TWDA.say(text)
   elseif #list == 1 and #list[1].verbs > 1 then
@@ -1107,11 +1107,11 @@ local function announceControl()
       what = (#new > 0 and #new < #list) and ("%s, and %d more"):format(table.concat(new, ". "), #list - #new)
         or (#list .. " things to interact with")
     end
-    TWDA.say(("%s%s. Tab to choose."):format(prefix, what))
+    TWDA.say((TWDA.tabWords("%s%s. Tab to choose.")):format(prefix, what))
   end
 end
 
-local VK_TAB, VK_SHIFT, VK_ENTER = 0x09, 0x10, 0x0D
+local VK_TAB, VK_SHIFT, VK_ENTER = TWDA.tabVK or 0x09, 0x10, 0x0D
 local KEYS = { VK_TAB, VK_ENTER, 0x31, 0x32, 0x33, 0x34 }
 local held = {}
 TWDA.onFrame("lookaround2", function()

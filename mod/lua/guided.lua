@@ -214,7 +214,7 @@ TWDA.onFrame("guided", function()
       if #here > 0 and TWDA.offerTexts then
         halted.offered = true
         local parts = TWDA.offerTexts(here, false)
-        parts[#parts + 1] = #here == 1 and "Enter to do it." or "Tab to choose, Enter."
+        parts[#parts + 1] = #here == 1 and "Enter to do it." or TWDA.tabWords("Tab to choose, Enter.")
         TWDA.say(table.concat(parts, ". "))
         if TWDA.preferNextTab then TWDA.preferNextTab(here[1].name) end
       end

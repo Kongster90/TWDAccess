@@ -71,8 +71,10 @@ Exploring:
                       come last. "In another area" means the game will not let you use it until
                       you have walked over there, for example across a fence. When a door you
                       open leaves nothing to use beyond it, the mod says it is open and offers
-                      "Open doorway": Enter walks you through.
-  1 to 4              Pick one of a thing's actions (Look At, Use, Talk To...).
+                      "Open doorway": Enter walks you through. The tabkey setting (below) can
+                      move Tab to a letter of your choice, and Shift+Tab to Shift and that
+                      letter.
+  1 to 4             Pick one of a thing's actions (Look At, Use, Talk To...).
   Enter               Do it. The mod walks you there first if needed.
   W A S D             Walk yourself, as usual.
   Backspace           Step back out of a close-up, or stop a walk.
@@ -96,6 +98,11 @@ Notepad. Most of them also have a key above.
   beepvolume     How loud the beeps are, in percent (F3).
   aim            sound (you aim by the tone) or auto (the mod aims for you).
   bowturn        How fast the arrow keys turn the bow in The Final Season.
+  tabkey         Tab, or a letter: the key that moves between the things around you, with
+                 Shift to go back, everywhere the mod uses Tab. Some letters cannot be used,
+                 because the game already uses them: W, A, S, D, Z, Q, E, F, T, P and R. With
+                 one of those, TWDAccess.exe says so when it starts and the mod keeps Tab.
+                 Takes effect the next time the game starts.
   streaming      true opens TWD Access in a window of its own, so OBS can record its beeps and
                  tones: add an Application Audio Capture and pick the window marked
                  [TWDAccess.exe]. Takes effect the next time TWDAccess.exe starts.
@@ -146,8 +153,9 @@ opened: Steam opens it with Shift+Tab, which the mod uses too. Press Shift+Tab a
 To stop it happening, turn the overlay off for this game: in your Steam Library, right-click The
 Walking Dead: The Telltale Definitive Series, choose Properties, and on the General page uncheck
 "Enable the Steam Overlay while in-game". Or keep the overlay and give it another shortcut in
-Steam's Settings, under In Game. TWDAccess.exe reminds you of this when it starts while the
-overlay is on with Shift+Tab. GOG Galaxy's overlay opens with Shift+Tab as well; it can be
+Steam's Settings, under In Game. Or move the mod off Tab to a letter with the tabkey setting
+(under Settings above). TWDAccess.exe reminds you of this when it starts
+while the overlay is on with Shift+Tab and the mod uses Tab. GOG Galaxy's overlay opens with Shift+Tab as well; it can be
 turned off in Galaxy's settings.
 
 

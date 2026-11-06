@@ -10,7 +10,7 @@
 local TWDA = ...
 local G = _G
 
-local VK_TAB, VK_SHIFT = 0x09, 0x10
+local VK_TAB, VK_SHIFT = TWDA.tabVK or 0x09, 0x10
 
 local function up(name)
   return TWDA.upvalue(rawget(G, "Constellation_ActivateStar"), name)
@@ -74,7 +74,7 @@ TWDA.onFrame("stars4", function()
     wasActive, chosen = on, nil
     if on then
       local n = #selectable()
-      TWDA.say(("Stars to link, %d. Tab picks a star, Enter links it."):format(n), { interrupt = true })
+      TWDA.say((TWDA.tabWords("Stars to link, %d. Tab picks a star, Enter links it.")):format(n), { interrupt = true })
     end
   end
   if not on then return end
@@ -126,5 +126,5 @@ end
 
 function TWDA.describeStars()
   if not active() then return nil end
-  return ("Stargazing. %d stars can be linked. Tab picks one, Enter links it."):format(#selectable())
+  return (TWDA.tabWords("Stargazing. %d stars can be linked. Tab picks one, Enter links it.")):format(#selectable())
 end

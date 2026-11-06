@@ -22,6 +22,8 @@ TWDA.hookBefore = function(name, fn) hooksBefore[name] = hooksBefore[name] or {}
 TWDA.hookAfter = function() end
 TWDA.onFrame = function(name, fn) frames[name] = fn end
 TWDA.settings = {}
+TWDA.tabVK, TWDA.tabName = 0x09, "Tab" -- (settings.lua: the tabkey setting)
+TWDA.tabWords = function(t) return t end
 TWDA.isEnglish = function() return true end
 TWDA.lower = string.lower
 TWDA.englishVerb = function(v) return tostring(v) end

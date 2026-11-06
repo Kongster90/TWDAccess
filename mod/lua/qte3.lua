@@ -225,14 +225,14 @@ TWDA.onFrame("qte3.targets", function()
       if #names == 1 then
         say(capital(names[1]) .. ": Enter!")
       else
-        say(("%s, or %s. Tab to choose, Enter does %s!"):format(capital(table.concat(names, ", ", 1, #names - 1)),
+        say((TWDA.tabWords("%s, or %s. Tab to choose, Enter does %s!")):format(capital(table.concat(names, ", ", 1, #names - 1)),
           names[#names], names[1]))
       end
     end
   end
   local ok, down = pcall(InputPCIsVKeyPressed, 0x0D)
   down = ok and down == true
-  local okT, tab = pcall(InputPCIsVKeyPressed, 0x09)
+  local okT, tab = pcall(InputPCIsVKeyPressed, TWDA.tabVK or 0x09)
   tab = okT and tab == true
   local mode = TWDA.settings.actionscenes or "slow"
   if target then
@@ -413,7 +413,7 @@ TWDA.describeAction2 = function()
   end
   if target then
     local now = capital(target.names[target.index]) .. ": press Enter"
-    if #target.names > 1 then now = now .. ". Tab for " .. table.concat(target.names, " or ") end
+    if #target.names > 1 then now = now .. TWDA.tabWords(". Tab for ") .. table.concat(target.names, " or ") end
     return now
   end
   return previous and previous() or nil

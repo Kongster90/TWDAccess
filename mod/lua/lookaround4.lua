@@ -410,9 +410,9 @@ local function enter(fromGame)
   end
   if fromGame and gameSelected() ~= nil then return false end -- (the game's own use)
   if #list == 0 then
-    speak(#places() > 0 and "Nothing to interact with here. Tab for places to walk to." or "Nothing to interact with here.")
+    speak(#places() > 0 and TWDA.tabWords("Nothing to interact with here. Tab for places to walk to.") or "Nothing to interact with here.")
   else
-    speak("Nothing chosen. Tab to choose something.")
+    speak(TWDA.tabWords("Nothing chosen. Tab to choose something."))
   end
   return true
 end
@@ -472,7 +472,7 @@ TWDA.describeLookaround = function()
     for _, p in ipairs(walkTo) do names[#names + 1] = ("%s (%s)"):format(p.label, whereText(p)) end
     sentences[#sentences + 1] = "Places to walk to: " .. table.concat(names, ", ")
   end
-  if #list + #walkTo > 0 then sentences[#sentences + 1] = "Tab and Enter to use" end
+  if #list + #walkTo > 0 then sentences[#sentences + 1] = TWDA.tabWords("Tab and Enter to use") end
   return TWDA.joinSentences(sentences)
 end
 
@@ -543,7 +543,7 @@ local function announce()
   if #list == 0 then
     if walk then
       local n = #places()
-      TWDA.say(prefix .. (n > 0 and ("Nothing to interact with here. %d %s to walk to, Tab to choose."):format(n, n == 1 and "place" or "places")
+      TWDA.say(prefix .. (n > 0 and (TWDA.tabWords("Nothing to interact with here. %d %s to walk to, Tab to choose.")):format(n, n == 1 and "place" or "places")
         or "Nothing to interact with here."))
     elseif station() and call("Station_AllowExit") ~= false then
       TWDA.say("Nothing more here. Backspace steps back.")
@@ -551,13 +551,13 @@ local function announce()
   elseif #list == 1 then
     TWDA.say(("%s%s. Enter to do it."):format(prefix, parts[1]))
   elseif #list <= 4 then
-    TWDA.say(("%s%s. Tab to choose."):format(prefix, table.concat(parts, ". ")))
+    TWDA.say((TWDA.tabWords("%s%s. Tab to choose.")):format(prefix, table.concat(parts, ". ")))
   else
-    TWDA.say(("%s%d things to interact with. Tab to choose."):format(prefix, #list))
+    TWDA.say((TWDA.tabWords("%s%d things to interact with. Tab to choose.")):format(prefix, #list))
   end
 end
 
-local VK_TAB, VK_SHIFT = 0x09, 0x10
+local VK_TAB, VK_SHIFT = TWDA.tabVK or 0x09, 0x10
 local held = {}
 TWDA.onFrame("lookaround4", function()
   if not isSeason4() then return end

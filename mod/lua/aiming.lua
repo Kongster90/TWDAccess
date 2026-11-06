@@ -22,7 +22,7 @@
 local TWDA = ...
 local G = _G
 
-local VK_TAB, VK_ENTER, VK_SHIFT = 0x09, 0x0D, 0x10
+local VK_TAB, VK_ENTER, VK_SHIFT = TWDA.tabVK or 0x09, 0x0D, 0x10
 local VK_LEFT, VK_UP, VK_RIGHT, VK_DOWN = 0x25, 0x26, 0x27, 0x28
 local HAND_SPEED = 0.12      -- pointer travel per second with an arrow key held (0 to 1 is the full turn)
 local SCAN_LOW, SCAN_HIGH = 0.25, 0.65 -- pointer heights the assist searches for the head
@@ -147,7 +147,7 @@ local function describe()
     elseif x > 0.6 then where = " The cop is to the right."
     else where = " The cop is straight ahead; aim up or down." end
   end
-  return "Aiming the shotgun." .. where .. " Tab aims for you, arrow keys aim by hand, Enter fires."
+  return "Aiming the shotgun." .. where .. TWDA.tabWords(" Tab aims for you, arrow keys aim by hand, Enter fires.")
 end
 TWDA.describeAiming = function() return state and describe() or nil end
 
@@ -165,8 +165,8 @@ TWDA.onFrame("aiming", function()
     state = { assist = auto, auto = auto, sound = sound, scanDir = -1, wasOn = false, toneAt = 0, lastFrame = now }
     TWDA.log("aiming: shotgun mode" .. (sound and " (by a tone)" or ""))
     TWDA.say(auto and "Aiming the shotgun at the cop. Aiming for you."
-      or sound and "Aiming the shotgun at the cop. Arrows aim, a tone guides you, Enter fires. Tab aims for you."
-      or "Aiming the shotgun at the cop. Tab aims for you, arrow keys aim by hand, Enter fires.", { interrupt = true })
+      or sound and TWDA.tabWords("Aiming the shotgun at the cop. Arrows aim, a tone guides you, Enter fires. Tab aims for you.")
+      or TWDA.tabWords("Aiming the shotgun at the cop. Tab aims for you, arrow keys aim by hand, Enter fires."), { interrupt = true })
   end
   state.lastFrame = now
   if state.fired then return end

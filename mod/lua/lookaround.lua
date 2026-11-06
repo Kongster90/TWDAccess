@@ -19,7 +19,7 @@
 local TWDA = ...
 local G = _G
 
-local VK_TAB, VK_SHIFT, VK_ENTER, VK_BACK = 0x09, 0x10, 0x0D, 0x08
+local VK_TAB, VK_SHIFT, VK_ENTER, VK_BACK = TWDA.tabVK or 0x09, 0x10, 0x0D, 0x08
 local REACH_SECONDS = 2.5        -- to focus something in view
 local REACH_BEHIND_SECONDS = 8   -- to turn the camera round to something behind it
 local REACH_WALK_SECONDS = 2.5   -- the same where Lee can walk there instead
@@ -1884,7 +1884,7 @@ local function enterPressed()
     lastTargetName = usable[1].name
     return
   end
-  TWDA.say("Nothing chosen. Tab to choose something.", { interrupt = true })
+  TWDA.say(TWDA.tabWords("Nothing chosen. Tab to choose something."), { interrupt = true })
 end
 
 local held = {}
@@ -2283,7 +2283,7 @@ function TWDA.describeLookaround()
     if tag then table.insert(where, 1, tag) end
     names[#names + 1] = displayName(entry.name, entry.agent) .. (#where > 0 and (" (" .. table.concat(where, ", ") .. ")") or "")
   end
-  parts[#parts + 1] = ("%d to interact with: %s. Tab and Shift Tab to move between them"):format(#list,
+  parts[#parts + 1] = (TWDA.tabWords("%d to interact with: %s. Tab and Shift Tab to move between them")):format(#list,
     table.concat(names, ", "))
   return TWDA.joinSentences(parts)
 end
